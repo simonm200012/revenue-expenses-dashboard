@@ -1186,10 +1186,10 @@ function renderChatEmpty(){
   const box=document.getElementById('chatMsgs');
   const hasKey=!!CHAT.apiKey;
   const suggestions=[
-    'Summarize my spending this year',
-    'What are my top 3 expense categories?',
-    'How did last month compare to the previous month?',
-    'Are there any unusual transactions I should look at?'
+    'Break down my income by category this year',
+    'Show me all paychecks in the last 12 months',
+    'Find transactions over €500 in 2025',
+    'Compare grocery spending month-over-month'
   ];
   box.innerHTML='<div class="chat-empty">'+
     (hasKey
@@ -1219,40 +1219,148 @@ function appendMsg(role,text,opts){
   box.scrollTop=box.scrollHeight;
   return div;
 }
-function buildFinanceContext(){
-  const inflow=TXNS.filter(t=>t.t==='In').reduce((a,t)=>a+t.v,0);
-  const outflow=TXNS.filter(t=>t.t==='Out').reduce((a,t)=>a+t.v,0);
+// === Tool definitions sent to Claude ===
+const CHAT_TOOLS=[
+  {
+    name:'query_transactions',
+    description:'Search and filter the full transaction database. Returns matching rows (capped at 200) plus the total matching count and total amount. Combine multiple filters as needed. Date format is YYYY-MM-DD. Type "In"=income, "Out"=expense.',
+    input_schema:{
+      type:'object',
+      properties:{
+        date_from:{type:'string',description:'Inclusive start date YYYY-MM-DD'},
+        date_to:{type:'string',description:'Inclusive end date YYYY-MM-DD'},
+        type:{type:'string',enum:['In','Out'],description:'In=income, Out=expense'},
+        category:{type:'string',description:'Exact category match'},
+        category_contains:{type:'string',description:'Substring match on category (case-insensitive)'},
+        source_contains:{type:'string',description:'Substring match on source/merchant (case-insensitive)'},
+        bank:{type:'string',description:'Exact bank match'},
+        amount_min:{type:'number'},
+        amount_max:{type:'number'},
+        search:{type:'string',description:'Free-text search across source, category, and detail fields'},
+        sort_by:{type:'string',enum:['date_desc','date_asc','amount_desc','amount_asc'],description:'Default date_desc'},
+        limit:{type:'integer',description:'Max rows to return (default 50, max 200)'}
+      }
+    }
+  },
+  {
+    name:'aggregate',
+    description:'Group transactions by a field and return sum, count, and average per group. Useful for breakdowns by category, merchant, month, year, etc. Supports the same filters as query_transactions.',
+    input_schema:{
+      type:'object',
+      required:['group_by'],
+      properties:{
+        group_by:{type:'string',enum:['category','source','bank','month','year','type'],description:'Field to group by. "month"=YYYY-MM, "year"=YYYY.'},
+        date_from:{type:'string'},
+        date_to:{type:'string'},
+        type:{type:'string',enum:['In','Out']},
+        category:{type:'string'},
+        bank:{type:'string'},
+        limit:{type:'integer',description:'Top N groups by sum (default 20, max 100)'}
+      }
+    }
+  },
+  {
+    name:'list_distinct_values',
+    description:'List all distinct values for a column (e.g. all categories, banks, sources). Useful to discover what is queryable before filtering.',
+    input_schema:{
+      type:'object',
+      required:['field'],
+      properties:{
+        field:{type:'string',enum:['category','source','bank','type']},
+        type_filter:{type:'string',enum:['In','Out'],description:'Only include rows of this type'}
+      }
+    }
+  }
+];
+
+function _filterRows(af){
+  let rows=TXNS;
+  if(af.date_from)rows=rows.filter(t=>t.d>=af.date_from);
+  if(af.date_to)rows=rows.filter(t=>t.d<=af.date_to);
+  if(af.type)rows=rows.filter(t=>t.t===af.type);
+  if(af.category)rows=rows.filter(t=>t.c===af.category);
+  if(af.category_contains){const q=af.category_contains.toLowerCase();rows=rows.filter(t=>(t.c||'').toLowerCase().includes(q));}
+  if(af.source_contains){const q=af.source_contains.toLowerCase();rows=rows.filter(t=>(t.s||'').toLowerCase().includes(q));}
+  if(af.bank)rows=rows.filter(t=>t.b===af.bank);
+  if(af.amount_min!=null)rows=rows.filter(t=>t.v>=af.amount_min);
+  if(af.amount_max!=null)rows=rows.filter(t=>t.v<=af.amount_max);
+  if(af.search){const q=af.search.toLowerCase();rows=rows.filter(t=>((t.s||'')+' '+(t.r||'')+' '+(t.c||'')).toLowerCase().includes(q));}
+  return rows;
+}
+function tool_query_transactions(args){
+  const af=args||{};
+  let rows=_filterRows(af);
+  const sortBy=af.sort_by||'date_desc';
+  if(sortBy==='date_desc')rows=[...rows].sort((a,b)=>b.d.localeCompare(a.d));
+  else if(sortBy==='date_asc')rows=[...rows].sort((a,b)=>a.d.localeCompare(b.d));
+  else if(sortBy==='amount_desc')rows=[...rows].sort((a,b)=>b.v-a.v);
+  else if(sortBy==='amount_asc')rows=[...rows].sort((a,b)=>a.v-b.v);
+  const limit=Math.min(Math.max(af.limit||50,1),200);
+  const total=rows.length;
+  const totalAmount=rows.reduce((s,t)=>s+t.v,0);
+  const items=rows.slice(0,limit).map(t=>({date:t.d,amount:t.v,type:t.t,source:t.s,bank:t.b,category:t.c,detail:t.r}));
+  return {total_matching:total,returned:items.length,total_amount:Math.round(totalAmount*100)/100,items};
+}
+function tool_aggregate(args){
+  const af=args||{};
+  const rows=_filterRows(af);
+  const keyFn={
+    category:t=>t.c||'(uncategorized)',
+    source:t=>t.s||'(no source)',
+    bank:t=>t.b||'(no bank)',
+    month:t=>(t.d||'').slice(0,7),
+    year:t=>(t.d||'').slice(0,4),
+    type:t=>t.t
+  }[af.group_by];
+  if(!keyFn)return {error:'invalid group_by'};
+  const map={};
+  for(const t of rows){
+    const k=keyFn(t);
+    if(!map[k])map[k]={group:k,count:0,sum:0};
+    map[k].count++;
+    map[k].sum+=t.v;
+  }
+  const groups=Object.values(map).map(g=>({
+    group:g.group,count:g.count,
+    sum:Math.round(g.sum*100)/100,
+    avg:Math.round(g.sum/g.count*100)/100
+  })).sort((a,b)=>b.sum-a.sum);
+  const limit=Math.min(Math.max(af.limit||20,1),100);
+  return {total_rows:rows.length,group_count:groups.length,groups:groups.slice(0,limit)};
+}
+function tool_list_distinct(args){
+  const af=args||{};
+  const fnMap={category:t=>t.c,source:t=>t.s,bank:t=>t.b,type:t=>t.t};
+  const fn=fnMap[af.field];
+  if(!fn)return {error:'invalid field'};
+  let rows=TXNS;
+  if(af.type_filter)rows=rows.filter(t=>t.t===af.type_filter);
+  const set=new Set();
+  for(const t of rows){const v=fn(t);if(v)set.add(v);}
+  return {field:af.field,count:set.size,values:[...set].sort()};
+}
+function execChatTool(name,input){
+  try{
+    if(name==='query_transactions')return tool_query_transactions(input);
+    if(name==='aggregate')return tool_aggregate(input);
+    if(name==='list_distinct_values')return tool_list_distinct(input);
+    return {error:'Unknown tool: '+name};
+  }catch(e){return {error:e.message||String(e)};}
+}
+function buildChatSystem(){
   const dates=TXNS.map(t=>t.d).filter(Boolean);
   const minD=dates[dates.length-1]||'';
   const maxD=dates[0]||'';
-  // Last 12 months
-  const monthsRecent=MONTHLY.slice(-12);
-  // Recent transactions sample (newest 30)
-  const recent=TXNS.slice(0,30).map(t=>({date:t.d,amount:t.v,type:t.t,source:t.s,bank:t.b,category:t.c,detail:t.r}));
-  return `You are a helpful financial analyst assistant embedded in the user's personal revenue & expenses dashboard. The currency is EUR (€). Be concise, factual, and reference the numbers below. If a question can't be answered from the provided data, say so.
-=== DATA SNAPSHOT ===
-Date range: ${minD} to ${maxD}
-Total transactions: ${TXNS.length}
-Total income: €${inflow.toFixed(2)}
-Total expenses: €${outflow.toFixed(2)}
-Net: €${(inflow-outflow).toFixed(2)}
-Current view: tab="${activeTab}", yearFilter="${yearFilter}"
+  return `You are a helpful financial analyst assistant embedded in the user's personal revenue & expenses dashboard. The currency is EUR (€). Be concise and factual.
 
-MONTHLY (last 12, YYYY-MM, Inflow/Outflow/Net):
-${monthsRecent.map(m=>`${m.YM}: in €${m.Inflow}, out €${m.Outflow}, net €${m.Net}`).join('\n')}
+DATASET:
+- Total transactions: ${TXNS.length}
+- Date range: ${minD} to ${maxD}
+- Each transaction has: date (YYYY-MM-DD), amount (positive number), type ("In"=income or "Out"=expense), source/merchant, bank, category, detail
 
-YEARLY:
-${YEARLY.map(y=>`${y.Year}: in €${y.Inflow}, out €${y.Outflow}, net €${y.Net}`).join('\n')}
+You have tools to query the full transaction database on demand. Use them whenever the answer requires specifics — don't guess or make up numbers. Use multiple tool calls when needed (e.g. first list_distinct_values to discover categories, then aggregate to break them down). After tool calls, give the user a clear, concise answer with the actual numbers.
 
-TOP EXPENSE CATEGORIES (sum of outflow):
-${TOP_CATEGORIES.map(c=>`${c.Category}: €${c.Total}`).join('\n')}
-
-TOP EXPENSE SOURCES/MERCHANTS:
-${TOP_SOURCES.map(s=>`${s.Source}: €${s.Total}`).join('\n')}
-
-RECENT TRANSACTIONS (newest 30):
-${JSON.stringify(recent)}
-`;
+Current dashboard view: tab="${activeTab}", yearFilter="${yearFilter}".`;
 }
 async function sendChat(){
   if(CHAT.busy)return;
@@ -1265,42 +1373,67 @@ async function sendChat(){
   CHAT.history.push({role:'user',content:text});
   CHAT.busy=true;
   document.getElementById('chatSend').disabled=true;
-  const typingNode=appendMsg('bot','',{typing:true});
+  let typingNode=appendMsg('bot','',{typing:true});
   try{
-    const system=buildFinanceContext();
-    const res=await fetch('https://api.anthropic.com/v1/messages',{
-      method:'POST',
-      headers:{
-        'content-type':'application/json',
-        'x-api-key':CHAT.apiKey,
-        'anthropic-version':'2023-06-01',
-        'anthropic-dangerous-direct-browser-access':'true'
-      },
-      body:JSON.stringify({
-        model:CHAT.model,
-        max_tokens:1024,
-        system,
-        messages:CHAT.history
-      })
-    });
-    if(!res.ok){
-      const errBody=await res.text();
-      let msg='API error '+res.status;
-      try{const j=JSON.parse(errBody);if(j.error&&j.error.message)msg=j.error.message;}catch{}
-      typingNode.remove();
-      appendMsg('bot',msg,{error:true});
-      CHAT.history.pop(); // remove the user msg so retry works
-    }else{
+    const system=buildChatSystem();
+    let safety=0;
+    while(safety++<10){
+      const res=await fetch('https://api.anthropic.com/v1/messages',{
+        method:'POST',
+        headers:{
+          'content-type':'application/json',
+          'x-api-key':CHAT.apiKey,
+          'anthropic-version':'2023-06-01',
+          'anthropic-dangerous-direct-browser-access':'true'
+        },
+        body:JSON.stringify({
+          model:CHAT.model,
+          max_tokens:2048,
+          system,
+          tools:CHAT_TOOLS,
+          messages:CHAT.history
+        })
+      });
+      if(!res.ok){
+        const errBody=await res.text();
+        let msg='API error '+res.status;
+        try{const j=JSON.parse(errBody);if(j.error&&j.error.message)msg=j.error.message;}catch{}
+        if(typingNode){typingNode.remove();typingNode=null;}
+        appendMsg('bot',msg,{error:true});
+        // Roll back to last user message so retry works
+        while(CHAT.history.length&&CHAT.history[CHAT.history.length-1].role!=='user')CHAT.history.pop();
+        if(CHAT.history.length&&CHAT.history[CHAT.history.length-1].role==='user')CHAT.history.pop();
+        break;
+      }
       const data=await res.json();
-      const reply=(data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('\n').trim()||'(empty reply)';
-      typingNode.remove();
-      appendMsg('bot',reply);
-      CHAT.history.push({role:'assistant',content:reply});
+      const content=data.content||[];
+      CHAT.history.push({role:'assistant',content});
+      // Display any text blocks
+      const textBlocks=content.filter(b=>b.type==='text');
+      const toolUses=content.filter(b=>b.type==='tool_use');
+      if(textBlocks.length||toolUses.length){
+        if(typingNode){typingNode.remove();typingNode=null;}
+      }
+      for(const tb of textBlocks){
+        if(tb.text&&tb.text.trim())appendMsg('bot',tb.text);
+      }
+      if(data.stop_reason!=='tool_use'||toolUses.length===0)break;
+      // Show small "looking up data..." note
+      typingNode=appendMsg('bot','',{typing:true});
+      // Execute each tool call
+      const toolResults=toolUses.map(tu=>({
+        type:'tool_result',
+        tool_use_id:tu.id,
+        content:JSON.stringify(execChatTool(tu.name,tu.input||{}))
+      }));
+      CHAT.history.push({role:'user',content:toolResults});
     }
+    if(typingNode){typingNode.remove();typingNode=null;}
   }catch(err){
-    typingNode.remove();
+    if(typingNode){typingNode.remove();typingNode=null;}
     appendMsg('bot','Network error: '+err.message,{error:true});
-    CHAT.history.pop();
+    while(CHAT.history.length&&CHAT.history[CHAT.history.length-1].role!=='user')CHAT.history.pop();
+    if(CHAT.history.length&&CHAT.history[CHAT.history.length-1].role==='user')CHAT.history.pop();
   }finally{
     CHAT.busy=false;
     document.getElementById('chatSend').disabled=false;
