@@ -97,6 +97,47 @@ h1{font-size:32px;font-weight:800;letter-spacing:-1.5px;background:linear-gradie
 .delta.pos{background:rgba(16,185,129,0.15);color:#10b981}.delta.neg{background:rgba(239,68,68,0.15);color:#ef4444}
 
 .proj-controls{display:flex;gap:16px;margin-bottom:20px;flex-wrap:wrap;align-items:center}
+
+/* === AI CHAT WIDGET === */
+.chat-fab{position:fixed;bottom:24px;right:24px;width:56px;height:56px;border-radius:50%;border:none;cursor:pointer;background:linear-gradient(135deg,#10b981 0%,#8b5cf6 100%);color:#fff;font-size:24px;box-shadow:0 6px 20px rgba(0,0,0,0.35);z-index:998;transition:transform .2s;display:flex;align-items:center;justify-content:center}
+.chat-fab:hover{transform:scale(1.06)}
+.chat-panel{position:fixed;bottom:90px;right:24px;width:400px;max-width:calc(100vw - 32px);height:600px;max-height:calc(100vh - 120px);background:var(--panel-bg);border:1px solid var(--border);border-radius:16px;z-index:999;display:none;flex-direction:column;box-shadow:0 12px 36px var(--shadow);overflow:hidden}
+.chat-panel.open{display:flex}
+.chat-header{display:flex;justify-content:space-between;align-items:center;padding:14px 18px;border-bottom:1px solid var(--border);background:var(--bg3)}
+.chat-title{font-size:14px;font-weight:700;color:var(--text);display:flex;align-items:center;gap:8px}
+.chat-title .dot{width:8px;height:8px;border-radius:50%;background:#10b981;box-shadow:0 0 8px #10b981}
+.chat-head-btns{display:flex;gap:4px}
+.chat-head-btns button{background:none;border:none;color:var(--text4);cursor:pointer;padding:4px 8px;border-radius:6px;font-size:16px}
+.chat-head-btns button:hover{background:var(--bg4);color:var(--text)}
+.chat-msgs{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:12px}
+.chat-msg{max-width:85%;padding:10px 14px;border-radius:14px;font-size:13px;line-height:1.5;white-space:pre-wrap;word-wrap:break-word}
+.chat-msg.user{align-self:flex-end;background:#10b981;color:#fff;border-bottom-right-radius:4px}
+.chat-msg.bot{align-self:flex-start;background:var(--bg3);color:var(--text2);border:1px solid var(--border);border-bottom-left-radius:4px}
+.chat-msg.bot.error{border-color:rgba(239,68,68,0.4);color:#ef4444}
+.chat-empty{text-align:center;color:var(--text5);font-size:12px;padding:30px 16px}
+.chat-empty .suggestions{display:flex;flex-direction:column;gap:6px;margin-top:14px}
+.chat-empty .sg{background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:8px 12px;color:var(--text3);cursor:pointer;font-size:12px;text-align:left;font-family:inherit;transition:all .15s}
+.chat-empty .sg:hover{border-color:#10b981;color:#10b981}
+.chat-input-row{display:flex;gap:8px;padding:12px;border-top:1px solid var(--border);background:var(--bg2)}
+.chat-input{flex:1;background:var(--input-bg);border:1px solid var(--border2);border-radius:10px;color:var(--text);padding:10px 12px;font-size:13px;font-family:inherit;outline:none;resize:none;max-height:120px;min-height:40px}
+.chat-input:focus{border-color:#10b981}
+.chat-send{background:#10b981;color:#fff;border:none;border-radius:10px;padding:0 16px;cursor:pointer;font-weight:600;font-size:13px;font-family:inherit}
+.chat-send:disabled{opacity:.4;cursor:not-allowed}
+.chat-settings{position:absolute;inset:0;background:var(--panel-bg);padding:18px;display:none;flex-direction:column;gap:14px;overflow-y:auto}
+.chat-settings.open{display:flex}
+.chat-settings h3{font-size:14px;font-weight:700;color:var(--text);margin-bottom:4px}
+.chat-settings label{font-size:11px;font-weight:700;color:var(--text4);text-transform:uppercase;letter-spacing:1.2px;display:block;margin-bottom:6px}
+.chat-settings input,.chat-settings select{width:100%;background:var(--input-bg);border:1px solid var(--border2);border-radius:8px;color:var(--text);padding:10px 12px;font-size:13px;font-family:inherit;outline:none}
+.chat-settings input:focus,.chat-settings select:focus{border-color:#10b981}
+.chat-settings .hint{font-size:11px;color:var(--text5);line-height:1.5;margin-top:-6px}
+.chat-settings .hint a{color:#10b981;text-decoration:none}
+.chat-settings .btns{display:flex;gap:8px;margin-top:auto}
+.chat-settings .btns button{flex:1;padding:10px;border-radius:8px;border:none;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit}
+.chat-typing{display:inline-flex;gap:3px;align-items:center}
+.chat-typing span{width:6px;height:6px;border-radius:50%;background:var(--text4);animation:chatBlink 1.2s infinite}
+.chat-typing span:nth-child(2){animation-delay:.2s}.chat-typing span:nth-child(3){animation-delay:.4s}
+@keyframes chatBlink{0%,80%,100%{opacity:.2}40%{opacity:1}}
+@media(max-width:480px){.chat-panel{right:8px;left:8px;width:auto;bottom:84px;height:calc(100vh - 100px)}.chat-fab{bottom:16px;right:16px}}
 .proj-label{font-size:12px;color:var(--text4);font-weight:600}
 .proj-input{background:var(--input-bg);border:1px solid var(--border2);border-radius:8px;color:var(--text);padding:8px 12px;font-size:13px;font-family:inherit;outline:none;width:100px}
 .proj-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:20px}
@@ -243,6 +284,44 @@ h1{font-size:32px;font-weight:800;letter-spacing:-1.5px;background:linear-gradie
   <div id="content"></div>
   <div class="insights" id="insightsSection"></div>
 </div>
+<!-- AI Chat Widget -->
+<button class="chat-fab" id="chatFab" onclick="toggleChat()" title="Ask AI about your finances">💬</button>
+<div class="chat-panel" id="chatPanel">
+  <div class="chat-header">
+    <div class="chat-title"><span class="dot"></span>AI Assistant</div>
+    <div class="chat-head-btns">
+      <button onclick="clearChat()" title="New chat">🗘</button>
+      <button onclick="toggleChatSettings()" title="Settings">⚙</button>
+      <button onclick="toggleChat()" title="Close">×</button>
+    </div>
+  </div>
+  <div class="chat-msgs" id="chatMsgs"></div>
+  <div class="chat-input-row">
+    <textarea class="chat-input" id="chatInput" placeholder="Ask about your revenue, expenses, trends…" rows="1" onkeydown="chatKeyDown(event)"></textarea>
+    <button class="chat-send" id="chatSend" onclick="sendChat()">Send</button>
+  </div>
+  <div class="chat-settings" id="chatSettings">
+    <h3>AI Settings</h3>
+    <div>
+      <label>Anthropic API Key</label>
+      <input type="password" id="chatApiKey" placeholder="sk-ant-...">
+      <p class="hint">Get a key at <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com</a>. Stored only in your browser's localStorage.</p>
+    </div>
+    <div>
+      <label>Model</label>
+      <select id="chatModel">
+        <option value="claude-sonnet-4-5">Claude Sonnet 4.5 (recommended)</option>
+        <option value="claude-haiku-4-5">Claude Haiku 4.5 (fast, cheap)</option>
+        <option value="claude-opus-4-5">Claude Opus 4.5 (most capable)</option>
+      </select>
+    </div>
+    <div class="btns">
+      <button class="fp-btn fp-btn-secondary" onclick="toggleChatSettings()">Cancel</button>
+      <button class="fp-btn fp-btn-primary" onclick="saveChatSettings()">Save</button>
+    </div>
+  </div>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script>
@@ -1382,6 +1461,175 @@ function render(){
 
 applyTheme();
 (async()=>{await loadFromSupabase();restoreStateFromHash();render();})();
+
+// ============================================================
+// AI CHAT WIDGET
+// ============================================================
+const CHAT_KEYS={apiKey:'chat-anthropic-key',model:'chat-model'};
+let CHAT={
+  apiKey:localStorage.getItem(CHAT_KEYS.apiKey)||'',
+  model:localStorage.getItem(CHAT_KEYS.model)||'claude-sonnet-4-5',
+  history:[],
+  busy:false
+};
+
+function toggleChat(){
+  const p=document.getElementById('chatPanel');
+  const wasOpen=p.classList.contains('open');
+  p.classList.toggle('open');
+  if(!wasOpen){
+    // Prefill settings inputs
+    document.getElementById('chatApiKey').value=CHAT.apiKey;
+    document.getElementById('chatModel').value=CHAT.model;
+    if(CHAT.history.length===0)renderChatEmpty();
+    if(!CHAT.apiKey){toggleChatSettings(true);}
+    else{setTimeout(()=>document.getElementById('chatInput').focus(),100);}
+  }
+}
+function toggleChatSettings(forceOpen){
+  const s=document.getElementById('chatSettings');
+  if(forceOpen===true)s.classList.add('open');
+  else s.classList.toggle('open');
+}
+function saveChatSettings(){
+  const key=document.getElementById('chatApiKey').value.trim();
+  const model=document.getElementById('chatModel').value;
+  CHAT.apiKey=key;CHAT.model=model;
+  localStorage.setItem(CHAT_KEYS.apiKey,key);
+  localStorage.setItem(CHAT_KEYS.model,model);
+  toggleChatSettings();
+  if(CHAT.history.length===0)renderChatEmpty();
+  document.getElementById('chatInput').focus();
+}
+function clearChat(){
+  CHAT.history=[];
+  renderChatEmpty();
+}
+function renderChatEmpty(){
+  const box=document.getElementById('chatMsgs');
+  const hasKey=!!CHAT.apiKey;
+  const suggestions=[
+    'Summarize my spending this year',
+    'What are my top 3 expense categories?',
+    'How did last month compare to the previous month?',
+    'Are there any unusual transactions I should look at?'
+  ];
+  box.innerHTML='<div class="chat-empty">'+
+    (hasKey
+      ? '<div>Ask anything about your transactions, trends, or categories.</div><div class="suggestions">'+
+        suggestions.map(s=>'<button class="sg" onclick="useSuggestion(this)">'+escapeHtml(s)+'</button>').join('')+'</div>'
+      : '<div>Add your Anthropic API key in settings (⚙) to get started.</div>')+
+    '</div>';
+}
+function useSuggestion(btn){
+  document.getElementById('chatInput').value=btn.textContent;
+  sendChat();
+}
+function chatKeyDown(e){
+  if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendChat();}
+}
+function appendMsg(role,text,opts){
+  const box=document.getElementById('chatMsgs');
+  if(box.querySelector('.chat-empty'))box.innerHTML='';
+  const div=document.createElement('div');
+  div.className='chat-msg '+role+(opts&&opts.error?' error':'');
+  if(opts&&opts.typing){
+    div.innerHTML='<span class="chat-typing"><span></span><span></span><span></span></span>';
+  }else{
+    div.textContent=text;
+  }
+  box.appendChild(div);
+  box.scrollTop=box.scrollHeight;
+  return div;
+}
+function buildFinanceContext(){
+  const inflow=TXNS.filter(t=>t.t==='In').reduce((a,t)=>a+t.v,0);
+  const outflow=TXNS.filter(t=>t.t==='Out').reduce((a,t)=>a+t.v,0);
+  const dates=TXNS.map(t=>t.d).filter(Boolean);
+  const minD=dates[dates.length-1]||'';
+  const maxD=dates[0]||'';
+  // Last 12 months
+  const monthsRecent=MONTHLY.slice(-12);
+  // Recent transactions sample (newest 30)
+  const recent=TXNS.slice(0,30).map(t=>({date:t.d,amount:t.v,type:t.t,source:t.s,bank:t.b,category:t.c,detail:t.r}));
+  return `You are a helpful financial analyst assistant embedded in the user's personal revenue & expenses dashboard. The currency is EUR (€). Be concise, factual, and reference the numbers below. If a question can't be answered from the provided data, say so.
+=== DATA SNAPSHOT ===
+Date range: ${minD} to ${maxD}
+Total transactions: ${TXNS.length}
+Total income: €${inflow.toFixed(2)}
+Total expenses: €${outflow.toFixed(2)}
+Net: €${(inflow-outflow).toFixed(2)}
+Current view: tab="${activeTab}", yearFilter="${yearFilter}"
+
+MONTHLY (last 12, YYYY-MM, Inflow/Outflow/Net):
+${monthsRecent.map(m=>`${m.YM}: in €${m.Inflow}, out €${m.Outflow}, net €${m.Net}`).join('\n')}
+
+YEARLY:
+${YEARLY.map(y=>`${y.Year}: in €${y.Inflow}, out €${y.Outflow}, net €${y.Net}`).join('\n')}
+
+TOP EXPENSE CATEGORIES (sum of outflow):
+${TOP_CATEGORIES.map(c=>`${c.Category}: €${c.Total}`).join('\n')}
+
+TOP EXPENSE SOURCES/MERCHANTS:
+${TOP_SOURCES.map(s=>`${s.Source}: €${s.Total}`).join('\n')}
+
+RECENT TRANSACTIONS (newest 30):
+${JSON.stringify(recent)}
+`;
+}
+async function sendChat(){
+  if(CHAT.busy)return;
+  const input=document.getElementById('chatInput');
+  const text=input.value.trim();
+  if(!text)return;
+  if(!CHAT.apiKey){toggleChatSettings(true);return;}
+  input.value='';
+  appendMsg('user',text);
+  CHAT.history.push({role:'user',content:text});
+  CHAT.busy=true;
+  document.getElementById('chatSend').disabled=true;
+  const typingNode=appendMsg('bot','',{typing:true});
+  try{
+    const system=buildFinanceContext();
+    const res=await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',
+      headers:{
+        'content-type':'application/json',
+        'x-api-key':CHAT.apiKey,
+        'anthropic-version':'2023-06-01',
+        'anthropic-dangerous-direct-browser-access':'true'
+      },
+      body:JSON.stringify({
+        model:CHAT.model,
+        max_tokens:1024,
+        system,
+        messages:CHAT.history
+      })
+    });
+    if(!res.ok){
+      const errBody=await res.text();
+      let msg='API error '+res.status;
+      try{const j=JSON.parse(errBody);if(j.error&&j.error.message)msg=j.error.message;}catch{}
+      typingNode.remove();
+      appendMsg('bot',msg,{error:true});
+      CHAT.history.pop(); // remove the user msg so retry works
+    }else{
+      const data=await res.json();
+      const reply=(data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('\n').trim()||'(empty reply)';
+      typingNode.remove();
+      appendMsg('bot',reply);
+      CHAT.history.push({role:'assistant',content:reply});
+    }
+  }catch(err){
+    typingNode.remove();
+    appendMsg('bot','Network error: '+err.message,{error:true});
+    CHAT.history.pop();
+  }finally{
+    CHAT.busy=false;
+    document.getElementById('chatSend').disabled=false;
+    input.focus();
+  }
+}
 </script>
 </body>
 </html>
