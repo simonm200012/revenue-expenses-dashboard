@@ -536,28 +536,24 @@ function bl(items,lk,vk,mx,onClick){return'<div class="bar-list">'+items.map((it
 function ttcb(ds){return{callbacks:{label:ctx=>ds?ctx.dataset.label+": "+fmtE(ctx.parsed.y):fmtE(ctx.parsed.y)}}}
 
 // Compute YoY comparison: current period vs same months one year earlier.
-// Only meaningful when no non-year filters are active.
+// Only meaningful when a specific year is selected and no other filters active —
+// otherwise the lifetime KPI value would clash with a year-vs-year badge.
 function getYoYTotals(){
   const nonYearFilters=Object.values(gFilters).some(v=>v!=='');
   if(nonYearFilters)return null;
+  if(yearFilter==='All')return null;
   const allDates=TXNS.map(t=>t.d).filter(Boolean).sort();
   if(!allDates.length)return null;
   const latest=allDates[allDates.length-1];
   let startY,startM,endY,endM;
-  if(yearFilter==='All'){
-    endY=parseInt(latest.slice(0,4));
-    endM=parseInt(latest.slice(5,7));
-    startY=endY;startM=1;
-  } else {
-    startY=parseInt(yearFilter);
-    startM=1;endY=startY;endM=12;
-    const yrDates=allDates.filter(d=>d.startsWith(yearFilter));
-    if(yrDates.length){
-      const last=yrDates[yrDates.length-1];
-      const lastYr=parseInt(latest.slice(0,4));
-      // If looking at current calendar year, cap end month at latest available
-      if(parseInt(last.slice(0,4))===lastYr)endM=parseInt(last.slice(5,7));
-    }
+  startY=parseInt(yearFilter);
+  startM=1;endY=startY;endM=12;
+  const yrDates=allDates.filter(d=>d.startsWith(yearFilter));
+  if(yrDates.length){
+    const last=yrDates[yrDates.length-1];
+    const lastYr=parseInt(latest.slice(0,4));
+    // If looking at current calendar year, cap end month at latest available
+    if(parseInt(last.slice(0,4))===lastYr)endM=parseInt(last.slice(5,7));
   }
   function sumPeriod(yA,mA,yB,mB){
     let inflow=0,outflow=0,count=0;
