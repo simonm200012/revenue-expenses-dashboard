@@ -3,6 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#10b981">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/png" href="icons/favicon-32.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Finances">
 <title>Revenue & Expenses Dashboard</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -157,6 +164,7 @@ h1{font-size:32px;font-weight:800;letter-spacing:-1.5px;background:linear-gradie
 /* Recurring */
 .rec-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px;margin-bottom:20px}
 .rec-card{background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:16px;display:flex;flex-direction:column;gap:6px}
+.rec-card.dormant{border-color:rgba(245,158,11,0.35);background:linear-gradient(180deg,rgba(245,158,11,0.04),var(--bg3))}
 .rec-card-head{display:flex;justify-content:space-between;align-items:center}
 .rec-card-name{font-size:13px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:65%}
 .rec-card-freq{font-size:10px;font-weight:700;color:var(--text4);text-transform:uppercase;letter-spacing:.8px;padding:2px 8px;background:var(--bg4);border-radius:10px}
@@ -527,12 +535,69 @@ function mc(id,h){return`<div style="position:relative;height:${h}px"><canvas id
 function bl(items,lk,vk,mx,onClick){return'<div class="bar-list">'+items.map((it,i)=>{const raw=String(it[lk]||'');const ch=onClick?` style="cursor:pointer" data-merchant="${escapeHtml(raw)}" onclick="${onClick}(this.dataset.merchant)"`:'';return `<div class="bar-item"${ch}><div class="bar-header"><span class="bar-label">${escapeHtml(raw)}</span><span class="bar-value">${fmtE(it[vk])}</span></div><div class="bar-track"><div class="bar-fill" style="width:${(it[vk]/mx)*100}%;background:${P[i%P.length]}"></div></div></div>`}).join("")+"</div>"}
 function ttcb(ds){return{callbacks:{label:ctx=>ds?ctx.dataset.label+": "+fmtE(ctx.parsed.y):fmtE(ctx.parsed.y)}}}
 
+// Compute YoY comparison: current period vs same months one year earlier.
+// Only meaningful when no non-year filters are active.
+function getYoYTotals(){
+  const nonYearFilters=Object.values(gFilters).some(v=>v!=='');
+  if(nonYearFilters)return null;
+  const allDates=TXNS.map(t=>t.d).filter(Boolean).sort();
+  if(!allDates.length)return null;
+  const latest=allDates[allDates.length-1];
+  let startY,startM,endY,endM;
+  if(yearFilter==='All'){
+    endY=parseInt(latest.slice(0,4));
+    endM=parseInt(latest.slice(5,7));
+    startY=endY;startM=1;
+  } else {
+    startY=parseInt(yearFilter);
+    startM=1;endY=startY;endM=12;
+    const yrDates=allDates.filter(d=>d.startsWith(yearFilter));
+    if(yrDates.length){
+      const last=yrDates[yrDates.length-1];
+      const lastYr=parseInt(latest.slice(0,4));
+      // If looking at current calendar year, cap end month at latest available
+      if(parseInt(last.slice(0,4))===lastYr)endM=parseInt(last.slice(5,7));
+    }
+  }
+  function sumPeriod(yA,mA,yB,mB){
+    let inflow=0,outflow=0,count=0;
+    for(const t of TXNS){
+      const y=parseInt(t.d.slice(0,4)),mo=parseInt(t.d.slice(5,7));
+      if(y<yA||y>yB)continue;
+      if(y===yA&&mo<mA)continue;
+      if(y===yB&&mo>mB)continue;
+      if(t.t==='In')inflow+=t.v; else outflow+=t.v;
+      count++;
+    }
+    return {inflow,outflow,net:inflow-outflow,count};
+  }
+  const cur=sumPeriod(startY,startM,endY,endM);
+  const prev=sumPeriod(startY-1,startM,endY-1,endM);
+  if(!prev.count)return null;
+  return {cur,prev,label:yearFilter==='All'?`${startY} YTD vs ${startY-1} YTD`:`${startY} vs ${startY-1}`};
+}
+function yoyPct(c,p){if(p==null||p===0)return null; return ((c-p)/Math.abs(p))*100;}
+function yoyBadge(c,p,invertColor){
+  if(p==null)return '';
+  const pct=yoyPct(c,p);
+  if(pct==null)return '';
+  // invertColor=true means "negative is good" (e.g., for expenses going down)
+  const good=invertColor?pct<0:pct>=0;
+  const cls=good?'pos':'neg';
+  const sign=pct>=0?'+':'';
+  return `<span class="delta ${cls}" style="margin-left:6px">${sign}${pct.toFixed(1)}%</span>`;
+}
 function renderKPIs(){const t=getTotals(),m=gfm(),l=m.slice(-12),ai=l.reduce((s,d)=>s+d.Inflow,0)/Math.max(l.length,1),ao=l.reduce((s,d)=>s+d.Outflow,0)/Math.max(l.length,1);
 const ftxns=getFilteredTxns();
+const yoy=getYoYTotals();
+const inBadge=yoy?yoyBadge(yoy.cur.inflow,yoy.prev.inflow,false):'';
+const outBadge=yoy?yoyBadge(yoy.cur.outflow,yoy.prev.outflow,true):'';
+const netBadge=yoy?yoyBadge(yoy.cur.net,yoy.prev.net,false):'';
+const yoyLabel=yoy?`<span style="font-size:10px;color:var(--text5);margin-left:4px">${yoy.label}</span>`:'';
 document.getElementById("kpis").innerHTML=`
-<div class="kpi"><div class="kpi-label">Total Income</div><div class="kpi-value" style="color:#10b981">\u20AC${fmt(t.inflow)}</div><div class="kpi-sub">Avg \u20AC${fmt(ai)}/mo (L12M)</div></div>
-<div class="kpi"><div class="kpi-label">Total Expenses</div><div class="kpi-value" style="color:#ef4444">\u20AC${fmt(t.outflow)}</div><div class="kpi-sub">Avg \u20AC${fmt(ao)}/mo (L12M)</div></div>
-<div class="kpi"><div class="kpi-label">Net Balance</div><div class="kpi-value" style="color:${t.net>=0?'#10b981':'#ef4444'}">\u20AC${fmt(Math.abs(t.net))}</div><div class="kpi-sub">${t.net>=0?'Surplus':'Deficit'}</div></div>
+<div class="kpi"><div class="kpi-label">Total Income</div><div class="kpi-value" style="color:#10b981">\u20AC${fmt(t.inflow)}</div><div class="kpi-sub">Avg \u20AC${fmt(ai)}/mo (L12M)${inBadge?'<br>'+inBadge+yoyLabel:''}</div></div>
+<div class="kpi"><div class="kpi-label">Total Expenses</div><div class="kpi-value" style="color:#ef4444">\u20AC${fmt(t.outflow)}</div><div class="kpi-sub">Avg \u20AC${fmt(ao)}/mo (L12M)${outBadge?'<br>'+outBadge+yoyLabel:''}</div></div>
+<div class="kpi"><div class="kpi-label">Net Balance</div><div class="kpi-value" style="color:${t.net>=0?'#10b981':'#ef4444'}">\u20AC${fmt(Math.abs(t.net))}</div><div class="kpi-sub">${t.net>=0?'Surplus':'Deficit'}${netBadge?'<br>'+netBadge+yoyLabel:''}</div></div>
 <div class="kpi"><div class="kpi-label">${hasActiveFilters()?'Filtered Txns':'Savings Rate'}</div><div class="kpi-value" style="color:${hasActiveFilters()?'#8b5cf6':t.rate>=0?'#06b6d4':'#ef4444'}">${hasActiveFilters()?ftxns.length:t.rate.toFixed(1)+'%'}</div><div class="kpi-sub">${hasActiveFilters()?'of '+TXNS.length+' total':'Income saved'}</div></div>`}
 
 // Dynamic insights
@@ -677,7 +742,61 @@ if(recOut.length||recIn.length){
   </div></div>`;
 }
 
-el.innerHTML=`<div class="section"><div class="section-title">Cash Flow Forecast</div><div class="proj-controls"><div><span class="proj-label">Monthly Income (\u20AC)</span><br><input class="proj-input" id="projIn" type="number" value="${avgIn}" oninput="updateProjection()"></div><div><span class="proj-label">Monthly Expenses (\u20AC)</span><br><input class="proj-input" id="projOut" type="number" value="${avgOut}" oninput="updateProjection()"></div><div><span class="proj-label">Current Balance (\u20AC)</span><br><input class="proj-input" id="projBal" type="number" value="${Math.round(cumNow)}" oninput="updateProjection()"></div><div><span class="proj-label">Months</span><br><input class="proj-input" id="projMonths" type="number" value="24" min="1" max="120" oninput="updateProjection()"></div></div><div id="projCards"></div>${mc("projChart",300)}<div style="margin-top:16px">${mc("projStackChart",260)}</div></div>${recBreakdown}`;updateProjection();
+// 30/60/90-day cash flow forecast (data-driven, not user-tweakable)
+// Uses detected recurring + median daily discretionary spend from the last 90 days.
+function buildNearTermForecast(){
+  const ftxns=getFilteredTxns();
+  if(!ftxns.length)return null;
+  const dates=ftxns.map(t=>t.d).filter(Boolean).sort();
+  const latest=dates[dates.length-1];
+  if(!latest)return null;
+  const latestMs=new Date(latest).getTime();
+  const ninetyDaysAgoMs=latestMs-90*86400000;
+  // Recent transactions (last 90 days)
+  const recent=ftxns.filter(t=>new Date(t.d).getTime()>=ninetyDaysAgoMs);
+  const recurringSet=new Set(rec.map(r=>r.source));
+  // Discretionary = recent expenses NOT from a detected recurring source
+  const discr=recent.filter(t=>t.t==='Out'&&!recurringSet.has(t.s));
+  const discrDaily=discr.reduce((s,t)=>s+t.v,0)/90;
+  // Recurring averages per day
+  const recOutDaily=rec.filter(r=>r.type==='Out').reduce((s,r)=>s+(r.annual/365),0);
+  const recInDaily=rec.filter(r=>r.type==='In').reduce((s,r)=>s+(r.annual/365),0);
+  // Variable income (last 90 days, not flagged as recurring)
+  const varIncome=recent.filter(t=>t.t==='In'&&!recurringSet.has(t.s));
+  const varInDaily=varIncome.reduce((s,t)=>s+t.v,0)/90;
+  const netDaily=(recInDaily+varInDaily)-(recOutDaily+discrDaily);
+  const horizons=[30,60,90];
+  return {
+    horizons:horizons.map(h=>({
+      days:h,
+      expectedInflow:Math.round((recInDaily+varInDaily)*h),
+      expectedOutflow:Math.round((recOutDaily+discrDaily)*h),
+      expectedNet:Math.round(netDaily*h),
+      projectedBalance:Math.round(cumNow+netDaily*h)
+    })),
+    netDaily:Math.round(netDaily*100)/100,
+    recurringMonthly:Math.round((recOutDaily+0)*30),
+    discretionaryMonthly:Math.round(discrDaily*30)
+  };
+}
+const nearTerm=buildNearTermForecast();
+let nearTermHTML='';
+if(nearTerm){
+  nearTermHTML=`<div class="section" style="margin-bottom:16px"><div class="section-title">Near-Term Forecast (data-driven)</div>
+  <div style="font-size:11px;color:var(--text4);margin-bottom:14px">Based on detected recurring transactions + median discretionary spend from the last 90 days. Avg net €${nearTerm.netDaily}/day.</div>
+  <div class="kpis" style="margin-bottom:0">${nearTerm.horizons.map(h=>{
+    const goodNet=h.expectedNet>=0;
+    return `<div class="kpi" style="flex:1">
+      <div class="kpi-label">Next ${h.days} days</div>
+      <div class="kpi-value" style="color:${goodNet?'#10b981':'#ef4444'}">${goodNet?'+':'\u2212'}\u20AC${Math.abs(h.expectedNet).toLocaleString()}</div>
+      <div class="kpi-sub">
+        Income \u20AC${h.expectedInflow.toLocaleString()} \u00B7 Expenses \u20AC${h.expectedOutflow.toLocaleString()}<br>
+        Projected balance: <strong>\u20AC${h.projectedBalance.toLocaleString()}</strong>
+      </div>
+    </div>`;
+  }).join('')}</div></div>`;
+}
+el.innerHTML=`${nearTermHTML}<div class="section"><div class="section-title">Cash Flow Forecast</div><div class="proj-controls"><div><span class="proj-label">Monthly Income (\u20AC)</span><br><input class="proj-input" id="projIn" type="number" value="${avgIn}" oninput="updateProjection()"></div><div><span class="proj-label">Monthly Expenses (\u20AC)</span><br><input class="proj-input" id="projOut" type="number" value="${avgOut}" oninput="updateProjection()"></div><div><span class="proj-label">Current Balance (\u20AC)</span><br><input class="proj-input" id="projBal" type="number" value="${Math.round(cumNow)}" oninput="updateProjection()"></div><div><span class="proj-label">Months</span><br><input class="proj-input" id="projMonths" type="number" value="24" min="1" max="120" oninput="updateProjection()"></div></div><div id="projCards"></div>${mc("projChart",300)}<div style="margin-top:16px">${mc("projStackChart",260)}</div></div>${recBreakdown}`;updateProjection();
 // Stacked area: recurring vs variable
 if(recOut.length){
   const months=parseInt(document.getElementById("projMonths").value)||24;
@@ -756,24 +875,60 @@ function renderRecurring(){
   const totalOutMonthly=Math.round(totalOutAnnual/12);
   const totalInMonthly=Math.round(totalInAnnual/12);
 
-  function recCards(items,isIncome){
-    if(!items.length)return'<p style="color:var(--text4);padding:12px">No recurring transactions detected.</p>';
-    return'<div class="rec-grid">'+items.map(r=>`<div class="rec-card${isIncome?' income':''}">
+  // Subscription audit: bucket by days-since-last-seen relative to the latest data date
+  const allDates=TXNS.map(t=>t.d).filter(Boolean).sort();
+  const latestData=allDates[allDates.length-1];
+  const latestMs=latestData?new Date(latestData).getTime():Date.now();
+  function daysSince(dateStr){
+    if(!dateStr)return null;
+    return Math.round((latestMs-new Date(dateStr).getTime())/86400000);
+  }
+  // Active = expected window for its frequency (e.g., monthly = within 35 days, weekly = within 14, etc.)
+  // Dormant = lastSeen older than that but <= 180 days
+  // Stale = older than 180 days (filtered out — not interesting)
+  function expectedWindow(freq){
+    if(freq==='weekly')return 14;
+    if(freq==='bi-weekly')return 28;
+    if(freq==='monthly')return 45;
+    if(freq==='quarterly')return 110;
+    if(freq==='yearly')return 400;
+    return 60;
+  }
+  const outActive=[], outDormant=[];
+  outRec.forEach(r=>{
+    const days=daysSince(r.lastDate);
+    r._days=days;
+    const win=expectedWindow(r.freq);
+    if(days==null)return;
+    if(days<=win)outActive.push(r);
+    else if(days<=180)outDormant.push(r);
+    // else stale, drop from display but still in totals
+  });
+  const dormantAnnual=outDormant.reduce((s,r)=>s+r.annual,0);
+  const dormantMonthly=Math.round(dormantAnnual/12);
+
+  function recCards(items,isIncome,isDormant){
+    if(!items.length)return'<p style="color:var(--text4);padding:12px">'+(isDormant?'No dormant subscriptions detected — nothing obvious to cancel.':'No recurring transactions detected.')+'</p>';
+    return'<div class="rec-grid">'+items.map(r=>{
+      const days=r._days!=null?r._days:daysSince(r.lastDate);
+      const ageBadge=days!=null?`<span class="delta ${isDormant?'neg':'pos'}" style="font-size:10px">${days}d ago</span>`:'';
+      return `<div class="rec-card${isIncome?' income':''}${isDormant?' dormant':''}">
       <div class="rec-card-head"><span class="rec-card-name" title="${r.source}">${r.source}</span><span class="rec-card-freq">${r.freq}</span></div>
       <div class="rec-card-amt">${isIncome?'+':'\u2212'}\u20AC${r.amount.toFixed(2)}</div>
-      <div class="rec-card-annual">\u20AC${r.annual.toLocaleString()}/yr \u00B7 ${r.category} \u00B7 Last: ${r.lastDate}</div>
-    </div>`).join('')+'</div>';
+      <div class="rec-card-annual">\u20AC${r.annual.toLocaleString()}/yr \u00B7 ${r.category} \u00B7 Last: ${r.lastDate} ${ageBadge}</div>
+    </div>`;}).join('')+'</div>';
   }
 
   el.innerHTML=`
     <div class="rec-summary">
-      <div class="rec-summary-card"><div class="rec-summary-label">Recurring Expenses / mo</div><div class="rec-summary-value" style="color:#ef4444">\u20AC${totalOutMonthly.toLocaleString()}</div></div>
+      <div class="rec-summary-card"><div class="rec-summary-label">Active Subscriptions / mo</div><div class="rec-summary-value" style="color:#ef4444">\u20AC${Math.round(outActive.reduce((s,r)=>s+r.annual,0)/12).toLocaleString()}</div></div>
       <div class="rec-summary-card"><div class="rec-summary-label">Recurring Income / mo</div><div class="rec-summary-value" style="color:#10b981">\u20AC${totalInMonthly.toLocaleString()}</div></div>
       <div class="rec-summary-card"><div class="rec-summary-label">Net Recurring / mo</div><div class="rec-summary-value" style="color:${totalInMonthly-totalOutMonthly>=0?'#06b6d4':'#ef4444'}">\u20AC${Math.abs(totalInMonthly-totalOutMonthly).toLocaleString()}</div></div>
-      <div class="rec-summary-card"><div class="rec-summary-label">Subscriptions Found</div><div class="rec-summary-value" style="color:#8b5cf6">${rec.length}</div></div>
+      <div class="rec-summary-card"><div class="rec-summary-label">Dormant / Possibly Cancelled</div><div class="rec-summary-value" style="color:#f59e0b">${outDormant.length}<span style="font-size:13px;color:var(--text4);margin-left:6px">\u00B7 \u20AC${dormantMonthly}/mo</span></div></div>
     </div>
-    <div class="section"><div class="section-title">Recurring Expenses (${outRec.length})</div>${recCards(outRec,false)}</div>
-    <div class="section" style="margin-top:16px"><div class="section-title">Recurring Income (${inRec.length})</div>${recCards(inRec,true)}</div>
+    <div class="section"><div class="section-title">Active Subscriptions (${outActive.length})</div>${recCards(outActive,false,false)}</div>
+    <div class="section" style="margin-top:16px"><div class="section-title" style="color:#f59e0b">\u26A0 Dormant / Possibly Cancelled (${outDormant.length})</div><p style="font-size:11px;color:var(--text4);margin-bottom:10px">Recurring expenses not seen recently. Check if you cancelled them \u2014 or if a payment failed.</p>${recCards(outDormant,false,true)}</div>
+    <div class="section" style="margin-top:16px"><div class="section-title">Recurring Income (${inRec.length})</div>${recCards(inRec,true,false)}</div>
     <div class="section" style="margin-top:16px"><div class="section-title">Recurring Expense Breakdown</div>${mc("recChart",300)}</div>`;
 
   // Chart: recurring by category
@@ -1274,6 +1429,13 @@ function render(){
 
 applyTheme();
 (async()=>{await loadFromSupabase();restoreStateFromHash();render();})();
+
+// PWA service worker registration
+if('serviceWorker' in navigator){
+  window.addEventListener('load',()=>{
+    navigator.serviceWorker.register('sw.js').catch(err=>console.warn('SW registration failed:',err));
+  });
+}
 
 // ============================================================
 // AI CHAT WIDGET
