@@ -1,0 +1,36 @@
+name: Scrape fuel prices
+
+on:
+  schedule:
+    # Tuesdays at 14:00 UTC (16:00 Ljubljana). Slovenian regulated prices
+    # change Tuesday morning, so this catches the update reliably.
+    - cron: '0 14 * * 2'
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Run scraper
+        run: node scripts/scrape-fuel.mjs
+
+      - name: Commit updated data
+        run: |
+          if [[ -n "$(git status --porcelain data/fuel-prices.json)" ]]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add data/fuel-prices.json
+            git commit -m "Update fuel prices ($(date -u +%Y-%m-%d))"
+            git push
+          else
+            echo "No changes to fuel-prices.json"
+          fi

@@ -450,8 +450,8 @@ const fmt=v=>v>=1000?(v/1000).toFixed(1)+"k":Math.round(v).toLocaleString();
 const fmtE=v=>"\u20AC"+Math.round(v).toLocaleString();
 
 let activeTab="overview",yearFilter="All",charts={},txnPage=0;
-const TABS=["overview","spending","income","trends","recurring","transactions","compare","projection","rules"];
-const TAB_LABELS={overview:"Overview",spending:"Spending",income:"Income",trends:"Trends",recurring:"Recurring",transactions:"Transactions",compare:"Compare",projection:"Projection",rules:"Rules"};
+const TABS=["overview","spending","income","trends","recurring","transactions","compare","projection","fuel","rules"];
+const TAB_LABELS={overview:"Overview",spending:"Spending",income:"Income",trends:"Trends",recurring:"Recurring",transactions:"Transactions",compare:"Compare",projection:"Projection",fuel:"Gas Prices",rules:"Rules"};
 let gFilters={type:"",bank:"",category:"",dateFrom:"",dateTo:"",amtMin:"",amtMax:"",search:""};
 
 let dashboardSubtitle='Loading from Supabase...';
@@ -1118,16 +1118,152 @@ async function exportMonthPDF(){
   doc.save(`finance_report_${ym}.pdf`);
 }
 
+// ============================================================
+// FUEL PRICES (Slovenia, regulated weekly)
+// ============================================================
+let FUEL_DATA=null;
+let FUEL_LOADING=false;
+async function loadFuelData(){
+  if(FUEL_DATA||FUEL_LOADING)return FUEL_DATA;
+  FUEL_LOADING=true;
+  try{
+    const res=await fetch('data/fuel-prices.json',{cache:'no-cache'});
+    if(!res.ok)throw new Error('HTTP '+res.status);
+    FUEL_DATA=await res.json();
+  }catch(e){
+    FUEL_DATA={error:e.message||String(e)};
+  }finally{
+    FUEL_LOADING=false;
+  }
+  return FUEL_DATA;
+}
+function fuelPct(curr,prev){
+  if(prev==null||curr==null||prev===0)return null;
+  return ((curr-prev)/prev)*100;
+}
+function fuelPctBadge(pct){
+  if(pct==null)return '<span class="kpi-sub">—</span>';
+  const cls=pct>=0?'pos':'neg';
+  const sign=pct>=0?'+':'';
+  return `<span class="delta ${cls}">${sign}${pct.toFixed(2)}%</span>`;
+}
+function renderFuel(){
+  const k=document.getElementById('kpis');
+  const c=document.getElementById('content');
+  if(!FUEL_DATA){
+    k.innerHTML='';
+    c.innerHTML='<div style="text-align:center;padding:60px;color:var(--text4)"><p style="font-size:16px">Loading fuel prices…</p></div>';
+    loadFuelData().then(()=>{if(activeTab==='fuel')renderFuel()});
+    return;
+  }
+  if(FUEL_DATA.error){
+    k.innerHTML='';
+    c.innerHTML=`<div style="text-align:center;padding:60px;color:#ef4444"><p>Failed to load fuel prices: ${escapeHtml(FUEL_DATA.error)}</p><p style="margin-top:8px;color:var(--text4);font-size:12px">Make sure <code>data/fuel-prices.json</code> exists in the repo.</p></div>`;
+    return;
+  }
+  const prices=FUEL_DATA.prices||[];
+  if(!prices.length){k.innerHTML='';c.innerHTML='<div style="padding:40px;text-align:center;color:var(--text4)">No price data.</div>';return}
+  // newest first; for weekly % change compare to next row in array (i+1 = previous week)
+  const latest=prices[0];
+  const prev=prices[1]||{};
+  const fuels=FUEL_DATA.fuels||[{key:'nmb95',label:'NMB-95'},{key:'diesel',label:'Diesel'},{key:'elko',label:'ELKO'}];
+  const colors={nmb95:'#10b981',diesel:'#3b82f6',elko:'#f59e0b'};
+
+  // KPI cards
+  k.innerHTML=fuels.map(f=>{
+    const v=latest[f.key];
+    const pv=prev[f.key];
+    const pct=fuelPct(v,pv);
+    return `<div class="kpi"><div class="kpi-label">${escapeHtml(f.label)}</div><div class="kpi-value" style="color:${colors[f.key]||'#10b981'}">€${v!=null?v.toFixed(3):'—'}</div><div class="kpi-sub" style="display:flex;align-items:center;gap:6px">${fuelPctBadge(pct)}<span>vs prev. week</span></div></div>`;
+  }).join('');
+
+  // Build chart datasets (oldest → newest for line chart)
+  const chrono=[...prices].reverse();
+  const labels=chrono.map(p=>p.date);
+  const datasets=fuels.map(f=>({
+    label:f.label,
+    data:chrono.map(p=>p[f.key]),
+    borderColor:colors[f.key]||'#10b981',
+    backgroundColor:(colors[f.key]||'#10b981')+'22',
+    borderWidth:2,
+    pointRadius:0,
+    tension:.25,
+    spanGaps:true
+  }));
+
+  // History table (most recent first)
+  const histRows=prices.slice(0,52).map((p,i)=>{
+    const prv=prices[i+1];
+    const row=fuels.map(f=>{
+      const v=p[f.key];
+      const pv=prv?prv[f.key]:null;
+      const pct=fuelPct(v,pv);
+      const cls=pct==null?'':(pct>=0?'in':'out');
+      const sign=pct==null?'':(pct>=0?'+':'');
+      return `<td style="font-family:'JetBrains Mono',monospace">${v!=null?'€'+v.toFixed(3):'—'}</td><td class="${cls}" style="font-family:'JetBrains Mono',monospace;font-size:11px">${pct==null?'—':sign+pct.toFixed(2)+'%'}</td>`;
+    }).join('');
+    return `<tr><td>${p.date}</td>${row}</tr>`;
+  }).join('');
+
+  const fuelHeaders=fuels.map(f=>`<th>${escapeHtml(f.label)}</th><th>Δ wk</th>`).join('');
+  const updated=FUEL_DATA.updated?new Date(FUEL_DATA.updated).toLocaleString('en-GB'):'';
+
+  c.innerHTML=`
+  <div class="grid grid-1">
+    <div class="section">
+      <div class="section-title">Regulated Fuel Prices · Slovenia · €/liter</div>
+      <div style="font-size:11px;color:var(--text5);margin-bottom:12px">
+        Source: <a href="${escapeHtml(FUEL_DATA.source||'#')}" target="_blank" rel="noopener" style="color:#10b981">energetika-portal.si</a>
+        · ${prices.length} weekly records · Last scrape: ${escapeHtml(updated)}
+      </div>
+      <div style="position:relative;height:380px"><canvas id="fuelChart"></canvas></div>
+    </div>
+    <div class="section">
+      <div class="section-title">Weekly history · last 52 weeks</div>
+      <div class="table-wrap" style="max-height:520px">
+        <table class="txn-table">
+          <thead><tr><th>Date</th>${fuelHeaders}</tr></thead>
+          <tbody>${histRows}</tbody>
+        </table>
+      </div>
+    </div>
+  </div>`;
+
+  // Chart
+  charts.fuelChart=new Chart(document.getElementById('fuelChart'),{
+    type:'line',
+    data:{labels,datasets},
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      interaction:{mode:'nearest',axis:'x',intersect:false},
+      scales:{
+        x:{ticks:{maxTicksLimit:12,maxRotation:0,autoSkip:true,color:'#94a3b8'},grid:{display:false}},
+        y:{ticks:{callback:v=>'€'+v.toFixed(2),color:'#94a3b8'},grid:{color:'rgba(255,255,255,0.04)'}}
+      },
+      plugins:{
+        legend:{position:'top',labels:{boxWidth:12,padding:10,font:{size:12}}},
+        tooltip:{callbacks:{label:ctx=>ctx.dataset.label+': €'+(ctx.parsed.y!=null?ctx.parsed.y.toFixed(3):'—')}}
+      }
+    }
+  });
+}
+
 function render(){
   dc();
   const isRules=activeTab==='rules';
-  document.getElementById('activeFilters').style.display=isRules?'none':'flex';
-  document.getElementById('yearFilter').style.display=isRules?'none':'inline-block';
+  const isFuel=activeTab==='fuel';
+  document.getElementById('activeFilters').style.display=(isRules||isFuel)?'none':'flex';
+  document.getElementById('yearFilter').style.display=(isRules||isFuel)?'none':'inline-block';
   document.querySelector('.subtitle').textContent=dashboardSubtitle;
   if(isRules){
     document.getElementById('kpis').innerHTML='';
     document.getElementById('insightsSection').innerHTML='';
     renderRules();
+    return;
+  }
+  if(isFuel){
+    document.getElementById('insightsSection').innerHTML='';
+    renderFuel();
     return;
   }
   renderActiveTags();
