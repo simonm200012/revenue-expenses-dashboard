@@ -87,7 +87,7 @@ h1{font-size:32px;font-weight:800;letter-spacing:-1.5px;background:linear-gradie
 .txn-table th{text-align:left;padding:10px 12px;color:var(--text4);font-weight:700;text-transform:uppercase;letter-spacing:1px;font-size:10px;border-bottom:2px solid var(--border);position:sticky;top:0;background:var(--bg);z-index:1}
 .txn-table td{padding:8px 12px;border-bottom:1px solid var(--border);color:var(--text2)}
 .txn-table tr:nth-child(even){background:var(--table-stripe)}.txn-table tr:hover td{background:var(--table-hover)}
-.txn-table .in{color:#10b981;font-weight:600}.txn-table .out{color:#ef4444;font-weight:600}
+.txn-table .in{color:#10b981;font-weight:600}.txn-table .out{color:#ef4444;font-weight:600}.txn-table .inv{color:#8b5cf6;font-weight:600}
 .table-wrap{max-height:500px;overflow:auto;border:1px solid var(--border);border-radius:10px}
 .table-footer{display:flex;justify-content:space-between;align-items:center;margin-top:12px;font-size:12px;color:var(--text4);flex-wrap:wrap;gap:8px}
 .page-btn{background:var(--input-bg);border:1px solid var(--border2);border-radius:6px;color:var(--text);padding:6px 14px;cursor:pointer;font-size:12px;font-family:inherit}
@@ -377,7 +377,7 @@ async function loadFromSupabase() {
     v: parseFloat(row.value) || 0,
     s: row.source || '',
     b: row.bank || '',
-    t: row.type === 'Inflow' ? 'In' : 'Out',
+    t: row.type === 'Inflow' ? 'In' : (row.type === 'Investment' ? 'Inv' : 'Out'),
     c: row.final_category || row.category || '',
     r: row.cost_revenue_type || ''
   })).filter(t => t.d); // skip rows without dates
@@ -414,23 +414,25 @@ function recomputeAggregates() {
   const monthMap = {};
   TXNS.forEach(t => {
     const ym = t.d.slice(0, 7);
-    if (!monthMap[ym]) monthMap[ym] = { YM: ym, Inflow: 0, Outflow: 0 };
+    if (!monthMap[ym]) monthMap[ym] = { YM: ym, Inflow: 0, Outflow: 0, Invested: 0 };
     if (t.t === 'In') monthMap[ym].Inflow += t.v;
+    else if (t.t === 'Inv') monthMap[ym].Invested += t.v;
     else monthMap[ym].Outflow += t.v;
   });
   MONTHLY = Object.values(monthMap).sort((a, b) => a.YM.localeCompare(b.YM));
-  MONTHLY.forEach(d => { d.Inflow = Math.round(d.Inflow * 100) / 100; d.Outflow = Math.round(d.Outflow * 100) / 100; d.Net = d.Inflow - d.Outflow; });
+  MONTHLY.forEach(d => { d.Inflow = Math.round(d.Inflow * 100) / 100; d.Outflow = Math.round(d.Outflow * 100) / 100; d.Invested = Math.round(d.Invested * 100) / 100; d.Net = d.Inflow - d.Outflow; });
 
   // YEARLY
   const yearMap = {};
   TXNS.forEach(t => {
     const yr = parseInt(t.d.slice(0, 4));
-    if (!yearMap[yr]) yearMap[yr] = { Year: yr, Inflow: 0, Outflow: 0 };
+    if (!yearMap[yr]) yearMap[yr] = { Year: yr, Inflow: 0, Outflow: 0, Invested: 0 };
     if (t.t === 'In') yearMap[yr].Inflow += t.v;
+    else if (t.t === 'Inv') yearMap[yr].Invested += t.v;
     else yearMap[yr].Outflow += t.v;
   });
   YEARLY = Object.values(yearMap).sort((a, b) => a.Year - b.Year);
-  YEARLY.forEach(d => { d.Inflow = Math.round(d.Inflow * 100) / 100; d.Outflow = Math.round(d.Outflow * 100) / 100; d.Net = d.Inflow - d.Outflow; });
+  YEARLY.forEach(d => { d.Inflow = Math.round(d.Inflow * 100) / 100; d.Outflow = Math.round(d.Outflow * 100) / 100; d.Invested = Math.round(d.Invested * 100) / 100; d.Net = d.Inflow - d.Outflow; });
 
   // TOP_CATEGORIES (outflow only, top 15)
   const catMap = {};
@@ -517,9 +519,9 @@ function renderActiveTags(){const el=document.getElementById("activeFilters");co
 
 function getFilteredTxns(){let f=TXNS;if(yearFilter!=="All")f=f.filter(t=>t.d.startsWith(yearFilter));if(gFilters.type)f=f.filter(t=>t.t===gFilters.type);if(gFilters.bank)f=f.filter(t=>t.b===gFilters.bank);if(gFilters.category)f=f.filter(t=>t.c===gFilters.category);if(gFilters.dateFrom)f=f.filter(t=>t.d>=gFilters.dateFrom);if(gFilters.dateTo)f=f.filter(t=>t.d<=gFilters.dateTo);if(gFilters.amtMin)f=f.filter(t=>t.v>=parseFloat(gFilters.amtMin));if(gFilters.amtMax)f=f.filter(t=>t.v<=parseFloat(gFilters.amtMax));if(gFilters.search){const q=gFilters.search.toLowerCase();f=f.filter(t=>(t.s+t.c+t.r+t.b+t.d).toLowerCase().includes(q))}return f}
 function hasActiveFilters(){return yearFilter!=="All"||Object.values(gFilters).some(v=>v!=="")}
-function getFilteredMonthly(){const txns=getFilteredTxns();const map={};txns.forEach(t=>{const ym=t.d.slice(0,7);if(!map[ym])map[ym]={YM:ym,Inflow:0,Outflow:0};if(t.t==="In")map[ym].Inflow+=t.v;else map[ym].Outflow+=t.v});const arr=Object.values(map).sort((a,b)=>a.YM.localeCompare(b.YM));arr.forEach(d=>d.Net=d.Inflow-d.Outflow);return arr}
+function getFilteredMonthly(){const txns=getFilteredTxns();const map={};txns.forEach(t=>{const ym=t.d.slice(0,7);if(!map[ym])map[ym]={YM:ym,Inflow:0,Outflow:0,Invested:0};if(t.t==="In")map[ym].Inflow+=t.v;else if(t.t==="Inv")map[ym].Invested+=t.v;else map[ym].Outflow+=t.v});const arr=Object.values(map).sort((a,b)=>a.YM.localeCompare(b.YM));arr.forEach(d=>d.Net=d.Inflow-d.Outflow);return arr}
 function gfm(){if(hasActiveFilters()){return getFilteredMonthly()}return MONTHLY}
-function getTotals(){const m=gfm();const i=m.reduce((s,d)=>s+d.Inflow,0),o=m.reduce((s,d)=>s+d.Outflow,0);return{inflow:i,outflow:o,net:i-o,rate:i>0?((i-o)/i*100):0}}
+function getTotals(){const m=gfm();const i=m.reduce((s,d)=>s+d.Inflow,0),o=m.reduce((s,d)=>s+d.Outflow,0),inv=m.reduce((s,d)=>s+(d.Invested||0),0);return{inflow:i,outflow:o,invested:inv,net:i-o,rate:i>0?((i-o)/i*100):0}}
 
 // CSV Export
 function exportCSV(){const txns=getFilteredTxns();let csv="\uFEFFDate,Source,Amount,Type,Bank,Category,Detail\n";txns.forEach(t=>{const src=(t.s||"").replace(/"/g,'""');const cat=(t.c||"").replace(/"/g,'""');const det=(t.r||"").replace(/"/g,'""');const bank=(t.b||"").replace(/"/g,'""');csv+=`${t.d},"${src}",${t.v},${t.t==="In"?"Inflow":"Outflow"},"${bank}","${cat}","${det}"\n`});const blob=new Blob([csv],{type:"text/csv;charset=utf-8"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);const suffix=yearFilter!=="All"?"_"+yearFilter:"";a.download="transactions"+(hasActiveFilters()?"_filtered"+suffix:"")+".csv";a.click()}
@@ -562,7 +564,9 @@ function getYoYTotals(){
       if(y<yA||y>yB)continue;
       if(y===yA&&mo<mA)continue;
       if(y===yB&&mo>mB)continue;
-      if(t.t==='In')inflow+=t.v; else outflow+=t.v;
+      if(t.t==='In')inflow+=t.v;
+      else if(t.t==='Out')outflow+=t.v;
+      // Investments excluded from YoY since they aren't expense
       count++;
     }
     return {inflow,outflow,net:inflow-outflow,count};
@@ -583,18 +587,19 @@ function yoyBadge(c,p,invertColor){
   const sign=pct>=0?'+':'';
   return `<span class="delta ${cls}" style="margin-left:6px">${sign}${pct.toFixed(1)}%</span>`;
 }
-function renderKPIs(){const t=getTotals(),m=gfm(),l=m.slice(-12),ai=l.reduce((s,d)=>s+d.Inflow,0)/Math.max(l.length,1),ao=l.reduce((s,d)=>s+d.Outflow,0)/Math.max(l.length,1);
+function renderKPIs(){const t=getTotals(),m=gfm(),l=m.slice(-12),ai=l.reduce((s,d)=>s+d.Inflow,0)/Math.max(l.length,1),ao=l.reduce((s,d)=>s+d.Outflow,0)/Math.max(l.length,1),aInv=l.reduce((s,d)=>s+(d.Invested||0),0)/Math.max(l.length,1);
 const ftxns=getFilteredTxns();
 const yoy=getYoYTotals();
 const inBadge=yoy?yoyBadge(yoy.cur.inflow,yoy.prev.inflow,false):'';
 const outBadge=yoy?yoyBadge(yoy.cur.outflow,yoy.prev.outflow,true):'';
 const netBadge=yoy?yoyBadge(yoy.cur.net,yoy.prev.net,false):'';
 const yoyLabel=yoy?`<span style="font-size:10px;color:var(--text5);margin-left:4px">${yoy.label}</span>`:'';
+const invCard=(t.invested>0)?`<div class="kpi"><div class="kpi-label">Invested</div><div class="kpi-value" style="color:#8b5cf6">\u20AC${fmt(t.invested)}</div><div class="kpi-sub">Avg \u20AC${fmt(aInv)}/mo (L12M)</div></div>`:'';
 document.getElementById("kpis").innerHTML=`
 <div class="kpi"><div class="kpi-label">Total Income</div><div class="kpi-value" style="color:#10b981">\u20AC${fmt(t.inflow)}</div><div class="kpi-sub">Avg \u20AC${fmt(ai)}/mo (L12M)${inBadge?'<br>'+inBadge+yoyLabel:''}</div></div>
 <div class="kpi"><div class="kpi-label">Total Expenses</div><div class="kpi-value" style="color:#ef4444">\u20AC${fmt(t.outflow)}</div><div class="kpi-sub">Avg \u20AC${fmt(ao)}/mo (L12M)${outBadge?'<br>'+outBadge+yoyLabel:''}</div></div>
 <div class="kpi"><div class="kpi-label">Net Balance</div><div class="kpi-value" style="color:${t.net>=0?'#10b981':'#ef4444'}">\u20AC${fmt(Math.abs(t.net))}</div><div class="kpi-sub">${t.net>=0?'Surplus':'Deficit'}${netBadge?'<br>'+netBadge+yoyLabel:''}</div></div>
-<div class="kpi"><div class="kpi-label">${hasActiveFilters()?'Filtered Txns':'Savings Rate'}</div><div class="kpi-value" style="color:${hasActiveFilters()?'#8b5cf6':t.rate>=0?'#06b6d4':'#ef4444'}">${hasActiveFilters()?ftxns.length:t.rate.toFixed(1)+'%'}</div><div class="kpi-sub">${hasActiveFilters()?'of '+TXNS.length+' total':'Income saved'}</div></div>`}
+${invCard}<div class="kpi"><div class="kpi-label">${hasActiveFilters()?'Filtered Txns':'Savings Rate'}</div><div class="kpi-value" style="color:${hasActiveFilters()?'#8b5cf6':t.rate>=0?'#06b6d4':'#ef4444'}">${hasActiveFilters()?ftxns.length:t.rate.toFixed(1)+'%'}</div><div class="kpi-sub">${hasActiveFilters()?'of '+TXNS.length+' total':'Income saved'}</div></div>`}
 
 // Dynamic insights
 function renderInsights(){
@@ -698,7 +703,7 @@ charts.c9=new Chart(document.getElementById("c9"),{type:"line",data:{labels:data
 
 function renderTransactions(){const el=document.getElementById("content");
 el.innerHTML=`<div class="section"><div class="section-title">Transaction Search</div><div class="search-bar"><input class="search-input" id="txnSearch" placeholder="Quick search within filtered results..." oninput="txnPage=0;filterTxns()"></div><div class="table-wrap"><table class="txn-table"><thead><tr><th>Date</th><th>Source</th><th>Amount</th><th>Type</th><th>Category</th><th>Detail</th></tr></thead><tbody id="txnBody"></tbody></table></div><div class="table-footer"><span id="txnCount"></span><div><button class="page-btn" id="prevBtn" onclick="txnPage--;filterTxns()">\u2190 Prev</button> <button class="page-btn" id="nextBtn" onclick="txnPage++;filterTxns()">Next \u2192</button></div></div></div>`;filterTxns()}
-function filterTxns(){let filtered=getFilteredTxns();const q=(document.getElementById("txnSearch").value||"").toLowerCase();if(q)filtered=filtered.filter(t=>(t.s+t.c+t.r+t.b+t.d).toLowerCase().includes(q));const pp=50,total=filtered.length,pages=Math.ceil(total/pp);if(txnPage>=pages)txnPage=Math.max(0,pages-1);const sl=filtered.slice(txnPage*pp,(txnPage+1)*pp);document.getElementById("txnBody").innerHTML=sl.map(t=>`<tr><td>${t.d}</td><td style="cursor:pointer;color:var(--text)" data-merchant="${escapeHtml(t.s||'')}" onclick="openMerchant(this.dataset.merchant)">${escapeHtml(t.s)}</td><td class="${t.t==='In'?'in':'out'}">${t.t==='In'?'+':'\u2212'}\u20AC${t.v.toFixed(2)}</td><td>${t.t==='In'?'Inflow':'Outflow'}</td><td>${escapeHtml(t.c)}</td><td>${escapeHtml(t.r)}</td></tr>`).join("");document.getElementById("txnCount").textContent=`${total} transactions \u00B7 Page ${txnPage+1}/${Math.max(pages,1)}`;document.getElementById("prevBtn").disabled=txnPage<=0;document.getElementById("nextBtn").disabled=txnPage>=pages-1}
+function filterTxns(){let filtered=getFilteredTxns();const q=(document.getElementById("txnSearch").value||"").toLowerCase();if(q)filtered=filtered.filter(t=>(t.s+t.c+t.r+t.b+t.d).toLowerCase().includes(q));const pp=50,total=filtered.length,pages=Math.ceil(total/pp);if(txnPage>=pages)txnPage=Math.max(0,pages-1);const sl=filtered.slice(txnPage*pp,(txnPage+1)*pp);const typeLabel=t=>t.t==='In'?'Inflow':(t.t==='Inv'?'Investment':'Outflow');const amtClass=t=>t.t==='In'?'in':(t.t==='Inv'?'inv':'out');const amtSign=t=>t.t==='In'?'+':(t.t==='Inv'?'\u25CF':'\u2212');document.getElementById("txnBody").innerHTML=sl.map(t=>`<tr><td>${t.d}</td><td style="cursor:pointer;color:var(--text)" data-merchant="${escapeHtml(t.s||'')}" onclick="openMerchant(this.dataset.merchant)">${escapeHtml(t.s)}</td><td class="${amtClass(t)}">${amtSign(t)}\u20AC${t.v.toFixed(2)}</td><td>${typeLabel(t)}</td><td>${escapeHtml(t.c)}</td><td>${escapeHtml(t.r)}</td></tr>`).join("");document.getElementById("txnCount").textContent=`${total} transactions \u00B7 Page ${txnPage+1}/${Math.max(pages,1)}`;document.getElementById("prevBtn").disabled=txnPage<=0;document.getElementById("nextBtn").disabled=txnPage>=pages-1}
 
 function renderCompare(){const months=MONTHLY.map(m=>m.YM);const el=document.getElementById("content");
 // Smart defaults: current month vs same month last year
@@ -1523,7 +1528,7 @@ const CHAT_TOOLS=[
       properties:{
         date_from:{type:'string',description:'Inclusive start date YYYY-MM-DD'},
         date_to:{type:'string',description:'Inclusive end date YYYY-MM-DD'},
-        type:{type:'string',enum:['In','Out'],description:'In=income, Out=expense'},
+        type:{type:'string',enum:['In','Out','Inv'],description:'In=income, Out=expense, Inv=investment'},
         category:{type:'string',description:'Exact category match'},
         category_contains:{type:'string',description:'Substring match on category (case-insensitive)'},
         source_contains:{type:'string',description:'Substring match on source/merchant (case-insensitive)'},
@@ -1546,7 +1551,7 @@ const CHAT_TOOLS=[
         group_by:{type:'string',enum:['category','source','bank','month','year','type'],description:'Field to group by. "month"=YYYY-MM, "year"=YYYY.'},
         date_from:{type:'string'},
         date_to:{type:'string'},
-        type:{type:'string',enum:['In','Out']},
+        type:{type:'string',enum:['In','Out','Inv']},
         category:{type:'string'},
         bank:{type:'string'},
         limit:{type:'integer',description:'Top N groups by sum (default 20, max 100)'}
@@ -1561,7 +1566,7 @@ const CHAT_TOOLS=[
       required:['field'],
       properties:{
         field:{type:'string',enum:['category','source','bank','type']},
-        type_filter:{type:'string',enum:['In','Out'],description:'Only include rows of this type'}
+        type_filter:{type:'string',enum:['In','Out','Inv'],description:'Only include rows of this type'}
       }
     }
   }
@@ -1650,7 +1655,8 @@ function buildChatSystem(){
 DATASET:
 - Total transactions: ${TXNS.length}
 - Date range: ${minD} to ${maxD}
-- Each transaction has: date (YYYY-MM-DD), amount (positive number), type ("In"=income or "Out"=expense), source/merchant, bank, category, detail
+- Each transaction has: date (YYYY-MM-DD), amount (positive number), type ("In"=income, "Out"=expense, "Inv"=investment / money moved into investments), source/merchant, bank, category, detail
+- Note: Investments are NOT expenses \u2014 the money is still owned, just moved into investment accounts. Treat them as a separate flow.
 
 You have tools to query the full transaction database on demand. Use them whenever the answer requires specifics — don't guess or make up numbers. Use multiple tool calls when needed (e.g. first list_distinct_values to discover categories, then aggregate to break them down). After tool calls, give the user a clear, concise answer with the actual numbers.
 

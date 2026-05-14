@@ -40,6 +40,7 @@ async function supabaseFetch(){
 function summarize(rows){
   const inflow = rows.filter(t=>t.type==='Inflow').reduce((s,t)=>s+parseFloat(t.value||0),0);
   const outflow = rows.filter(t=>t.type==='Outflow').reduce((s,t)=>s+parseFloat(t.value||0),0);
+  const invested = rows.filter(t=>t.type==='Investment').reduce((s,t)=>s+parseFloat(t.value||0),0);
   const byCat = {};
   rows.filter(t=>t.type==='Outflow').forEach(t=>{
     const c = t.final_category || t.category || '(uncategorized)';
@@ -52,6 +53,7 @@ function summarize(rows){
   return {
     inflow: Math.round(inflow*100)/100,
     outflow: Math.round(outflow*100)/100,
+    invested: Math.round(invested*100)/100,
     net: Math.round((inflow-outflow)*100)/100,
     count: rows.length,
     topCategories: topCats
@@ -86,17 +88,20 @@ const prompt = `You are writing a friendly, concise weekly personal-finance summ
 
 Compare the last 7 days (${sevenIso} to ${nowIso}) to the prior 7 days (${fourteenIso} to ${sevenIso}).
 
+NOTE: "invested" = money moved into investment accounts. It is NOT an expense \u2014 the user still owns it. Treat it as a separate flow.
+
 Produce ONLY the email body as inline HTML (no <html>, <body>, <head>, or markdown). Use these styles inline:
 - Headings: <h2 style="color:#10b981;font-size:18px;margin:18px 0 8px 0">
 - Body text: <p style="margin:0 0 10px 0;line-height:1.5;color:#334155;font-size:14px">
 - Lists: <ul style="margin:0 0 12px 0;padding-left:20px;color:#334155;font-size:14px;line-height:1.6">
 - Strong green for positive: <strong style="color:#10b981">
 - Strong red for negative: <strong style="color:#ef4444">
+- Strong purple for invested: <strong style="color:#8b5cf6">
 - Stat row: <div style="display:flex;gap:12px;margin:12px 0;flex-wrap:wrap">
 
 Sections to include:
 1. One short opening sentence with the week's headline finding.
-2. Stat row with 3 boxes: Income, Expenses, Net (vs prior week % change).
+2. Stat row: Income, Expenses, Net (vs prior week % change). If invested > 0 last week, add a 4th box for "Invested".
 3. Top spending categories (3-5).
 4. 2-3 notable transactions worth flagging (largest, unusual, or first-time merchants).
 5. One actionable observation or recommendation.
