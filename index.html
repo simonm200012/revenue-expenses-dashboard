@@ -460,8 +460,8 @@ const fmt=v=>v>=1000?(v/1000).toFixed(1)+"k":Math.round(v).toLocaleString();
 const fmtE=v=>"\u20AC"+Math.round(v).toLocaleString();
 
 let activeTab="overview",yearFilter="All",charts={},txnPage=0;
-const TABS=["overview","spending","income","trends","recurring","transactions","compare","projection","fuel","rules"];
-const TAB_LABELS={overview:"Overview",spending:"Spending",income:"Income",trends:"Trends",recurring:"Recurring",transactions:"Transactions",compare:"Compare",projection:"Projection",fuel:"Gas Prices",rules:"Rules"};
+const TABS=["overview","networth","spending","income","trends","recurring","transactions","compare","projection","fuel","rules"];
+const TAB_LABELS={overview:"Overview",networth:"Net Worth",spending:"Spending",income:"Income",trends:"Trends",recurring:"Recurring",transactions:"Transactions",compare:"Compare",projection:"Projection",fuel:"Gas Prices",rules:"Rules"};
 let gFilters={type:"",bank:"",category:"",dateFrom:"",dateTo:"",amtMin:"",amtMax:"",search:""};
 
 let dashboardSubtitle='Loading from Supabase...';
@@ -1275,6 +1275,240 @@ async function exportMonthPDF(){
 }
 
 // ============================================================
+// NET WORTH (bank baselines + investment current values)
+// ============================================================
+const NW_KEY='finance-networth';
+let NETWORTH={baselines:{},investments:{},snapshots:[]};
+(function loadNetWorth(){
+  try{const raw=localStorage.getItem(NW_KEY);if(raw)NETWORTH={...NETWORTH,...JSON.parse(raw)};}catch{}
+  if(!NETWORTH.baselines)NETWORTH.baselines={};
+  if(!NETWORTH.investments)NETWORTH.investments={};
+  if(!NETWORTH.snapshots)NETWORTH.snapshots=[];
+})();
+function saveNetWorth(){localStorage.setItem(NW_KEY,JSON.stringify(NETWORTH));}
+
+function nwDistinctBanks(){return [...new Set(TXNS.map(t=>t.b).filter(Boolean))].sort();}
+function nwDistinctInvAccounts(){return [...new Set(TXNS.filter(t=>t.t==='Inv').map(t=>t.s).filter(Boolean))].sort();}
+
+function nwBankBalance(bank){
+  const base=NETWORTH.baselines[bank];
+  if(!base||!base.date)return null;
+  let bal=parseFloat(base.amount)||0;
+  for(const t of TXNS){
+    if(t.b!==bank)continue;
+    if(t.d<base.date)continue;
+    if(t.t==='In')bal+=t.v; else bal-=t.v; // Out and Inv both leave the account
+  }
+  return Math.round(bal*100)/100;
+}
+function nwBankFlows(bank){
+  const base=NETWORTH.baselines[bank];
+  if(!base)return {inflow:0,outflow:0};
+  let inflow=0,outflow=0;
+  for(const t of TXNS){
+    if(t.b!==bank||t.d<base.date)continue;
+    if(t.t==='In')inflow+=t.v; else outflow+=t.v;
+  }
+  return {inflow:Math.round(inflow*100)/100,outflow:Math.round(outflow*100)/100};
+}
+function nwContributedToAccount(account){
+  return Math.round(TXNS.filter(t=>t.t==='Inv'&&t.s===account).reduce((s,t)=>s+t.v,0)*100)/100;
+}
+function computeNetWorth(){
+  let liquid=0;
+  for(const bank of Object.keys(NETWORTH.baselines)){
+    const b=nwBankBalance(bank);
+    if(b!=null)liquid+=b;
+  }
+  let invested=0,contributed=0;
+  for(const acc of Object.keys(NETWORTH.investments)){
+    invested+=parseFloat(NETWORTH.investments[acc])||0;
+    contributed+=nwContributedToAccount(acc);
+  }
+  // Add contributions for Inv accounts not yet entered (so user sees them)
+  for(const acc of nwDistinctInvAccounts()){
+    if(!(acc in NETWORTH.investments))contributed+=nwContributedToAccount(acc);
+  }
+  const gain=invested-contributed;
+  return {
+    liquid:Math.round(liquid*100)/100,
+    invested:Math.round(invested*100)/100,
+    contributed:Math.round(contributed*100)/100,
+    gain:Math.round(gain*100)/100,
+    gainPct:contributed>0?(gain/contributed*100):0,
+    total:Math.round((liquid+invested)*100)/100
+  };
+}
+function nwMaybeSnapshot(){
+  if(!Object.keys(NETWORTH.baselines).length)return;
+  const today=new Date().toISOString().slice(0,10);
+  const last=NETWORTH.snapshots[NETWORTH.snapshots.length-1];
+  if(last&&last.date===today)return;
+  const nw=computeNetWorth();
+  NETWORTH.snapshots.push({date:today,liquid:nw.liquid,invested:nw.invested,total:nw.total});
+  if(NETWORTH.snapshots.length>730)NETWORTH.snapshots=NETWORTH.snapshots.slice(-730);
+  saveNetWorth();
+}
+function nwSaveBaselines(){
+  document.querySelectorAll('#nwSetup tr[data-bank]').forEach(tr=>{
+    const bank=tr.dataset.bank;
+    const date=tr.querySelector('input[type=date]').value;
+    const amt=tr.querySelector('input[type=number]').value;
+    if(date&&amt!==''){NETWORTH.baselines[bank]={date,amount:parseFloat(amt)};}
+  });
+  saveNetWorth();render();
+}
+function nwEditBaseline(bank){
+  const cur=NETWORTH.baselines[bank]||{};
+  const date=prompt('Baseline date for '+bank+' (YYYY-MM-DD):',cur.date||new Date().toISOString().slice(0,10));
+  if(date===null)return;
+  const amt=prompt('Balance on that date (\u20AC):',cur.amount!=null?cur.amount:'');
+  if(amt===null)return;
+  NETWORTH.baselines[bank]={date,amount:parseFloat(amt)||0};
+  saveNetWorth();renderNetWorth();
+}
+function nwRemoveBaseline(bank){
+  if(!confirm('Remove baseline for '+bank+'? Its balance will no longer be counted.'))return;
+  delete NETWORTH.baselines[bank];
+  saveNetWorth();renderNetWorth();
+}
+function nwUpdateInvestment(account,value){
+  const v=parseFloat(value);
+  if(isNaN(v)){delete NETWORTH.investments[account];}
+  else{NETWORTH.investments[account]=v;}
+  saveNetWorth();renderNetWorth();
+}
+
+function renderNetWorth(){
+  const k=document.getElementById('kpis');
+  const c=document.getElementById('content');
+  const banks=nwDistinctBanks();
+  const invAccounts=nwDistinctInvAccounts();
+  const hasBaselines=Object.keys(NETWORTH.baselines).length>0;
+
+  if(!hasBaselines){
+    // Setup wizard
+    k.innerHTML='';
+    const today=new Date().toISOString().slice(0,10);
+    c.innerHTML=`<div class="section">
+      <div class="section-title">Set up your account baselines</div>
+      <p style="color:var(--text3);margin-bottom:14px;line-height:1.6">Enter the balance you have <strong>today</strong> for each bank account. The dashboard will then track every transaction from today forward to keep your balance accurate. You can leave any account blank to skip it.</p>
+      <table class="txn-table" id="nwSetup">
+        <thead><tr><th>Bank</th><th>Baseline date</th><th>Current balance (\u20AC)</th></tr></thead>
+        <tbody>${banks.map(b=>`<tr data-bank="${escapeAttr(b)}">
+          <td><strong>${escapeHtml(b)}</strong></td>
+          <td><input type="date" class="fp-input" value="${today}" style="width:170px"></td>
+          <td><input type="number" step="0.01" class="fp-input" placeholder="0.00" style="width:160px"></td>
+        </tr>`).join('')}</tbody>
+      </table>
+      <div style="display:flex;gap:8px;margin-top:14px"><button class="fp-btn fp-btn-primary" style="max-width:240px" onclick="nwSaveBaselines()">Save baselines</button><span style="color:var(--text5);font-size:11px;align-self:center">Stored locally in your browser \u2014 not sent anywhere.</span></div>
+    </div>`;
+    return;
+  }
+
+  nwMaybeSnapshot();
+  const nw=computeNetWorth();
+
+  // KPI strip — 4 cards specific to net worth
+  k.innerHTML=`
+    <div class="kpi"><div class="kpi-label">Net Worth</div><div class="kpi-value" style="background:linear-gradient(135deg,#10b981 0%,#06b6d4 50%,#8b5cf6 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent">\u20AC${fmt(nw.total)}</div><div class="kpi-sub">Liquid + invested</div></div>
+    <div class="kpi"><div class="kpi-label">Liquid</div><div class="kpi-value" style="color:#06b6d4">\u20AC${fmt(nw.liquid)}</div><div class="kpi-sub">${Object.keys(NETWORTH.baselines).length} bank${Object.keys(NETWORTH.baselines).length===1?'':'s'}</div></div>
+    <div class="kpi"><div class="kpi-label">Invested (current)</div><div class="kpi-value" style="color:#8b5cf6">\u20AC${fmt(nw.invested)}</div><div class="kpi-sub">Contributed \u20AC${fmt(nw.contributed)}</div></div>
+    <div class="kpi"><div class="kpi-label">Investment Gain/Loss</div><div class="kpi-value" style="color:${nw.gain>=0?'#10b981':'#ef4444'}">${nw.gain>=0?'+':'\u2212'}\u20AC${fmt(Math.abs(nw.gain))}</div><div class="kpi-sub" style="color:${nw.gainPct>=0?'#10b981':'#ef4444'}">${nw.gainPct>=0?'+':''}${nw.gainPct.toFixed(2)}%</div></div>
+  `;
+
+  // Bank balances table
+  const allBanks=[...new Set([...banks,...Object.keys(NETWORTH.baselines)])].sort();
+  const bankRows=allBanks.map(b=>{
+    const base=NETWORTH.baselines[b];
+    if(!base){
+      return `<tr><td><strong>${escapeHtml(b)}</strong></td><td colspan="4" style="color:var(--text4);font-style:italic">No baseline set</td><td><button class="fp-btn fp-btn-secondary" style="font-size:11px;padding:5px 10px" data-bank="${escapeAttr(b)}" onclick="nwEditBaseline(this.dataset.bank)">+ Add</button></td></tr>`;
+    }
+    const flows=nwBankFlows(b);
+    const bal=nwBankBalance(b);
+    return `<tr>
+      <td><strong>${escapeHtml(b)}</strong></td>
+      <td style="color:var(--text4);font-size:12px">${base.date}<br>\u20AC${fmt(parseFloat(base.amount)||0)}</td>
+      <td style="font-family:'JetBrains Mono',monospace;color:#10b981">+\u20AC${fmt(flows.inflow)}</td>
+      <td style="font-family:'JetBrains Mono',monospace;color:#ef4444">\u2212\u20AC${fmt(flows.outflow)}</td>
+      <td style="font-family:'JetBrains Mono',monospace;font-weight:700;font-size:15px;color:${bal>=0?'#10b981':'#ef4444'}">\u20AC${fmt(bal)}</td>
+      <td><button class="fp-btn fp-btn-secondary" style="font-size:11px;padding:5px 10px;margin-right:4px" data-bank="${escapeAttr(b)}" onclick="nwEditBaseline(this.dataset.bank)">Edit</button><button class="fp-btn fp-btn-secondary" style="font-size:11px;padding:5px 10px" data-bank="${escapeAttr(b)}" onclick="nwRemoveBaseline(this.dataset.bank)">\u00D7</button></td>
+    </tr>`;
+  }).join('');
+
+  // Investments table
+  const invRows=invAccounts.map(a=>{
+    const contributed=nwContributedToAccount(a);
+    const current=NETWORTH.investments[a];
+    const gain=current!=null?(current-contributed):null;
+    const gainPct=(current!=null&&contributed>0)?(gain/contributed*100):null;
+    return `<tr>
+      <td><strong>${escapeHtml(a)}</strong></td>
+      <td style="font-family:'JetBrains Mono',monospace">\u20AC${fmt(contributed)}</td>
+      <td><input type="number" step="0.01" value="${current!=null?current:''}" placeholder="enter current value" class="fp-input" style="width:160px" data-account="${escapeAttr(a)}" onchange="nwUpdateInvestment(this.dataset.account,this.value)"></td>
+      <td style="font-family:'JetBrains Mono',monospace;color:${gain==null?'var(--text4)':(gain>=0?'#10b981':'#ef4444')}">${gain==null?'—':((gain>=0?'+':'\u2212')+'\u20AC'+fmt(Math.abs(gain)))}</td>
+      <td style="font-family:'JetBrains Mono',monospace;color:${gainPct==null?'var(--text4)':(gainPct>=0?'#10b981':'#ef4444')}">${gainPct==null?'—':((gainPct>=0?'+':'')+gainPct.toFixed(2)+'%')}</td>
+    </tr>`;
+  }).join('');
+
+  // Insights — net worth change over last 30/90 days
+  let nwTrend='';
+  if(NETWORTH.snapshots.length>=2){
+    const latest=NETWORTH.snapshots[NETWORTH.snapshots.length-1];
+    function snapNDaysAgo(n){
+      const target=new Date(Date.now()-n*86400000).toISOString().slice(0,10);
+      let best=null;
+      for(const s of NETWORTH.snapshots){if(s.date<=target)best=s;}
+      return best;
+    }
+    const s30=snapNDaysAgo(30);
+    const s90=snapNDaysAgo(90);
+    function delta(s){if(!s)return null;const d=latest.total-s.total;const p=s.total?(d/Math.abs(s.total)*100):0;return {d,p};}
+    const d30=delta(s30),d90=delta(s90);
+    nwTrend=`<div class="insights-grid">
+      ${d30?`<div><span style="color:${d30.d>=0?'#10b981':'#ef4444'}">${d30.d>=0?'\u2197':'\u2198'}</span> Last 30 days: <strong style="color:var(--text)">${d30.d>=0?'+':'\u2212'}\u20AC${fmt(Math.abs(d30.d))}</strong> (${d30.p>=0?'+':''}${d30.p.toFixed(2)}%)</div>`:''}
+      ${d90?`<div><span style="color:${d90.d>=0?'#10b981':'#ef4444'}">${d90.d>=0?'\u2197':'\u2198'}</span> Last 90 days: <strong style="color:var(--text)">${d90.d>=0?'+':'\u2212'}\u20AC${fmt(Math.abs(d90.d))}</strong> (${d90.p>=0?'+':''}${d90.p.toFixed(2)}%)</div>`:''}
+    </div>`;
+  }
+
+  c.innerHTML=`
+    ${nwTrend?`<div class="section" style="margin-bottom:16px"><div class="section-title">Trend</div>${nwTrend}</div>`:''}
+    <div class="section">
+      <div class="section-title">Bank balances</div>
+      <div class="table-wrap"><table class="txn-table">
+        <thead><tr><th>Bank</th><th>Baseline</th><th>+ Inflow since</th><th>\u2212 Out / Inv since</th><th>Current balance</th><th></th></tr></thead>
+        <tbody>${bankRows||'<tr><td colspan="6" style="color:var(--text4);text-align:center;padding:20px">No banks detected.</td></tr>'}</tbody>
+      </table></div>
+    </div>
+    <div class="section" style="margin-top:16px">
+      <div class="section-title">Investment accounts</div>
+      <p style="color:var(--text4);font-size:12px;margin-bottom:10px">Enter the current portfolio value for each broker to compute gain/loss vs your contributions. Detected from <code>Investment</code>-type transactions grouped by source.</p>
+      ${invAccounts.length?`<div class="table-wrap"><table class="txn-table">
+        <thead><tr><th>Account</th><th>Total contributed</th><th>Current value (\u20AC)</th><th>Gain/Loss</th><th>%</th></tr></thead>
+        <tbody>${invRows}</tbody>
+      </table></div>`:'<p style="color:var(--text4)">No investment-type transactions in your data yet.</p>'}
+    </div>
+    <div class="section" style="margin-top:16px">
+      <div class="section-title">Net worth over time</div>
+      <p style="color:var(--text4);font-size:12px;margin-bottom:10px">Auto-snapshots once per day when you open this tab. <strong>${NETWORTH.snapshots.length}</strong> snapshot${NETWORTH.snapshots.length===1?'':'s'} stored.</p>
+      ${NETWORTH.snapshots.length>=2?'<div style="position:relative;height:340px"><canvas id="nwChart"></canvas></div>':'<p style="color:var(--text4);padding:20px;text-align:center">Open this tab on different days to build history. Today\'s snapshot was just recorded.</p>'}
+    </div>`;
+
+  if(NETWORTH.snapshots.length>=2){
+    const labels=NETWORTH.snapshots.map(s=>s.date);
+    charts.nwChart=new Chart(document.getElementById('nwChart'),{
+      type:'line',
+      data:{labels,datasets:[
+        {label:'Net Worth',data:NETWORTH.snapshots.map(s=>s.total),borderColor:'#10b981',backgroundColor:'rgba(16,185,129,0.12)',borderWidth:2.5,fill:true,tension:.25,pointRadius:0},
+        {label:'Liquid',data:NETWORTH.snapshots.map(s=>s.liquid),borderColor:'#06b6d4',borderWidth:1.5,fill:false,tension:.25,pointRadius:0,borderDash:[4,3]},
+        {label:'Invested',data:NETWORTH.snapshots.map(s=>s.invested),borderColor:'#8b5cf6',borderWidth:1.5,fill:false,tension:.25,pointRadius:0,borderDash:[4,3]}
+      ]},
+      options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'nearest',axis:'x',intersect:false},scales:{x:{ticks:{maxTicksLimit:12,color:'#94a3b8'},grid:{display:false}},y:{ticks:{callback:v=>'\u20AC'+fmt(v),color:'#94a3b8'},grid:{color:'rgba(255,255,255,0.04)'}}},plugins:{legend:{position:'top',labels:{boxWidth:12,padding:10,font:{size:12}}},tooltip:{callbacks:{label:ctx=>ctx.dataset.label+': \u20AC'+fmt(ctx.parsed.y)}}}}
+    });
+  }
+}
+
+// ============================================================
 // FUEL PRICES (Slovenia, regulated weekly)
 // ============================================================
 let FUEL_DATA=null;
@@ -1408,8 +1642,9 @@ function render(){
   dc();
   const isRules=activeTab==='rules';
   const isFuel=activeTab==='fuel';
-  document.getElementById('activeFilters').style.display=(isRules||isFuel)?'none':'flex';
-  document.getElementById('yearFilter').style.display=(isRules||isFuel)?'none':'inline-block';
+  const isNetWorth=activeTab==='networth';
+  document.getElementById('activeFilters').style.display=(isRules||isFuel||isNetWorth)?'none':'flex';
+  document.getElementById('yearFilter').style.display=(isRules||isFuel||isNetWorth)?'none':'inline-block';
   document.querySelector('.subtitle').textContent=dashboardSubtitle;
   if(isRules){
     document.getElementById('kpis').innerHTML='';
@@ -1420,6 +1655,11 @@ function render(){
   if(isFuel){
     document.getElementById('insightsSection').innerHTML='';
     renderFuel();
+    return;
+  }
+  if(isNetWorth){
+    document.getElementById('insightsSection').innerHTML='';
+    renderNetWorth();
     return;
   }
   renderActiveTags();
