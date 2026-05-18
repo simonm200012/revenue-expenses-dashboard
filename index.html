@@ -227,6 +227,7 @@ h1{font-size:32px;font-weight:800;letter-spacing:-1.5px;background:linear-gradie
     <div class="fp-group"><div class="fp-label">Bank / Account</div><div class="fp-chips" id="fpBankChips"><span class="fp-chip active" data-val="" onclick="toggleChip(this)">All</span><span class="fp-chip" data-val="NLB" onclick="toggleChip(this)">NLB</span><span class="fp-chip" data-val="GORENJSKA BANKA" onclick="toggleChip(this)">Gorenjska</span><span class="fp-chip" data-val="Revolut" onclick="toggleChip(this)">Revolut</span><span class="fp-chip" data-val="Trading212" onclick="toggleChip(this)">Trading212</span></div></div>
     <div class="fp-group"><div class="fp-label">Category</div><select class="fp-select" id="fpCategory"><option value="">All Categories</option></select></div>
     <div class="fp-group"><div class="fp-label">Amount Range (\u20AC)</div><div class="fp-row"><input class="fp-input" type="number" id="fpAmtMin" placeholder="Min" step="1"><input class="fp-input" type="number" id="fpAmtMax" placeholder="Max" step="1"></div></div>
+    <div class="fp-group"><div class="fp-label">Reconciliation</div><div class="fp-chips" id="fpReconChips"><span class="fp-chip active" data-val="" onclick="toggleChip(this)">All</span><span class="fp-chip" data-val="reconciled" onclick="toggleChip(this)">Reconciled</span><span class="fp-chip" data-val="unreconciled" onclick="toggleChip(this)">Unreconciled</span></div></div>
     <div class="fp-group"><div class="fp-label">Search Text</div><input class="fp-input" type="text" id="fpSearch" placeholder="Source, category, detail..."></div>
   </div>
   <div class="fp-footer"><button class="fp-btn fp-btn-secondary" onclick="resetFilters()">Reset</button><button class="fp-btn fp-btn-primary" onclick="applyFilters()">Apply Filters</button></div>
@@ -371,7 +372,8 @@ async function loadFromSupabase() {
     from += batchSize;
   }
 
-  // Transform Supabase rows → dashboard format {d, v, s, b, t, c, r}
+  // Transform Supabase rows → dashboard format {d, v, s, b, t, c, r, f}
+  // f = "Found in Statements" reconciliation tag (e.g. "2026-04 (NLB)") or '' if unreconciled
   TXNS = allData.map(row => ({
     d: row.date || '',
     v: parseFloat(row.value) || 0,
@@ -379,7 +381,8 @@ async function loadFromSupabase() {
     b: row.bank || '',
     t: row.type === 'Inflow' ? 'In' : (row.type === 'Investment' ? 'Inv' : 'Out'),
     c: row.final_category || row.category || '',
-    r: row.cost_revenue_type || ''
+    r: row.cost_revenue_type || '',
+    f: row.found_in_statements || ''
   })).filter(t => t.d); // skip rows without dates
 
   // Sort by date descending (newest first, matching original)
@@ -397,7 +400,13 @@ async function loadFromSupabase() {
   const maxDate = dates[0] || '';
   const minMonth = minDate ? new Date(minDate).toLocaleString('en', { month: 'short', year: 'numeric' }) : '';
   const maxMonth = maxDate ? new Date(maxDate).toLocaleString('en', { month: 'short', year: 'numeric' }) : '';
-  document.querySelector('.subtitle').textContent = minMonth + ' \u2014 ' + maxMonth + ' \u00B7 ' + TXNS.length.toLocaleString() + ' transactions (live)';
+  const unreconCount = TXNS.filter(t=>!t.f).length;
+  const baseSub = minMonth + ' \u2014 ' + maxMonth + ' \u00B7 ' + TXNS.length.toLocaleString() + ' transactions (live)';
+  const subEl = document.querySelector('.subtitle');
+  subEl.innerHTML = baseSub + (unreconCount>0
+    ? ' \u00B7 <a href="#" onclick="event.preventDefault();setChipState(\'fpReconChips\',\'unreconciled\');gFilters.recon=\'unreconciled\';render();serializeStateToHash();" style="color:#f59e0b;text-decoration:none;font-weight:600">\u26A0 '+unreconCount.toLocaleString()+' unreconciled</a>'
+    : '');
+  dashboardSubtitle = subEl.innerHTML;
 
   // Dynamically populate year filter
   const years = [...new Set(TXNS.map(t => t.d.slice(0, 4)))].sort();
@@ -462,7 +471,7 @@ const fmtE=v=>"\u20AC"+Math.round(v).toLocaleString();
 let activeTab="overview",yearFilter="All",charts={},txnPage=0;
 const TABS=["overview","networth","spending","income","trends","recurring","transactions","compare","projection","fuel","rules"];
 const TAB_LABELS={overview:"Overview",networth:"Net Worth",spending:"Spending",income:"Income",trends:"Trends",recurring:"Recurring",transactions:"Transactions",compare:"Compare",projection:"Projection",fuel:"Gas Prices",rules:"Rules"};
-let gFilters={type:"",bank:"",category:"",dateFrom:"",dateTo:"",amtMin:"",amtMax:"",search:""};
+let gFilters={type:"",bank:"",category:"",dateFrom:"",dateTo:"",amtMin:"",amtMax:"",search:"",recon:""};
 
 let dashboardSubtitle='Loading from Supabase...';
 
@@ -512,12 +521,12 @@ function closeFilters(){document.getElementById("filterPanel").classList.remove(
 function toggleChip(el){el.parentElement.querySelectorAll(".fp-chip").forEach(c=>c.classList.remove("active"));el.classList.add("active")}
 function setChipState(id,val){const c=document.getElementById(id);if(!c)return;c.querySelectorAll(".fp-chip").forEach(x=>{x.classList.remove("active");if(x.dataset.val===val)x.classList.add("active")})}
 function getChipVal(id){const c=document.getElementById(id);if(!c)return"";const a=c.querySelector(".fp-chip.active");return a?a.dataset.val:""}
-function applyFilters(){gFilters={type:getChipVal("fpTypeChips"),bank:getChipVal("fpBankChips"),category:document.getElementById("fpCategory").value,dateFrom:document.getElementById("fpDateFrom").value,dateTo:document.getElementById("fpDateTo").value,amtMin:document.getElementById("fpAmtMin").value,amtMax:document.getElementById("fpAmtMax").value,search:document.getElementById("fpSearch").value};closeFilters();txnPage=0;render();serializeStateToHash();}
-function resetFilters(){gFilters={type:"",bank:"",category:"",dateFrom:"",dateTo:"",amtMin:"",amtMax:"",search:""};document.getElementById("fpDateFrom").value="";document.getElementById("fpDateTo").value="";document.getElementById("fpCategory").value="";document.getElementById("fpAmtMin").value="";document.getElementById("fpAmtMax").value="";document.getElementById("fpSearch").value="";setChipState("fpTypeChips","");setChipState("fpBankChips","");closeFilters();txnPage=0;render();serializeStateToHash();}
+function applyFilters(){gFilters={type:getChipVal("fpTypeChips"),bank:getChipVal("fpBankChips"),category:document.getElementById("fpCategory").value,dateFrom:document.getElementById("fpDateFrom").value,dateTo:document.getElementById("fpDateTo").value,amtMin:document.getElementById("fpAmtMin").value,amtMax:document.getElementById("fpAmtMax").value,search:document.getElementById("fpSearch").value,recon:getChipVal("fpReconChips")};closeFilters();txnPage=0;render();serializeStateToHash();}
+function resetFilters(){gFilters={type:"",bank:"",category:"",dateFrom:"",dateTo:"",amtMin:"",amtMax:"",search:"",recon:""};document.getElementById("fpDateFrom").value="";document.getElementById("fpDateTo").value="";document.getElementById("fpCategory").value="";document.getElementById("fpAmtMin").value="";document.getElementById("fpAmtMax").value="";document.getElementById("fpSearch").value="";setChipState("fpTypeChips","");setChipState("fpBankChips","");setChipState("fpReconChips","");closeFilters();txnPage=0;render();serializeStateToHash();}
 function removeFilter(k){gFilters[k]="";txnPage=0;render();serializeStateToHash();}
-function renderActiveTags(){const el=document.getElementById("activeFilters");const t=[];if(yearFilter!=="All")t.push({key:"_year",label:"Year: "+yearFilter});if(gFilters.type)t.push({key:"type",label:"Type: "+(gFilters.type==="In"?"Inflow":"Outflow")});if(gFilters.bank)t.push({key:"bank",label:"Bank: "+gFilters.bank});if(gFilters.category)t.push({key:"category",label:gFilters.category});if(gFilters.dateFrom)t.push({key:"dateFrom",label:"From: "+gFilters.dateFrom});if(gFilters.dateTo)t.push({key:"dateTo",label:"To: "+gFilters.dateTo});if(gFilters.amtMin)t.push({key:"amtMin",label:"Min \u20AC"+gFilters.amtMin});if(gFilters.amtMax)t.push({key:"amtMax",label:"Max \u20AC"+gFilters.amtMax});if(gFilters.search)t.push({key:"search",label:'"'+gFilters.search+'"'});el.innerHTML=t.map(x=>`<span class="af-tag">${x.label}<button onclick="${x.key==='_year'?'document.getElementById(\"yearFilter\").value=\"All\";yearFilter=\"All\";render()':'removeFilter(\''+x.key+'\')'}">\u00D7</button></span>`).join("")}
+function renderActiveTags(){const el=document.getElementById("activeFilters");const t=[];if(yearFilter!=="All")t.push({key:"_year",label:"Year: "+yearFilter});if(gFilters.type)t.push({key:"type",label:"Type: "+(gFilters.type==="In"?"Inflow":(gFilters.type==="Inv"?"Investment":"Outflow"))});if(gFilters.bank)t.push({key:"bank",label:"Bank: "+gFilters.bank});if(gFilters.category)t.push({key:"category",label:gFilters.category});if(gFilters.dateFrom)t.push({key:"dateFrom",label:"From: "+gFilters.dateFrom});if(gFilters.dateTo)t.push({key:"dateTo",label:"To: "+gFilters.dateTo});if(gFilters.amtMin)t.push({key:"amtMin",label:"Min \u20AC"+gFilters.amtMin});if(gFilters.amtMax)t.push({key:"amtMax",label:"Max \u20AC"+gFilters.amtMax});if(gFilters.search)t.push({key:"search",label:'"'+gFilters.search+'"'});if(gFilters.recon)t.push({key:"recon",label:gFilters.recon==="reconciled"?"Reconciled":"Unreconciled"});el.innerHTML=t.map(x=>`<span class="af-tag">${x.label}<button onclick="${x.key==='_year'?'document.getElementById(\"yearFilter\").value=\"All\";yearFilter=\"All\";render()':'removeFilter(\''+x.key+'\')'}">\u00D7</button></span>`).join("")}
 
-function getFilteredTxns(){let f=TXNS;if(yearFilter!=="All")f=f.filter(t=>t.d.startsWith(yearFilter));if(gFilters.type)f=f.filter(t=>t.t===gFilters.type);if(gFilters.bank)f=f.filter(t=>t.b===gFilters.bank);if(gFilters.category)f=f.filter(t=>t.c===gFilters.category);if(gFilters.dateFrom)f=f.filter(t=>t.d>=gFilters.dateFrom);if(gFilters.dateTo)f=f.filter(t=>t.d<=gFilters.dateTo);if(gFilters.amtMin)f=f.filter(t=>t.v>=parseFloat(gFilters.amtMin));if(gFilters.amtMax)f=f.filter(t=>t.v<=parseFloat(gFilters.amtMax));if(gFilters.search){const q=gFilters.search.toLowerCase();f=f.filter(t=>(t.s+t.c+t.r+t.b+t.d).toLowerCase().includes(q))}return f}
+function getFilteredTxns(){let f=TXNS;if(yearFilter!=="All")f=f.filter(t=>t.d.startsWith(yearFilter));if(gFilters.type)f=f.filter(t=>t.t===gFilters.type);if(gFilters.bank)f=f.filter(t=>t.b===gFilters.bank);if(gFilters.category)f=f.filter(t=>t.c===gFilters.category);if(gFilters.dateFrom)f=f.filter(t=>t.d>=gFilters.dateFrom);if(gFilters.dateTo)f=f.filter(t=>t.d<=gFilters.dateTo);if(gFilters.amtMin)f=f.filter(t=>t.v>=parseFloat(gFilters.amtMin));if(gFilters.amtMax)f=f.filter(t=>t.v<=parseFloat(gFilters.amtMax));if(gFilters.search){const q=gFilters.search.toLowerCase();f=f.filter(t=>(t.s+t.c+t.r+t.b+t.d).toLowerCase().includes(q))}if(gFilters.recon==="reconciled")f=f.filter(t=>!!t.f);else if(gFilters.recon==="unreconciled")f=f.filter(t=>!t.f);return f}
 function hasActiveFilters(){return yearFilter!=="All"||Object.values(gFilters).some(v=>v!=="")}
 function getFilteredMonthly(){const txns=getFilteredTxns();const map={};txns.forEach(t=>{const ym=t.d.slice(0,7);if(!map[ym])map[ym]={YM:ym,Inflow:0,Outflow:0,Invested:0};if(t.t==="In")map[ym].Inflow+=t.v;else if(t.t==="Inv")map[ym].Invested+=t.v;else map[ym].Outflow+=t.v});const arr=Object.values(map).sort((a,b)=>a.YM.localeCompare(b.YM));arr.forEach(d=>d.Net=d.Inflow-d.Outflow);return arr}
 function gfm(){if(hasActiveFilters()){return getFilteredMonthly()}return MONTHLY}
@@ -703,7 +712,7 @@ charts.c9=new Chart(document.getElementById("c9"),{type:"line",data:{labels:data
 
 function renderTransactions(){const el=document.getElementById("content");
 el.innerHTML=`<div class="section"><div class="section-title">Transaction Search</div><div class="search-bar"><input class="search-input" id="txnSearch" placeholder="Quick search within filtered results..." oninput="txnPage=0;filterTxns()"></div><div class="table-wrap"><table class="txn-table"><thead><tr><th>Date</th><th>Source</th><th>Amount</th><th>Type</th><th>Category</th><th>Detail</th></tr></thead><tbody id="txnBody"></tbody></table></div><div class="table-footer"><span id="txnCount"></span><div><button class="page-btn" id="prevBtn" onclick="txnPage--;filterTxns()">\u2190 Prev</button> <button class="page-btn" id="nextBtn" onclick="txnPage++;filterTxns()">Next \u2192</button></div></div></div>`;filterTxns()}
-function filterTxns(){let filtered=getFilteredTxns();const q=(document.getElementById("txnSearch").value||"").toLowerCase();if(q)filtered=filtered.filter(t=>(t.s+t.c+t.r+t.b+t.d).toLowerCase().includes(q));const pp=50,total=filtered.length,pages=Math.ceil(total/pp);if(txnPage>=pages)txnPage=Math.max(0,pages-1);const sl=filtered.slice(txnPage*pp,(txnPage+1)*pp);const typeLabel=t=>t.t==='In'?'Inflow':(t.t==='Inv'?'Investment':'Outflow');const amtClass=t=>t.t==='In'?'in':(t.t==='Inv'?'inv':'out');const amtSign=t=>t.t==='In'?'+':(t.t==='Inv'?'\u25CF':'\u2212');document.getElementById("txnBody").innerHTML=sl.map(t=>`<tr><td>${t.d}</td><td style="cursor:pointer;color:var(--text)" data-merchant="${escapeHtml(t.s||'')}" onclick="openMerchant(this.dataset.merchant)">${escapeHtml(t.s)}</td><td class="${amtClass(t)}">${amtSign(t)}\u20AC${t.v.toFixed(2)}</td><td>${typeLabel(t)}</td><td>${escapeHtml(t.c)}</td><td>${escapeHtml(t.r)}</td></tr>`).join("");document.getElementById("txnCount").textContent=`${total} transactions \u00B7 Page ${txnPage+1}/${Math.max(pages,1)}`;document.getElementById("prevBtn").disabled=txnPage<=0;document.getElementById("nextBtn").disabled=txnPage>=pages-1}
+function filterTxns(){let filtered=getFilteredTxns();const q=(document.getElementById("txnSearch").value||"").toLowerCase();if(q)filtered=filtered.filter(t=>(t.s+t.c+t.r+t.b+t.d).toLowerCase().includes(q));const pp=50,total=filtered.length,pages=Math.ceil(total/pp);if(txnPage>=pages)txnPage=Math.max(0,pages-1);const sl=filtered.slice(txnPage*pp,(txnPage+1)*pp);const typeLabel=t=>t.t==='In'?'Inflow':(t.t==='Inv'?'Investment':'Outflow');const amtClass=t=>t.t==='In'?'in':(t.t==='Inv'?'inv':'out');const amtSign=t=>t.t==='In'?'+':(t.t==='Inv'?'\u25CF':'\u2212');const reconBadge=t=>t.f?`<span title="Found in ${escapeAttr(t.f)}" style="color:#10b981;font-size:11px;margin-left:6px">\u2713</span>`:`<span title="Not yet found in any bank statement" style="color:#f59e0b;font-size:11px;margin-left:6px">\u26A0</span>`;document.getElementById("txnBody").innerHTML=sl.map(t=>`<tr><td>${t.d}${reconBadge(t)}</td><td style="cursor:pointer;color:var(--text)" data-merchant="${escapeHtml(t.s||'')}" onclick="openMerchant(this.dataset.merchant)">${escapeHtml(t.s)}</td><td class="${amtClass(t)}">${amtSign(t)}\u20AC${t.v.toFixed(2)}</td><td>${typeLabel(t)}</td><td>${escapeHtml(t.c)}</td><td>${escapeHtml(t.r)}</td></tr>`).join("");const unreconShown=sl.filter(t=>!t.f).length;document.getElementById("txnCount").innerHTML=`${total} transactions \u00B7 Page ${txnPage+1}/${Math.max(pages,1)}${unreconShown>0?` \u00B7 <span style="color:#f59e0b">\u26A0 ${unreconShown} unreconciled on this page</span>`:''}`;document.getElementById("prevBtn").disabled=txnPage<=0;document.getElementById("nextBtn").disabled=txnPage>=pages-1}
 
 function renderCompare(){const months=MONTHLY.map(m=>m.YM);const el=document.getElementById("content");
 // Smart defaults: current month vs same month last year
@@ -1645,7 +1654,7 @@ function render(){
   const isNetWorth=activeTab==='networth';
   document.getElementById('activeFilters').style.display=(isRules||isFuel||isNetWorth)?'none':'flex';
   document.getElementById('yearFilter').style.display=(isRules||isFuel||isNetWorth)?'none':'inline-block';
-  document.querySelector('.subtitle').textContent=dashboardSubtitle;
+  document.querySelector('.subtitle').innerHTML=dashboardSubtitle;
   if(isRules){
     document.getElementById('kpis').innerHTML='';
     document.getElementById('insightsSection').innerHTML='';
@@ -1777,6 +1786,7 @@ const CHAT_TOOLS=[
         amount_max:{type:'number'},
         search:{type:'string',description:'Free-text search across source, category, and detail fields'},
         sort_by:{type:'string',enum:['date_desc','date_asc','amount_desc','amount_asc'],description:'Default date_desc'},
+        reconciled:{type:'string',enum:['yes','no'],description:'"yes" = only transactions matched to a bank statement (found_in_statements set). "no" = only unreconciled transactions (cash, missing, or not yet imported).'},
         limit:{type:'integer',description:'Max rows to return (default 50, max 200)'}
       }
     }
@@ -1794,6 +1804,7 @@ const CHAT_TOOLS=[
         type:{type:'string',enum:['In','Out','Inv']},
         category:{type:'string'},
         bank:{type:'string'},
+        reconciled:{type:'string',enum:['yes','no'],description:'Filter by reconciliation status before grouping.'},
         limit:{type:'integer',description:'Top N groups by sum (default 20, max 100)'}
       }
     }
@@ -1824,6 +1835,8 @@ function _filterRows(af){
   if(af.amount_min!=null)rows=rows.filter(t=>t.v>=af.amount_min);
   if(af.amount_max!=null)rows=rows.filter(t=>t.v<=af.amount_max);
   if(af.search){const q=af.search.toLowerCase();rows=rows.filter(t=>((t.s||'')+' '+(t.r||'')+' '+(t.c||'')).toLowerCase().includes(q));}
+  if(af.reconciled==='yes')rows=rows.filter(t=>!!t.f);
+  else if(af.reconciled==='no')rows=rows.filter(t=>!t.f);
   return rows;
 }
 function tool_query_transactions(args){
@@ -1837,7 +1850,7 @@ function tool_query_transactions(args){
   const limit=Math.min(Math.max(af.limit||50,1),200);
   const total=rows.length;
   const totalAmount=rows.reduce((s,t)=>s+t.v,0);
-  const items=rows.slice(0,limit).map(t=>({date:t.d,amount:t.v,type:t.t,source:t.s,bank:t.b,category:t.c,detail:t.r}));
+  const items=rows.slice(0,limit).map(t=>({date:t.d,amount:t.v,type:t.t,source:t.s,bank:t.b,category:t.c,detail:t.r,found_in_statements:t.f||null}));
   return {total_matching:total,returned:items.length,total_amount:Math.round(totalAmount*100)/100,items};
 }
 function tool_aggregate(args){
@@ -1895,8 +1908,9 @@ function buildChatSystem(){
 DATASET:
 - Total transactions: ${TXNS.length}
 - Date range: ${minD} to ${maxD}
-- Each transaction has: date (YYYY-MM-DD), amount (positive number), type ("In"=income, "Out"=expense, "Inv"=investment / money moved into investments), source/merchant, bank, category, detail
+- Each transaction has: date (YYYY-MM-DD), amount (positive number), type ("In"=income, "Out"=expense, "Inv"=investment / money moved into investments), source/merchant, bank, category, detail, found_in_statements (which bank statement it was reconciled from, e.g. "2026-04 (NLB)", or null if unreconciled \u2014 cash, missing, or not yet imported)
 - Note: Investments are NOT expenses \u2014 the money is still owned, just moved into investment accounts. Treat them as a separate flow.
+- Use reconciled:"yes" / "no" filter to find reconciled vs unreconciled transactions.
 
 You have tools to query the full transaction database on demand. Use them whenever the answer requires specifics — don't guess or make up numbers. Use multiple tool calls when needed (e.g. first list_distinct_values to discover categories, then aggregate to break them down). After tool calls, give the user a clear, concise answer with the actual numbers.
 
