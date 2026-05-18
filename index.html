@@ -228,6 +228,7 @@ h1{font-size:32px;font-weight:800;letter-spacing:-1.5px;background:linear-gradie
     <div class="fp-group"><div class="fp-label">Category</div><select class="fp-select" id="fpCategory"><option value="">All Categories</option></select></div>
     <div class="fp-group"><div class="fp-label">Amount Range (\u20AC)</div><div class="fp-row"><input class="fp-input" type="number" id="fpAmtMin" placeholder="Min" step="1"><input class="fp-input" type="number" id="fpAmtMax" placeholder="Max" step="1"></div></div>
     <div class="fp-group"><div class="fp-label">Reconciliation</div><div class="fp-chips" id="fpReconChips"><span class="fp-chip active" data-val="" onclick="toggleChip(this)">All</span><span class="fp-chip" data-val="reconciled" onclick="toggleChip(this)">Reconciled</span><span class="fp-chip" data-val="unreconciled" onclick="toggleChip(this)">Unreconciled</span></div></div>
+    <div class="fp-group"><div class="fp-label">Bank Statement</div><select class="fp-select" id="fpStatement"><option value="">All Statements</option></select></div>
     <div class="fp-group"><div class="fp-label">Search Text</div><input class="fp-input" type="text" id="fpSearch" placeholder="Source, category, detail..."></div>
   </div>
   <div class="fp-footer"><button class="fp-btn fp-btn-secondary" onclick="resetFilters()">Reset</button><button class="fp-btn fp-btn-primary" onclick="applyFilters()">Apply Filters</button></div>
@@ -416,6 +417,13 @@ async function loadFromSupabase() {
   // Populate category filter
   const allCats = [...new Set(TXNS.map(t => t.c))].filter(Boolean).sort();
   document.getElementById('fpCategory').innerHTML = '<option value="">All Categories</option>' + allCats.map(c => '<option value="' + c.replace(/"/g, '&quot;') + '">' + c + '</option>').join('');
+
+  // Populate bank statement filter — newest first (e.g. "2026-05 (NLB)")
+  const stmtCounts = {};
+  for (const t of TXNS) { if (t.f) stmtCounts[t.f] = (stmtCounts[t.f] || 0) + 1; }
+  const allStmts = Object.keys(stmtCounts).sort().reverse();
+  document.getElementById('fpStatement').innerHTML = '<option value="">All Statements</option>' +
+    allStmts.map(s => `<option value="${s.replace(/"/g, '&quot;')}">${s} \u00B7 ${stmtCounts[s]}</option>`).join('');
 }
 
 function recomputeAggregates() {
@@ -471,7 +479,7 @@ const fmtE=v=>"\u20AC"+Math.round(v).toLocaleString();
 let activeTab="overview",yearFilter="All",charts={},txnPage=0;
 const TABS=["overview","networth","spending","income","trends","recurring","transactions","compare","projection","fuel","rules"];
 const TAB_LABELS={overview:"Overview",networth:"Net Worth",spending:"Spending",income:"Income",trends:"Trends",recurring:"Recurring",transactions:"Transactions",compare:"Compare",projection:"Projection",fuel:"Gas Prices",rules:"Rules"};
-let gFilters={type:"",bank:"",category:"",dateFrom:"",dateTo:"",amtMin:"",amtMax:"",search:"",recon:""};
+let gFilters={type:"",bank:"",category:"",dateFrom:"",dateTo:"",amtMin:"",amtMax:"",search:"",recon:"",statement:""};
 
 let dashboardSubtitle='Loading from Supabase...';
 
@@ -516,17 +524,17 @@ document.querySelectorAll(".tab-btn").forEach(b=>b.addEventListener("click",()=>
 window.addEventListener("resize",checkTabScroll);setTimeout(checkTabScroll,100);
 
 // Filter panel
-function openFilters(){document.getElementById("filterPanel").classList.add("open");document.getElementById("filterOverlay").classList.add("open");document.getElementById("fpDateFrom").value=gFilters.dateFrom;document.getElementById("fpDateTo").value=gFilters.dateTo;document.getElementById("fpCategory").value=gFilters.category;document.getElementById("fpAmtMin").value=gFilters.amtMin;document.getElementById("fpAmtMax").value=gFilters.amtMax;document.getElementById("fpSearch").value=gFilters.search;setChipState("fpTypeChips",gFilters.type);setChipState("fpBankChips",gFilters.bank)}
+function openFilters(){document.getElementById("filterPanel").classList.add("open");document.getElementById("filterOverlay").classList.add("open");document.getElementById("fpDateFrom").value=gFilters.dateFrom;document.getElementById("fpDateTo").value=gFilters.dateTo;document.getElementById("fpCategory").value=gFilters.category;document.getElementById("fpAmtMin").value=gFilters.amtMin;document.getElementById("fpAmtMax").value=gFilters.amtMax;document.getElementById("fpSearch").value=gFilters.search;document.getElementById("fpStatement").value=gFilters.statement||"";setChipState("fpTypeChips",gFilters.type);setChipState("fpBankChips",gFilters.bank);setChipState("fpReconChips",gFilters.recon||"")}
 function closeFilters(){document.getElementById("filterPanel").classList.remove("open");document.getElementById("filterOverlay").classList.remove("open")}
 function toggleChip(el){el.parentElement.querySelectorAll(".fp-chip").forEach(c=>c.classList.remove("active"));el.classList.add("active")}
 function setChipState(id,val){const c=document.getElementById(id);if(!c)return;c.querySelectorAll(".fp-chip").forEach(x=>{x.classList.remove("active");if(x.dataset.val===val)x.classList.add("active")})}
 function getChipVal(id){const c=document.getElementById(id);if(!c)return"";const a=c.querySelector(".fp-chip.active");return a?a.dataset.val:""}
-function applyFilters(){gFilters={type:getChipVal("fpTypeChips"),bank:getChipVal("fpBankChips"),category:document.getElementById("fpCategory").value,dateFrom:document.getElementById("fpDateFrom").value,dateTo:document.getElementById("fpDateTo").value,amtMin:document.getElementById("fpAmtMin").value,amtMax:document.getElementById("fpAmtMax").value,search:document.getElementById("fpSearch").value,recon:getChipVal("fpReconChips")};closeFilters();txnPage=0;render();serializeStateToHash();}
-function resetFilters(){gFilters={type:"",bank:"",category:"",dateFrom:"",dateTo:"",amtMin:"",amtMax:"",search:"",recon:""};document.getElementById("fpDateFrom").value="";document.getElementById("fpDateTo").value="";document.getElementById("fpCategory").value="";document.getElementById("fpAmtMin").value="";document.getElementById("fpAmtMax").value="";document.getElementById("fpSearch").value="";setChipState("fpTypeChips","");setChipState("fpBankChips","");setChipState("fpReconChips","");closeFilters();txnPage=0;render();serializeStateToHash();}
+function applyFilters(){gFilters={type:getChipVal("fpTypeChips"),bank:getChipVal("fpBankChips"),category:document.getElementById("fpCategory").value,dateFrom:document.getElementById("fpDateFrom").value,dateTo:document.getElementById("fpDateTo").value,amtMin:document.getElementById("fpAmtMin").value,amtMax:document.getElementById("fpAmtMax").value,search:document.getElementById("fpSearch").value,recon:getChipVal("fpReconChips"),statement:document.getElementById("fpStatement").value};closeFilters();txnPage=0;render();serializeStateToHash();}
+function resetFilters(){gFilters={type:"",bank:"",category:"",dateFrom:"",dateTo:"",amtMin:"",amtMax:"",search:"",recon:"",statement:""};document.getElementById("fpDateFrom").value="";document.getElementById("fpDateTo").value="";document.getElementById("fpCategory").value="";document.getElementById("fpAmtMin").value="";document.getElementById("fpAmtMax").value="";document.getElementById("fpSearch").value="";document.getElementById("fpStatement").value="";setChipState("fpTypeChips","");setChipState("fpBankChips","");setChipState("fpReconChips","");closeFilters();txnPage=0;render();serializeStateToHash();}
 function removeFilter(k){gFilters[k]="";txnPage=0;render();serializeStateToHash();}
-function renderActiveTags(){const el=document.getElementById("activeFilters");const t=[];if(yearFilter!=="All")t.push({key:"_year",label:"Year: "+yearFilter});if(gFilters.type)t.push({key:"type",label:"Type: "+(gFilters.type==="In"?"Inflow":(gFilters.type==="Inv"?"Investment":"Outflow"))});if(gFilters.bank)t.push({key:"bank",label:"Bank: "+gFilters.bank});if(gFilters.category)t.push({key:"category",label:gFilters.category});if(gFilters.dateFrom)t.push({key:"dateFrom",label:"From: "+gFilters.dateFrom});if(gFilters.dateTo)t.push({key:"dateTo",label:"To: "+gFilters.dateTo});if(gFilters.amtMin)t.push({key:"amtMin",label:"Min \u20AC"+gFilters.amtMin});if(gFilters.amtMax)t.push({key:"amtMax",label:"Max \u20AC"+gFilters.amtMax});if(gFilters.search)t.push({key:"search",label:'"'+gFilters.search+'"'});if(gFilters.recon)t.push({key:"recon",label:gFilters.recon==="reconciled"?"Reconciled":"Unreconciled"});el.innerHTML=t.map(x=>`<span class="af-tag">${x.label}<button onclick="${x.key==='_year'?'document.getElementById(\"yearFilter\").value=\"All\";yearFilter=\"All\";render()':'removeFilter(\''+x.key+'\')'}">\u00D7</button></span>`).join("")}
+function renderActiveTags(){const el=document.getElementById("activeFilters");const t=[];if(yearFilter!=="All")t.push({key:"_year",label:"Year: "+yearFilter});if(gFilters.type)t.push({key:"type",label:"Type: "+(gFilters.type==="In"?"Inflow":(gFilters.type==="Inv"?"Investment":"Outflow"))});if(gFilters.bank)t.push({key:"bank",label:"Bank: "+gFilters.bank});if(gFilters.category)t.push({key:"category",label:gFilters.category});if(gFilters.dateFrom)t.push({key:"dateFrom",label:"From: "+gFilters.dateFrom});if(gFilters.dateTo)t.push({key:"dateTo",label:"To: "+gFilters.dateTo});if(gFilters.amtMin)t.push({key:"amtMin",label:"Min \u20AC"+gFilters.amtMin});if(gFilters.amtMax)t.push({key:"amtMax",label:"Max \u20AC"+gFilters.amtMax});if(gFilters.search)t.push({key:"search",label:'"'+gFilters.search+'"'});if(gFilters.recon)t.push({key:"recon",label:gFilters.recon==="reconciled"?"Reconciled":"Unreconciled"});if(gFilters.statement)t.push({key:"statement",label:"Stmt: "+gFilters.statement});el.innerHTML=t.map(x=>`<span class="af-tag">${x.label}<button onclick="${x.key==='_year'?'document.getElementById(\"yearFilter\").value=\"All\";yearFilter=\"All\";render()':'removeFilter(\''+x.key+'\')'}">\u00D7</button></span>`).join("")}
 
-function getFilteredTxns(){let f=TXNS;if(yearFilter!=="All")f=f.filter(t=>t.d.startsWith(yearFilter));if(gFilters.type)f=f.filter(t=>t.t===gFilters.type);if(gFilters.bank)f=f.filter(t=>t.b===gFilters.bank);if(gFilters.category)f=f.filter(t=>t.c===gFilters.category);if(gFilters.dateFrom)f=f.filter(t=>t.d>=gFilters.dateFrom);if(gFilters.dateTo)f=f.filter(t=>t.d<=gFilters.dateTo);if(gFilters.amtMin)f=f.filter(t=>t.v>=parseFloat(gFilters.amtMin));if(gFilters.amtMax)f=f.filter(t=>t.v<=parseFloat(gFilters.amtMax));if(gFilters.search){const q=gFilters.search.toLowerCase();f=f.filter(t=>(t.s+t.c+t.r+t.b+t.d).toLowerCase().includes(q))}if(gFilters.recon==="reconciled")f=f.filter(t=>!!t.f);else if(gFilters.recon==="unreconciled")f=f.filter(t=>!t.f);return f}
+function getFilteredTxns(){let f=TXNS;if(yearFilter!=="All")f=f.filter(t=>t.d.startsWith(yearFilter));if(gFilters.type)f=f.filter(t=>t.t===gFilters.type);if(gFilters.bank)f=f.filter(t=>t.b===gFilters.bank);if(gFilters.category)f=f.filter(t=>t.c===gFilters.category);if(gFilters.dateFrom)f=f.filter(t=>t.d>=gFilters.dateFrom);if(gFilters.dateTo)f=f.filter(t=>t.d<=gFilters.dateTo);if(gFilters.amtMin)f=f.filter(t=>t.v>=parseFloat(gFilters.amtMin));if(gFilters.amtMax)f=f.filter(t=>t.v<=parseFloat(gFilters.amtMax));if(gFilters.search){const q=gFilters.search.toLowerCase();f=f.filter(t=>(t.s+t.c+t.r+t.b+t.d).toLowerCase().includes(q))}if(gFilters.recon==="reconciled")f=f.filter(t=>!!t.f);else if(gFilters.recon==="unreconciled")f=f.filter(t=>!t.f);if(gFilters.statement)f=f.filter(t=>t.f===gFilters.statement);return f}
 function hasActiveFilters(){return yearFilter!=="All"||Object.values(gFilters).some(v=>v!=="")}
 function getFilteredMonthly(){const txns=getFilteredTxns();const map={};txns.forEach(t=>{const ym=t.d.slice(0,7);if(!map[ym])map[ym]={YM:ym,Inflow:0,Outflow:0,Invested:0};if(t.t==="In")map[ym].Inflow+=t.v;else if(t.t==="Inv")map[ym].Invested+=t.v;else map[ym].Outflow+=t.v});const arr=Object.values(map).sort((a,b)=>a.YM.localeCompare(b.YM));arr.forEach(d=>d.Net=d.Inflow-d.Outflow);return arr}
 function gfm(){if(hasActiveFilters()){return getFilteredMonthly()}return MONTHLY}
@@ -1787,6 +1795,7 @@ const CHAT_TOOLS=[
         search:{type:'string',description:'Free-text search across source, category, and detail fields'},
         sort_by:{type:'string',enum:['date_desc','date_asc','amount_desc','amount_asc'],description:'Default date_desc'},
         reconciled:{type:'string',enum:['yes','no'],description:'"yes" = only transactions matched to a bank statement (found_in_statements set). "no" = only unreconciled transactions (cash, missing, or not yet imported).'},
+        statement:{type:'string',description:'Exact bank-statement tag to filter by, e.g. "2026-04 (NLB)". Use list_distinct_values with field:"statement" to discover available statements.'},
         limit:{type:'integer',description:'Max rows to return (default 50, max 200)'}
       }
     }
@@ -1798,13 +1807,14 @@ const CHAT_TOOLS=[
       type:'object',
       required:['group_by'],
       properties:{
-        group_by:{type:'string',enum:['category','source','bank','month','year','type'],description:'Field to group by. "month"=YYYY-MM, "year"=YYYY.'},
+        group_by:{type:'string',enum:['category','source','bank','month','year','type','statement'],description:'Field to group by. "month"=YYYY-MM, "year"=YYYY, "statement"=bank statement tag.'},
         date_from:{type:'string'},
         date_to:{type:'string'},
         type:{type:'string',enum:['In','Out','Inv']},
         category:{type:'string'},
         bank:{type:'string'},
         reconciled:{type:'string',enum:['yes','no'],description:'Filter by reconciliation status before grouping.'},
+        statement:{type:'string',description:'Exact bank-statement tag to filter by, e.g. "2026-04 (NLB)".'},
         limit:{type:'integer',description:'Top N groups by sum (default 20, max 100)'}
       }
     }
@@ -1816,7 +1826,7 @@ const CHAT_TOOLS=[
       type:'object',
       required:['field'],
       properties:{
-        field:{type:'string',enum:['category','source','bank','type']},
+        field:{type:'string',enum:['category','source','bank','type','statement']},
         type_filter:{type:'string',enum:['In','Out','Inv'],description:'Only include rows of this type'}
       }
     }
@@ -1837,6 +1847,7 @@ function _filterRows(af){
   if(af.search){const q=af.search.toLowerCase();rows=rows.filter(t=>((t.s||'')+' '+(t.r||'')+' '+(t.c||'')).toLowerCase().includes(q));}
   if(af.reconciled==='yes')rows=rows.filter(t=>!!t.f);
   else if(af.reconciled==='no')rows=rows.filter(t=>!t.f);
+  if(af.statement)rows=rows.filter(t=>t.f===af.statement);
   return rows;
 }
 function tool_query_transactions(args){
@@ -1862,7 +1873,8 @@ function tool_aggregate(args){
     bank:t=>t.b||'(no bank)',
     month:t=>(t.d||'').slice(0,7),
     year:t=>(t.d||'').slice(0,4),
-    type:t=>t.t
+    type:t=>t.t,
+    statement:t=>t.f||'(unreconciled)'
   }[af.group_by];
   if(!keyFn)return {error:'invalid group_by'};
   const map={};
@@ -1882,7 +1894,7 @@ function tool_aggregate(args){
 }
 function tool_list_distinct(args){
   const af=args||{};
-  const fnMap={category:t=>t.c,source:t=>t.s,bank:t=>t.b,type:t=>t.t};
+  const fnMap={category:t=>t.c,source:t=>t.s,bank:t=>t.b,type:t=>t.t,statement:t=>t.f};
   const fn=fnMap[af.field];
   if(!fn)return {error:'invalid field'};
   let rows=TXNS;
