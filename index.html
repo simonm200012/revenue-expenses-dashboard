@@ -1760,6 +1760,7 @@ function renderInvestments(){
         <span style="color:#3b82f6">\u25FC</span> Largest holding: <strong style="color:var(--text)">${escapeHtml(largest.ticker.replace(/_US_EQ|_UK_EQ|_DE_EQ/g,''))}</strong> \u20AC${fmt(largest.marketValue)} (${largest.allocationPercent.toFixed(1)}%)
         \u00B7
         <span style="color:#8b5cf6">\u23F0</span> Updated ${escapeHtml(updatedLabel)}
+        ${data.fxRates ? '\u00B7 <span style="color:#06b6d4">FX</span> ' + Object.entries(data.fxRates).filter(([c])=>c!=='EUR').map(([c,r])=>`1\u20AC=${r.toFixed(4)}${c}`).join(' \u00B7 ') : ''}
       </div>
     </div>
     <div class="grid grid-2">
@@ -1799,19 +1800,33 @@ function renderInvestments(){
     <div class="section" style="margin-top:16px">
       <div class="section-title">All Positions (${positions.length})</div>
       <div class="table-wrap" style="max-height:520px"><table class="txn-table">
-        <thead><tr><th>Ticker</th><th>Cur</th><th>Shares</th><th>Avg (native)</th><th>Current (native)</th><th>Current (€/sh)</th><th>Cost (€)</th><th>Value (€)</th><th>P/L (€)</th><th>%</th><th>Alloc</th></tr></thead>
+        <thead><tr><th>Ticker</th><th>Cur</th><th>Shares</th><th>Avg (native)</th><th>Current (native)</th><th>Avg (€/sh)</th><th>Current (€/sh)</th><th>Cost (€)</th><th>Value (€)</th><th>P/L (€)</th><th>%</th><th>Alloc</th></tr></thead>
         <tbody>${positions.map(p=>{
           const cur=p.nativeCurrency||t212Currency(p.ticker);
           const t=p.ticker.replace(/_US_EQ|_UK_EQ|_DE_EQ/g,'').replace(/[a-z]_EQ$/,'');
           const plCls=p.unrealizedPL>=0?'in':'out';
-          const eurCur=p.quantity>0?(p.marketValue/p.quantity):0;
+          // Convert native price per share to EUR using the live FX rates from the JSON.
+          // GBp (pence): /100 → GBP, then /EUR-base GBP rate → EUR.
+          // USD: /EUR-base USD rate → EUR. EUR: pass-through.
+          const fx=data.fxRates||{};
+          const toEurPerShare=(native)=>{
+            if(native==null||isNaN(native))return null;
+            if(cur==='EUR')return native;
+            if(cur==='GBp'&&fx.GBP)return (native/100)/fx.GBP;
+            if(cur==='USD'&&fx.USD)return native/fx.USD;
+            return null; // unknown currency or missing FX
+          };
+          const eurAvg=toEurPerShare(p.averagePrice);
+          const eurCur=toEurPerShare(p.currentPrice);
+          const fmtEurSh=(v)=>v==null?'\u2014':('\u20AC'+v.toFixed(2));
           return `<tr>
             <td><strong>${escapeHtml(t)}</strong></td>
             <td style="font-size:11px;color:var(--text4)">${cur||'?'}</td>
             <td style="font-family:'JetBrains Mono',monospace">${p.quantity.toLocaleString('en-US',{maximumFractionDigits:6})}</td>
             <td style="font-family:'JetBrains Mono',monospace">${fmtNativePrice(p.averagePrice,cur)}</td>
             <td style="font-family:'JetBrains Mono',monospace">${fmtNativePrice(p.currentPrice,cur)}</td>
-            <td style="font-family:'JetBrains Mono',monospace">\u20AC${eurCur.toFixed(2)}</td>
+            <td style="font-family:'JetBrains Mono',monospace">${fmtEurSh(eurAvg)}</td>
+            <td style="font-family:'JetBrains Mono',monospace">${fmtEurSh(eurCur)}</td>
             <td style="font-family:'JetBrains Mono',monospace">\u20AC${fmt(p.costBasis)}</td>
             <td style="font-family:'JetBrains Mono',monospace">\u20AC${fmt(p.marketValue)}</td>
             <td class="${plCls}" style="font-family:'JetBrains Mono',monospace">${fmtSigned(p.unrealizedPL)}</td>
@@ -1820,7 +1835,7 @@ function renderInvestments(){
           </tr>`;
         }).join('')}
         <tr style="font-weight:700;border-top:2px solid var(--border2)">
-          <td>TOTAL</td><td></td><td>${positions.length}</td><td></td><td></td><td></td>
+          <td>TOTAL</td><td></td><td>${positions.length}</td><td></td><td></td><td></td><td></td>
           <td style="font-family:'JetBrains Mono',monospace">\u20AC${fmt(tot.costBasis)}</td>
           <td style="font-family:'JetBrains Mono',monospace">\u20AC${fmt(tot.marketValue)}</td>
           <td class="${pl>=0?'in':'out'}" style="font-family:'JetBrains Mono',monospace">${fmtSigned(pl)}</td>
