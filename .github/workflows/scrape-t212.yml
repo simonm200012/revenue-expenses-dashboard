@@ -23,6 +23,7 @@ jobs:
       - name: Fetch from Trading 212
         env:
           T212_API_KEY: ${{ secrets.T212_API_KEY }}
+          T212_API_SECRET: ${{ secrets.T212_API_SECRET }}
         run: node scripts/scrape-t212.mjs
 
       - name: Commit if changed
