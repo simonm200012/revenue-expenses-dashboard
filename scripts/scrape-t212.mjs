@@ -74,31 +74,70 @@ try {
   console.warn('account/info skipped:', e.message);
 }
 
-// T212 reports per-position averagePrice / currentPrice in the instrument's
+// T212 reports per-position averagePrice/currentPrice in the instrument's
 // NATIVE currency (pence for UK stocks, USD for US, EUR for EU). The only
 // per-position field already in account currency (EUR) is `ppl`.
-// The cash object holds correct totals in EUR:
-//   cash.invested = total cost basis (EUR)
-//   cash.ppl      = total unrealized P/L (EUR)
-//   cash.free     = available cash (EUR)
-//   cash.pieCash  = cash held in pies (EUR)
-//   cash.total    = free + invested + pieCash + ppl (full account value)
-// So we use the cash object for portfolio-level totals, and derive each
-// position's EUR cost/value by pro-rating the EUR total by the position's
-// native-currency cost basis ratio. Per-position ppl stays as reported.
+// To show accurate EUR values per position, we fetch live FX rates from
+// frankfurter.app (free, no auth, ECB-sourced) and convert each position's
+// native value to EUR. The displayed EUR cost is then derived from
+// (EUR value - ppl), which matches what the T212 app displays.
+
+// Infer the instrument's trading currency from the T212 ticker.
+function tickerCurrency(ticker) {
+  if (!ticker) return null;
+  if (/_US_EQ$/.test(ticker)) return 'USD';
+  const m = ticker.match(/([a-z])_EQ$/);
+  if (m) return m[1] === 'l' ? 'GBp' : 'EUR';
+  return 'EUR'; // safe fallback
+}
 
 const nativeRows = (Array.isArray(portfolio) ? portfolio : []).map(p => {
   const qty = parseFloat(p.quantity) || 0;
   const avg = parseFloat(p.averagePrice) || 0;
   const cur = parseFloat(p.currentPrice) || 0;
-  const nativeCost = qty * avg;
-  const nativeValue = qty * cur;
-  const ppl = (p.ppl !== undefined && p.ppl !== null) ? parseFloat(p.ppl) : 0;
   return {
-    raw: p, qty, avg, cur, nativeCost, nativeValue, ppl,
+    raw: p,
+    qty, avg, cur,
+    nativeCost: qty * avg,
+    nativeValue: qty * cur,
+    nativeCurrency: tickerCurrency(p.ticker),
+    ppl: (p.ppl !== undefined && p.ppl !== null) ? parseFloat(p.ppl) : 0,
     fxPpl: parseFloat(p.fxPpl) || 0
   };
 });
+
+// Fetch FX rates only for currencies actually used (excluding EUR).
+const fxNeeded = new Set();
+for (const r of nativeRows) {
+  const code = r.nativeCurrency === 'GBp' ? 'GBP' : r.nativeCurrency;
+  if (code && code !== 'EUR') fxNeeded.add(code);
+}
+const fxRates = { EUR: 1 };
+if (fxNeeded.size > 0) {
+  try {
+    const symbols = [...fxNeeded].join(',');
+    const fxRes = await fetch(`https://api.frankfurter.app/latest?from=EUR&to=${symbols}`);
+    if (fxRes.ok) {
+      const fxData = await fxRes.json();
+      Object.assign(fxRates, fxData.rates || {});
+      console.log('FX rates (EUR base):', fxRates);
+    } else {
+      console.warn('FX fetch failed', fxRes.status, '— will fall back to pro-rating.');
+    }
+  } catch (e) {
+    console.warn('FX fetch error:', e.message, '— will fall back to pro-rating.');
+  }
+}
+// Convert a native value to EUR. Returns null if rate is missing.
+function toEUR(value, currency) {
+  if (currency === 'EUR') return value;
+  if (currency === 'GBp') {
+    if (!fxRates.GBP) return null;
+    return (value / 100) / fxRates.GBP; // pence → GBP → EUR
+  }
+  if (currency === 'USD' && fxRates.USD) return value / fxRates.USD;
+  return null;
+}
 
 const cashInvested = cash ? parseFloat(cash.invested) || 0 : 0;   // EUR cost basis total
 const cashPpl      = cash ? parseFloat(cash.ppl)      || 0 : 0;   // EUR total P/L
@@ -109,14 +148,21 @@ const cashTotal    = cash ? parseFloat(cash.total)    || 0 : (cashFree + cashInv
 const totalEURMarketValue = cashInvested + cashPpl;
 const totalNativeCost = nativeRows.reduce((s, r) => s + r.nativeCost, 0);
 
-// Pro-rate each position's EUR cost basis from its native cost share.
-// Then EUR market value = EUR cost + per-position EUR ppl.
+// Try to compute each position's EUR value via FX. Fall back to pro-rating
+// if FX rates are missing (network error, unknown currency, etc.).
 const positions = nativeRows.map(r => {
-  const share = totalNativeCost > 0 ? r.nativeCost / totalNativeCost : 0;
-  const eurCost = cashInvested * share;
-  const eurValue = eurCost + r.ppl;
+  let eurValue = toEUR(r.nativeValue, r.nativeCurrency);
+  if (eurValue == null) {
+    // Fallback: pro-rate from totals (less accurate when currencies mix).
+    const share = totalNativeCost > 0 ? r.nativeCost / totalNativeCost : 0;
+    const eurCost = cashInvested * share;
+    eurValue = eurCost + r.ppl;
+  }
+  // T212-app-style cost basis: value - ppl. Matches what the user sees in the app.
+  const eurCost = eurValue - r.ppl;
   return {
     ticker: r.raw.ticker || '',
+    nativeCurrency: r.nativeCurrency,
     quantity: r.qty,
     averagePrice: r.avg,        // in instrument's native currency
     currentPrice: r.cur,        // in instrument's native currency
@@ -146,6 +192,7 @@ const out = {
   updated: new Date().toISOString().replace(/\.\d+Z$/, 'Z'),
   source: 'Trading 212 live API',
   currency: (cash && cash.currencyCode) || (info && info.currencyCode) || 'EUR',
+  fxRates,
   account: info ? {
     id: info.id,
     currencyCode: info.currencyCode
