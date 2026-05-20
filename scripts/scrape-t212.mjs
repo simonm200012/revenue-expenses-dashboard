@@ -83,8 +83,15 @@ try {
 // (EUR value - ppl), which matches what the T212 app displays.
 
 // Infer the instrument's trading currency from the T212 ticker.
+// Most LSE stocks (e.g. RRl_EQ Rolls Royce) trade in GBp (pence).
+// Some LSE-listed ETFs (e.g. VUSAl_EQ Vanguard S&P 500) trade in GBP (pounds) instead.
+// Add known exceptions here.
+const TICKER_CURRENCY_OVERRIDES = {
+  'VUSAl_EQ': 'GBP'
+};
 function tickerCurrency(ticker) {
   if (!ticker) return null;
+  if (TICKER_CURRENCY_OVERRIDES[ticker]) return TICKER_CURRENCY_OVERRIDES[ticker];
   if (/_US_EQ$/.test(ticker)) return 'USD';
   const m = ticker.match(/([a-z])_EQ$/);
   if (m) return m[1] === 'l' ? 'GBp' : 'EUR';
@@ -134,6 +141,10 @@ function toEUR(value, currency) {
   if (currency === 'GBp') {
     if (!fxRates.GBP) return null;
     return (value / 100) / fxRates.GBP; // pence → GBP → EUR
+  }
+  if (currency === 'GBP') {
+    if (!fxRates.GBP) return null;
+    return value / fxRates.GBP; // GBP → EUR
   }
   if (currency === 'USD' && fxRates.USD) return value / fxRates.USD;
   return null;

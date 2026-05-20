@@ -303,20 +303,20 @@
     },
     {
       "ticker": "VUSAl_EQ",
-      "nativeCurrency": "GBp",
+      "nativeCurrency": "GBP",
       "quantity": 3.7558,
       "averagePrice": 76.15421481,
       "currentPrice": 104.5675,
       "nativeCurrencyValue": 392.73,
-      "costBasis": -114.17,
-      "marketValue": 4.54,
-      "unrealizedPL": 118.71,
-      "unrealizedPLPct": 0,
-      "fxPpl": -4.57,
+      "costBasis": 334.35,
+      "marketValue": 453.69,
+      "unrealizedPL": 119.34,
+      "unrealizedPLPct": 35.69,
+      "fxPpl": -4.11,
       "initialFillDate": "2024-02-21T12:37:58.000+02:00",
       "pieQuantity": 0,
       "frontend": "IOS",
-      "allocationPercent": 0.42
+      "allocationPercent": 41.87
     }
   ]
 }

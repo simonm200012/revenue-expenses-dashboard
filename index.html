@@ -1678,8 +1678,11 @@ function fmtSigned(n){const s=n>=0?'+':'\u2212';return s+'\u20AC'+fmt(Math.abs(n
 // Infer the native trading currency from a T212 ticker.
 // US: _US_EQ → USD. London (lowercase l before _EQ) → GBp (pence).
 // Other EU exchange suffixes (d/p/a/i/m/b/...) → EUR.
+// Known LSE ETFs that quote in GBP pounds rather than GBp pence.
+const T212_CURRENCY_OVERRIDES = {'VUSAl_EQ':'GBP'};
 function t212Currency(ticker){
   if(!ticker) return null;
+  if(T212_CURRENCY_OVERRIDES[ticker]) return T212_CURRENCY_OVERRIDES[ticker];
   if(/_US_EQ$/.test(ticker)) return 'USD';
   const m = ticker.match(/([a-z])_EQ$/);
   if(m) return m[1] === 'l' ? 'GBp' : 'EUR';
@@ -1691,6 +1694,7 @@ function fmtNativePrice(value, currency){
   if(currency === 'USD') return '$' + n;
   if(currency === 'EUR') return '\u20AC' + n;
   if(currency === 'GBp') return n + ' p';
+  if(currency === 'GBP') return '\u00A3' + n;
   return n;
 }
 
@@ -1813,6 +1817,7 @@ function renderInvestments(){
             if(native==null||isNaN(native))return null;
             if(cur==='EUR')return native;
             if(cur==='GBp'&&fx.GBP)return (native/100)/fx.GBP;
+            if(cur==='GBP'&&fx.GBP)return native/fx.GBP;
             if(cur==='USD'&&fx.USD)return native/fx.USD;
             return null; // unknown currency or missing FX
           };
