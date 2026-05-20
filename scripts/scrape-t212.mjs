@@ -6,20 +6,41 @@
 
 import { writeFile, mkdir } from 'node:fs/promises';
 
-const API_KEY = process.env.T212_API_KEY;
+// Trim whitespace — GitHub secrets sometimes pick up a trailing newline on paste.
+const API_KEY = (process.env.T212_API_KEY || '').trim();
 if (!API_KEY) {
   console.error('Missing T212_API_KEY env variable.');
   process.exit(1);
 }
+// Print a sanitized key fingerprint so you can verify the secret matches what you generated.
+const keyHint = API_KEY.length >= 12
+  ? `${API_KEY.slice(0,4)}...${API_KEY.slice(-4)} (length ${API_KEY.length})`
+  : `(${API_KEY.length} chars)`;
+console.log('Using API key:', keyHint);
 
-const BASE = 'https://live.trading212.com';
+const ENV = (process.env.T212_ENV || 'live').toLowerCase();
+const BASE = ENV === 'demo'
+  ? 'https://demo.trading212.com'
+  : 'https://live.trading212.com';
+console.log('Environment:', ENV, BASE);
+
 const HEADERS = { Authorization: API_KEY, Accept: 'application/json' };
 
 async function t212(path) {
   const res = await fetch(BASE + path, { headers: HEADERS });
   if (!res.ok) {
     const body = await res.text();
-    throw new Error(`${path} -> HTTP ${res.status}: ${body.slice(0, 300)}`);
+    const errMsg = `${path} -> HTTP ${res.status}: ${body.slice(0, 300)}`;
+    if (res.status === 401) {
+      throw new Error(errMsg + '\n  \u2192 Possible causes: API key has whitespace, key was generated for Demo (set T212_ENV=demo), or required scopes missing.');
+    }
+    if (res.status === 403) {
+      throw new Error(errMsg + '\n  \u2192 The API key works but lacks the required scope. Regenerate it with portfolio:read + account:read enabled.');
+    }
+    if (res.status === 429) {
+      throw new Error(errMsg + '\n  \u2192 Rate limited. Most endpoints are 1 req / 30s.');
+    }
+    throw new Error(errMsg);
   }
   return res.json();
 }
