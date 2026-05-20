@@ -1,0 +1,16 @@
+{
+  "updated": null,
+  "source": "Trading 212 live API",
+  "currency": "EUR",
+  "account": null,
+  "cash": null,
+  "totals": {
+    "positionCount": 0,
+    "marketValue": 0,
+    "costBasis": 0,
+    "unrealizedPL": 0,
+    "unrealizedPLPct": 0,
+    "accountValue": 0
+  },
+  "positions": []
+}

@@ -477,8 +477,8 @@ const fmt=v=>v>=1000?(v/1000).toFixed(1)+"k":Math.round(v).toLocaleString();
 const fmtE=v=>"\u20AC"+Math.round(v).toLocaleString();
 
 let activeTab="overview",yearFilter="All",charts={},txnPage=0;
-const TABS=["overview","networth","spending","income","trends","recurring","transactions","compare","projection","fuel","rules"];
-const TAB_LABELS={overview:"Overview",networth:"Net Worth",spending:"Spending",income:"Income",trends:"Trends",recurring:"Recurring",transactions:"Transactions",compare:"Compare",projection:"Projection",fuel:"Gas Prices",rules:"Rules"};
+const TABS=["overview","networth","spending","income","trends","recurring","transactions","compare","projection","investments","fuel","rules"];
+const TAB_LABELS={overview:"Overview",networth:"Net Worth",spending:"Spending",income:"Income",trends:"Trends",recurring:"Recurring",transactions:"Transactions",compare:"Compare",projection:"Projection",investments:"Investments",fuel:"Gas Prices",rules:"Rules"};
 let gFilters={type:"",bank:"",category:"",dateFrom:"",dateTo:"",amtMin:"",amtMax:"",search:"",recon:"",statement:""};
 
 let dashboardSubtitle='Loading from Supabase...';
@@ -1655,13 +1655,181 @@ function renderFuel(){
   });
 }
 
+// ============================================================
+// INVESTMENTS (Trading 212 — auto-fetched by GH Actions)
+// ============================================================
+let T212_DATA=null, T212_LOADING=false;
+async function loadT212Data(){
+  if(T212_DATA||T212_LOADING)return T212_DATA;
+  T212_LOADING=true;
+  try{
+    const res=await fetch('data/t212-portfolio.json',{cache:'no-cache'});
+    if(!res.ok)throw new Error('HTTP '+res.status);
+    T212_DATA=await res.json();
+  }catch(e){
+    T212_DATA={error:e.message||String(e)};
+  }finally{
+    T212_LOADING=false;
+  }
+  return T212_DATA;
+}
+function fmtSigned(n){const s=n>=0?'+':'\u2212';return s+'\u20AC'+fmt(Math.abs(n));}
+
+function renderInvestments(){
+  const k=document.getElementById('kpis');
+  const c=document.getElementById('content');
+  if(!T212_DATA){
+    k.innerHTML='';
+    c.innerHTML='<div style="text-align:center;padding:60px;color:var(--text4)"><p style="font-size:16px">Loading Trading 212 portfolio\u2026</p></div>';
+    loadT212Data().then(()=>{if(activeTab==='investments')renderInvestments()});
+    return;
+  }
+  if(T212_DATA.error){
+    k.innerHTML='';
+    c.innerHTML=`<div style="text-align:center;padding:60px;color:#ef4444"><p>Failed to load Trading 212 data: ${escapeHtml(T212_DATA.error)}</p></div>`;
+    return;
+  }
+  const data=T212_DATA;
+  const positions=data.positions||[];
+  if(!data.updated){
+    // Placeholder — waiting for first GH Actions run
+    k.innerHTML='';
+    c.innerHTML=`<div style="text-align:center;padding:60px;color:var(--text4)">
+      <p style="font-size:16px;margin-bottom:8px">Trading 212 not connected yet</p>
+      <p style="font-size:13px">Add a <code>T212_API_KEY</code> secret to the repo, then run the <strong>Fetch Trading 212 portfolio</strong> workflow once from the Actions tab. From there it auto-updates every 30 min on weekdays.</p>
+      <p style="margin-top:14px"><a href="https://github.com/simonm200012/revenue-expenses-dashboard/actions/workflows/scrape-t212.yml" target="_blank" rel="noopener" style="color:#10b981">\u2192 Open workflow</a></p>
+    </div>`;
+    return;
+  }
+  const cash=data.cash||{};
+  const tot=data.totals||{};
+  const pl=tot.unrealizedPL||0;
+  const plPct=tot.unrealizedPLPct||0;
+  const plColor=pl>=0?'#10b981':'#ef4444';
+  const updatedDate=new Date(data.updated);
+  const updatedAgoMin=Math.round((Date.now()-updatedDate.getTime())/60000);
+  const updatedLabel=updatedAgoMin<60?`${updatedAgoMin} min ago`:(updatedAgoMin<1440?`${Math.round(updatedAgoMin/60)} h ago`:`${Math.round(updatedAgoMin/1440)} d ago`);
+
+  // KPIs
+  k.innerHTML=`
+    <div class="kpi"><div class="kpi-label">Portfolio Value</div><div class="kpi-value" style="color:#3b82f6">\u20AC${fmt(tot.marketValue)}</div><div class="kpi-sub">${tot.positionCount} position${tot.positionCount===1?'':'s'}</div></div>
+    <div class="kpi"><div class="kpi-label">Available Cash</div><div class="kpi-value" style="color:#10b981">\u20AC${fmt(cash.free||0)}</div><div class="kpi-sub">${escapeHtml(data.currency||'EUR')}</div></div>
+    <div class="kpi"><div class="kpi-label">Unrealized P/L</div><div class="kpi-value" style="color:${plColor}">${fmtSigned(pl)}</div><div class="kpi-sub" style="color:${plColor}">${plPct>=0?'+':''}${plPct.toFixed(2)}%</div></div>
+    <div class="kpi"><div class="kpi-label">Total Account Value</div><div class="kpi-value" style="color:#8b5cf6">\u20AC${fmt(tot.accountValue)}</div><div class="kpi-sub">Cash + investments</div></div>
+  `;
+
+  if(positions.length===0){
+    c.innerHTML='<div class="section"><div class="section-title">No positions</div><p style="color:var(--text4)">Your Trading 212 portfolio is currently empty.</p></div>';
+    return;
+  }
+
+  const topByPL=[...positions].sort((a,b)=>b.unrealizedPL-a.unrealizedPL);
+  const topByValue=positions.slice(0,8);
+  const pnlChartData=[...positions].sort((a,b)=>b.unrealizedPL-a.unrealizedPL).slice(0,15);
+  const winner=topByPL[0];
+  const loser=topByPL[topByPL.length-1];
+  const largest=positions[0]; // already sorted by marketValue desc
+
+  c.innerHTML=`
+    <div class="section" style="margin-bottom:16px">
+      <div class="section-title">Snapshot</div>
+      <div style="font-size:12px;color:var(--text4);line-height:1.7">
+        <span style="color:#10b981">\u2197</span> Best performer: <strong style="color:var(--text)">${escapeHtml(winner.ticker.replace(/_US_EQ|_UK_EQ|_DE_EQ/g,''))}</strong> ${fmtSigned(winner.unrealizedPL)} (${winner.unrealizedPLPct>=0?'+':''}${winner.unrealizedPLPct.toFixed(2)}%)
+        \u00B7
+        <span style="color:#ef4444">\u2198</span> Weakest: <strong style="color:var(--text)">${escapeHtml(loser.ticker.replace(/_US_EQ|_UK_EQ|_DE_EQ/g,''))}</strong> ${fmtSigned(loser.unrealizedPL)} (${loser.unrealizedPLPct>=0?'+':''}${loser.unrealizedPLPct.toFixed(2)}%)
+        \u00B7
+        <span style="color:#3b82f6">\u25FC</span> Largest holding: <strong style="color:var(--text)">${escapeHtml(largest.ticker.replace(/_US_EQ|_UK_EQ|_DE_EQ/g,''))}</strong> \u20AC${fmt(largest.marketValue)} (${largest.allocationPercent.toFixed(1)}%)
+        \u00B7
+        <span style="color:#8b5cf6">\u23F0</span> Updated ${escapeHtml(updatedLabel)}
+      </div>
+    </div>
+    <div class="grid grid-2">
+      <div class="section">
+        <div class="section-title">Portfolio Allocation</div>
+        <div style="position:relative;height:300px"><canvas id="invAllocChart"></canvas></div>
+      </div>
+      <div class="section">
+        <div class="section-title">Gain / Loss by Position (top 15)</div>
+        <div style="position:relative;height:300px"><canvas id="invPnlChart"></canvas></div>
+      </div>
+      <div class="section">
+        <div class="section-title">Top Holdings</div>
+        ${topByValue.map(p=>{
+          const t=p.ticker.replace(/_US_EQ|_UK_EQ|_DE_EQ/g,'');
+          return `<div style="padding:10px 0;border-bottom:1px solid var(--border)">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+              <div style="font-weight:700">${escapeHtml(t)}</div>
+              <div style="font-family:'JetBrains Mono',monospace;color:${p.unrealizedPL>=0?'#10b981':'#ef4444'};font-weight:700">${fmtSigned(p.unrealizedPL)}</div>
+            </div>
+            <div style="height:6px;background:var(--bar-track);border-radius:99px;overflow:hidden;margin-top:8px"><span style="display:block;height:100%;background:linear-gradient(90deg,#3b82f6,#06b6d4);width:${Math.min(p.allocationPercent,100)}%"></span></div>
+            <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text4);margin-top:4px"><span>\u20AC${fmt(p.marketValue)}</span><span>${p.allocationPercent.toFixed(2)}%</span></div>
+          </div>`;
+        }).join('')}
+      </div>
+      <div class="section">
+        <div class="section-title">Currency & Cash</div>
+        <div style="font-size:13px;line-height:1.8;color:var(--text2)">
+          <div style="display:flex;justify-content:space-between"><span style="color:var(--text4)">Available cash</span><strong>\u20AC${fmt(cash.free||0)}</strong></div>
+          <div style="display:flex;justify-content:space-between"><span style="color:var(--text4)">Invested cash</span><strong>\u20AC${fmt(cash.invested||0)}</strong></div>
+          <div style="display:flex;justify-content:space-between"><span style="color:var(--text4)">Pie cash</span><strong>\u20AC${fmt(cash.pieCash||0)}</strong></div>
+          <div style="display:flex;justify-content:space-between"><span style="color:var(--text4)">Blocked</span><strong>\u20AC${fmt(cash.blocked||0)}</strong></div>
+          <div style="display:flex;justify-content:space-between;margin-top:8px;padding-top:8px;border-top:1px solid var(--border)"><span style="color:var(--text4)">Total account</span><strong style="color:#8b5cf6">\u20AC${fmt(tot.accountValue)}</strong></div>
+        </div>
+      </div>
+    </div>
+    <div class="section" style="margin-top:16px">
+      <div class="section-title">All Positions (${positions.length})</div>
+      <div class="table-wrap" style="max-height:520px"><table class="txn-table">
+        <thead><tr><th>Ticker</th><th>Shares</th><th>Avg Price</th><th>Current</th><th>Cost Basis</th><th>Market Value</th><th>P/L</th><th>%</th><th>Alloc</th></tr></thead>
+        <tbody>${positions.map(p=>{
+          const t=p.ticker.replace(/_US_EQ|_UK_EQ|_DE_EQ/g,'');
+          const plCls=p.unrealizedPL>=0?'in':'out';
+          return `<tr>
+            <td><strong>${escapeHtml(t)}</strong></td>
+            <td style="font-family:'JetBrains Mono',monospace">${p.quantity.toLocaleString('en-US',{maximumFractionDigits:6})}</td>
+            <td style="font-family:'JetBrains Mono',monospace">\u20AC${p.averagePrice.toFixed(2)}</td>
+            <td style="font-family:'JetBrains Mono',monospace">\u20AC${p.currentPrice.toFixed(2)}</td>
+            <td style="font-family:'JetBrains Mono',monospace">\u20AC${fmt(p.costBasis)}</td>
+            <td style="font-family:'JetBrains Mono',monospace">\u20AC${fmt(p.marketValue)}</td>
+            <td class="${plCls}" style="font-family:'JetBrains Mono',monospace">${fmtSigned(p.unrealizedPL)}</td>
+            <td class="${plCls}" style="font-family:'JetBrains Mono',monospace">${p.unrealizedPLPct>=0?'+':''}${p.unrealizedPLPct.toFixed(2)}%</td>
+            <td style="font-family:'JetBrains Mono',monospace">${p.allocationPercent.toFixed(1)}%</td>
+          </tr>`;
+        }).join('')}
+        <tr style="font-weight:700;border-top:2px solid var(--border2)">
+          <td>TOTAL</td><td>${positions.length}</td><td></td><td></td>
+          <td style="font-family:'JetBrains Mono',monospace">\u20AC${fmt(tot.costBasis)}</td>
+          <td style="font-family:'JetBrains Mono',monospace">\u20AC${fmt(tot.marketValue)}</td>
+          <td class="${pl>=0?'in':'out'}" style="font-family:'JetBrains Mono',monospace">${fmtSigned(pl)}</td>
+          <td class="${pl>=0?'in':'out'}" style="font-family:'JetBrains Mono',monospace">${plPct>=0?'+':''}${plPct.toFixed(2)}%</td>
+          <td>100%</td>
+        </tr>
+        </tbody>
+      </table></div>
+    </div>
+  `;
+
+  // Charts (re-uses dashboard palette P)
+  charts.invAllocChart=new Chart(document.getElementById('invAllocChart'),{
+    type:'doughnut',
+    data:{labels:positions.map(p=>p.ticker.replace(/_US_EQ|_UK_EQ|_DE_EQ/g,'')),datasets:[{data:positions.map(p=>p.marketValue),backgroundColor:P.concat(P),borderWidth:0}]},
+    options:{responsive:true,maintainAspectRatio:false,cutout:'55%',plugins:{legend:{position:'right',labels:{boxWidth:10,padding:6,font:{size:10}}},tooltip:{callbacks:{label:ctx=>ctx.label+': \u20AC'+fmt(ctx.parsed)+' ('+positions[ctx.dataIndex].allocationPercent.toFixed(1)+'%)'}}}}
+  });
+  charts.invPnlChart=new Chart(document.getElementById('invPnlChart'),{
+    type:'bar',
+    data:{labels:pnlChartData.map(p=>p.ticker.replace(/_US_EQ|_UK_EQ|_DE_EQ/g,'')),datasets:[{label:'Unrealized P/L',data:pnlChartData.map(p=>p.unrealizedPL),backgroundColor:pnlChartData.map(p=>p.unrealizedPL>=0?'#10b981cc':'#ef4444cc'),borderRadius:4}]},
+    options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,scales:{x:{ticks:{callback:v=>fmt(v),color:'#94a3b8'}}},plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>'\u20AC'+fmt(ctx.parsed.x)+' ('+pnlChartData[ctx.dataIndex].unrealizedPLPct.toFixed(2)+'%)'}}}}
+  });
+}
+
 function render(){
   dc();
   const isRules=activeTab==='rules';
   const isFuel=activeTab==='fuel';
+  const isInvestments=activeTab==='investments';
   const isNetWorth=activeTab==='networth';
-  document.getElementById('activeFilters').style.display=(isRules||isFuel||isNetWorth)?'none':'flex';
-  document.getElementById('yearFilter').style.display=(isRules||isFuel||isNetWorth)?'none':'inline-block';
+  document.getElementById('activeFilters').style.display=(isRules||isFuel||isInvestments||isNetWorth)?'none':'flex';
+  document.getElementById('yearFilter').style.display=(isRules||isFuel||isInvestments||isNetWorth)?'none':'inline-block';
   document.querySelector('.subtitle').innerHTML=dashboardSubtitle;
   if(isRules){
     document.getElementById('kpis').innerHTML='';
@@ -1672,6 +1840,11 @@ function render(){
   if(isFuel){
     document.getElementById('insightsSection').innerHTML='';
     renderFuel();
+    return;
+  }
+  if(isInvestments){
+    document.getElementById('insightsSection').innerHTML='';
+    renderInvestments();
     return;
   }
   if(isNetWorth){

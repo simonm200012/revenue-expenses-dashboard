@@ -1,0 +1,38 @@
+name: Fetch Trading 212 portfolio
+
+on:
+  # Every 30 minutes, weekdays, roughly 07:00–18:00 UTC
+  # (covers 08:00–19:00 Ljubljana in CET and 09:00–20:00 Ljubljana in CEST).
+  schedule:
+    - cron: '*/30 7-18 * * 1-5'
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Fetch from Trading 212
+        env:
+          T212_API_KEY: ${{ secrets.T212_API_KEY }}
+        run: node scripts/scrape-t212.mjs
+
+      - name: Commit if changed
+        run: |
+          if [[ -n "$(git status --porcelain data/t212-portfolio.json)" ]]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add data/t212-portfolio.json
+            git commit -m "Update T212 portfolio ($(date -u +%Y-%m-%dT%H:%MZ))"
+            git push
+          else
+            echo "No changes."
+          fi
