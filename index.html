@@ -1799,17 +1799,17 @@ function renderInvestments(){
     <div class="section" style="margin-top:16px">
       <div class="section-title">All Positions (${positions.length})</div>
       <div class="table-wrap" style="max-height:520px"><table class="txn-table">
-        <thead><tr><th>Ticker</th><th>Cur</th><th>Shares</th><th>Avg (native)</th><th>Current (native)</th><th>Cost (€)</th><th>Value (€)</th><th>P/L (€)</th><th>%</th><th>Alloc</th></tr></thead>
+        <thead><tr><th>Ticker</th><th>Shares</th><th>Avg (€/sh)</th><th>Current (€/sh)</th><th>Cost (€)</th><th>Value (€)</th><th>P/L (€)</th><th>%</th><th>Alloc</th></tr></thead>
         <tbody>${positions.map(p=>{
-          const cur=t212Currency(p.ticker);
           const t=p.ticker.replace(/_US_EQ|_UK_EQ|_DE_EQ/g,'').replace(/[a-z]_EQ$/,'');
           const plCls=p.unrealizedPL>=0?'in':'out';
+          const eurAvg = p.quantity>0 ? (p.costBasis/p.quantity) : 0;
+          const eurCur = p.quantity>0 ? (p.marketValue/p.quantity) : 0;
           return `<tr>
             <td><strong>${escapeHtml(t)}</strong></td>
-            <td style="font-size:11px;color:var(--text4)">${cur||'?'}</td>
             <td style="font-family:'JetBrains Mono',monospace">${p.quantity.toLocaleString('en-US',{maximumFractionDigits:6})}</td>
-            <td style="font-family:'JetBrains Mono',monospace">${fmtNativePrice(p.averagePrice,cur)}</td>
-            <td style="font-family:'JetBrains Mono',monospace">${fmtNativePrice(p.currentPrice,cur)}</td>
+            <td style="font-family:'JetBrains Mono',monospace">\u20AC${eurAvg.toFixed(2)}</td>
+            <td style="font-family:'JetBrains Mono',monospace">\u20AC${eurCur.toFixed(2)}</td>
             <td style="font-family:'JetBrains Mono',monospace">\u20AC${fmt(p.costBasis)}</td>
             <td style="font-family:'JetBrains Mono',monospace">\u20AC${fmt(p.marketValue)}</td>
             <td class="${plCls}" style="font-family:'JetBrains Mono',monospace">${fmtSigned(p.unrealizedPL)}</td>
@@ -1818,7 +1818,7 @@ function renderInvestments(){
           </tr>`;
         }).join('')}
         <tr style="font-weight:700;border-top:2px solid var(--border2)">
-          <td>TOTAL</td><td></td><td>${positions.length}</td><td></td><td></td>
+          <td>TOTAL</td><td>${positions.length}</td><td></td><td></td>
           <td style="font-family:'JetBrains Mono',monospace">\u20AC${fmt(tot.costBasis)}</td>
           <td style="font-family:'JetBrains Mono',monospace">\u20AC${fmt(tot.marketValue)}</td>
           <td class="${pl>=0?'in':'out'}" style="font-family:'JetBrains Mono',monospace">${fmtSigned(pl)}</td>
