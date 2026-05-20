@@ -74,40 +74,73 @@ try {
   console.warn('account/info skipped:', e.message);
 }
 
-// Normalize positions
-const positions = (Array.isArray(portfolio) ? portfolio : []).map(p => {
+// T212 reports per-position averagePrice / currentPrice in the instrument's
+// NATIVE currency (pence for UK stocks, USD for US, EUR for EU). The only
+// per-position field already in account currency (EUR) is `ppl`.
+// The cash object holds correct totals in EUR:
+//   cash.invested = total cost basis (EUR)
+//   cash.ppl      = total unrealized P/L (EUR)
+//   cash.free     = available cash (EUR)
+//   cash.pieCash  = cash held in pies (EUR)
+//   cash.total    = free + invested + pieCash + ppl (full account value)
+// So we use the cash object for portfolio-level totals, and derive each
+// position's EUR cost/value by pro-rating the EUR total by the position's
+// native-currency cost basis ratio. Per-position ppl stays as reported.
+
+const nativeRows = (Array.isArray(portfolio) ? portfolio : []).map(p => {
   const qty = parseFloat(p.quantity) || 0;
   const avg = parseFloat(p.averagePrice) || 0;
   const cur = parseFloat(p.currentPrice) || 0;
-  const marketValue = qty * cur;
-  const costBasis = qty * avg;
-  // T212 returns ppl (profit/loss) in the account currency
-  const ppl = (p.ppl !== undefined && p.ppl !== null) ? parseFloat(p.ppl) : (marketValue - costBasis);
+  const nativeCost = qty * avg;
+  const nativeValue = qty * cur;
+  const ppl = (p.ppl !== undefined && p.ppl !== null) ? parseFloat(p.ppl) : 0;
   return {
-    ticker: p.ticker || '',
-    quantity: qty,
-    averagePrice: avg,
-    currentPrice: cur,
-    marketValue: Math.round(marketValue * 100) / 100,
-    costBasis: Math.round(costBasis * 100) / 100,
-    unrealizedPL: Math.round(ppl * 100) / 100,
-    unrealizedPLPct: costBasis > 0 ? Math.round((ppl / costBasis) * 10000) / 100 : 0,
-    fxPpl: parseFloat(p.fxPpl) || 0,
-    initialFillDate: p.initialFillDate || '',
-    pieQuantity: parseFloat(p.pieQuantity) || 0,
-    frontend: p.frontend || ''
+    raw: p, qty, avg, cur, nativeCost, nativeValue, ppl,
+    fxPpl: parseFloat(p.fxPpl) || 0
+  };
+});
+
+const cashInvested = cash ? parseFloat(cash.invested) || 0 : 0;   // EUR cost basis total
+const cashPpl      = cash ? parseFloat(cash.ppl)      || 0 : 0;   // EUR total P/L
+const cashFree     = cash ? parseFloat(cash.free)     || 0 : 0;
+const cashPie      = cash ? parseFloat(cash.pieCash)  || 0 : 0;
+const cashBlocked  = cash ? parseFloat(cash.blocked)  || 0 : 0;
+const cashTotal    = cash ? parseFloat(cash.total)    || 0 : (cashFree + cashInvested + cashPpl + cashPie);
+const totalEURMarketValue = cashInvested + cashPpl;
+const totalNativeCost = nativeRows.reduce((s, r) => s + r.nativeCost, 0);
+
+// Pro-rate each position's EUR cost basis from its native cost share.
+// Then EUR market value = EUR cost + per-position EUR ppl.
+const positions = nativeRows.map(r => {
+  const share = totalNativeCost > 0 ? r.nativeCost / totalNativeCost : 0;
+  const eurCost = cashInvested * share;
+  const eurValue = eurCost + r.ppl;
+  return {
+    ticker: r.raw.ticker || '',
+    quantity: r.qty,
+    averagePrice: r.avg,        // in instrument's native currency
+    currentPrice: r.cur,        // in instrument's native currency
+    nativeCurrencyValue: Math.round(r.nativeValue * 100) / 100,
+    costBasis: Math.round(eurCost * 100) / 100,        // EUR
+    marketValue: Math.round(eurValue * 100) / 100,     // EUR
+    unrealizedPL: Math.round(r.ppl * 100) / 100,       // EUR (from T212)
+    unrealizedPLPct: eurCost > 0 ? Math.round((r.ppl / eurCost) * 10000) / 100 : 0,
+    fxPpl: r.fxPpl,
+    initialFillDate: r.raw.initialFillDate || '',
+    pieQuantity: parseFloat(r.raw.pieQuantity) || 0,
+    frontend: r.raw.frontend || ''
   };
 }).sort((a, b) => b.marketValue - a.marketValue);
 
-const totalMarketValue = positions.reduce((s, p) => s + p.marketValue, 0);
-const totalCostBasis = positions.reduce((s, p) => s + p.costBasis, 0);
-const totalUnrealizedPL = positions.reduce((s, p) => s + p.unrealizedPL, 0);
-
 positions.forEach(p => {
-  p.allocationPercent = totalMarketValue > 0
-    ? Math.round((p.marketValue / totalMarketValue) * 10000) / 100
+  p.allocationPercent = totalEURMarketValue > 0
+    ? Math.round((p.marketValue / totalEURMarketValue) * 10000) / 100
     : 0;
 });
+
+const totalMarketValue = totalEURMarketValue;
+const totalCostBasis = cashInvested;
+const totalUnrealizedPL = cashPpl;
 
 const out = {
   updated: new Date().toISOString().replace(/\.\d+Z$/, 'Z'),
@@ -132,7 +165,7 @@ const out = {
     costBasis: Math.round(totalCostBasis * 100) / 100,
     unrealizedPL: Math.round(totalUnrealizedPL * 100) / 100,
     unrealizedPLPct: totalCostBasis > 0 ? Math.round((totalUnrealizedPL / totalCostBasis) * 10000) / 100 : 0,
-    accountValue: Math.round(((cash && cash.total) ? parseFloat(cash.total) : (totalMarketValue + (cash ? parseFloat(cash.free) || 0 : 0))) * 100) / 100
+    accountValue: Math.round(cashTotal * 100) / 100
   },
   positions
 };
