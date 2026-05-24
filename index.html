@@ -325,6 +325,15 @@ html.is-mobile-device .treemap,html.is-mobile-device .treemap-item{max-width:100
 /* Show menu button + hide tab row on mobile. */
 html.is-mobile-device .nav-menu-btn{display:inline-flex}
 html.is-mobile-device .tabs-wrap{display:none}
+/* Sticky top bar on mobile: header (title + icon buttons) + active filters
+   + controls (year selector) stay glued to the top while the user scrolls.
+   The wrapping div is created at load time by setupMobileStickyBar(). */
+html.is-mobile-device #mobileStickyBar{position:sticky;top:0;z-index:95;background:var(--bg);margin:calc(-1 * max(14px,env(safe-area-inset-top))) -12px 12px;padding:10px 12px 10px;padding-top:calc(env(safe-area-inset-top,0px) + 10px);border-bottom:1px solid var(--border);box-shadow:0 4px 14px rgba(0,0,0,.35)}
+html.is-mobile-device #mobileStickyBar .header{margin-bottom:8px}
+html.is-mobile-device #mobileStickyBar .controls{margin-bottom:0}
+/* Compact header inside sticky bar so it doesn't dominate the screen */
+html.is-mobile-device #mobileStickyBar h1{font-size:20px}
+html.is-mobile-device #mobileStickyBar .subtitle{font-size:10px}
 /* Prevent inner content from stretching the page wider than the viewport.
    Sections shrink to fit, wide tables/heatmaps scroll internally. */
 html.is-mobile-device .grid{min-width:0}
@@ -782,6 +791,29 @@ function closeNavMenu(){
 function populateNavPane(){
   const list=document.getElementById("navPaneList");
   list.innerHTML=TABS.map(t=>`<button class="nav-item${t===activeTab?' active':''}" data-tab="${t}" onclick="navPaneSelect(this.dataset.tab)">${TAB_LABELS[t]}<span class="nav-item-chevron">\u203A</span></button>`).join("");
+}
+// On mobile, wrap .header + #activeFilters + .controls in a single sticky
+// container so they remain visible while the user scrolls the dashboard
+// content. Desktop renders the same DOM without the wrapping behavior
+// (the CSS rule is gated on html.is-mobile-device).
+function setupMobileStickyBar(){
+  if(!document.documentElement.classList.contains("is-mobile-device"))return;
+  if(document.getElementById("mobileStickyBar"))return;
+  const header=document.querySelector(".header");
+  const controls=document.querySelector(".controls");
+  const activeFilters=document.getElementById("activeFilters");
+  if(!header||!controls||!header.parentNode)return;
+  const wrap=document.createElement("div");
+  wrap.id="mobileStickyBar";
+  header.parentNode.insertBefore(wrap,header);
+  wrap.appendChild(header);
+  if(activeFilters)wrap.appendChild(activeFilters);
+  wrap.appendChild(controls);
+}
+if(document.readyState==="loading"){
+  document.addEventListener("DOMContentLoaded",setupMobileStickyBar);
+}else{
+  setupMobileStickyBar();
 }
 function navPaneSelect(tab){
   // Mirror what the inline tab buttons do, then close the pane.
