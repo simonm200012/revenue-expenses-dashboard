@@ -305,6 +305,26 @@ html.is-mobile-device .spark-label{font-size:11px}
 html.is-mobile-device .spark-value{font-size:10px;min-width:48px}
 html.is-mobile-device .spark-delta{font-size:9px;min-width:38px}
 html.is-mobile-device .treemap,html.is-mobile-device .treemap-item{max-width:100%}
+/* ============== Mobile nav pane ============== */
+/* Hidden entirely on desktop. */
+.nav-menu-btn{display:none}
+.nav-overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:999;opacity:0;pointer-events:none;transition:opacity .3s}
+.nav-overlay.open{opacity:1;pointer-events:auto}
+.nav-pane{position:fixed;top:0;left:-110%;width:100%;max-width:340px;height:100%;background:var(--panel-bg);border-right:1px solid var(--border);z-index:1000;transition:left .35s cubic-bezier(.4,0,.2,1);display:flex;flex-direction:column;box-shadow:4px 0 24px var(--shadow);padding-top:env(safe-area-inset-top)}
+.nav-pane.open{left:0}
+.nav-pane-header{display:flex;justify-content:space-between;align-items:center;padding:16px 20px;border-bottom:1px solid var(--border)}
+.nav-pane-header h3{font-size:14px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--text3);margin:0}
+.nav-pane-close{background:transparent;border:none;color:var(--text3);font-size:24px;cursor:pointer;width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-family:inherit}
+.nav-pane-close:hover{background:var(--bg4)}
+.nav-pane-list{display:flex;flex-direction:column;padding:10px;gap:2px;overflow-y:auto;flex:1}
+.nav-pane-list .nav-item{text-align:left;padding:14px 18px;background:transparent;border:none;color:var(--text2);font-size:15px;font-weight:600;border-radius:10px;cursor:pointer;font-family:inherit;transition:all .15s;display:flex;align-items:center;gap:10px;min-height:48px}
+.nav-pane-list .nav-item:hover{background:var(--bg3);color:var(--text)}
+.nav-pane-list .nav-item.active{background:rgba(16,185,129,.18);color:#10b981;box-shadow:0 0 0 1px rgba(16,185,129,.35) inset}
+.nav-pane-list .nav-item .nav-item-chevron{margin-left:auto;color:var(--text5);font-size:14px}
+.nav-pane-list .nav-item.active .nav-item-chevron{color:#10b981}
+/* Show menu button + hide tab row on mobile. */
+html.is-mobile-device .nav-menu-btn{display:inline-flex}
+html.is-mobile-device .tabs-wrap{display:none}
 /* Prevent inner content from stretching the page wider than the viewport.
    Sections shrink to fit, wide tables/heatmaps scroll internally. */
 html.is-mobile-device .grid{min-width:0}
@@ -338,6 +358,9 @@ html.is-mobile-device .section .txn-table input.fp-input{width:120px !important;
   .spark-delta{font-size:9px;min-width:38px}
   /* Treemap stays inside container */
   .treemap,.treemap-item{max-width:100%}
+  /* Show the slide-out nav pane menu button, hide the inline tab row. */
+  .nav-menu-btn{display:inline-flex !important}
+  .tabs-wrap{display:none !important}
   /* Sections cap at viewport width; wide inner content (tables, heatmaps)
      scrolls within the section instead of stretching the page. */
   .grid{min-width:0}
@@ -424,11 +447,22 @@ html.is-mobile-device .section .txn-table input.fp-input{width:120px !important;
   <div class="header">
     <div><h1>Revenue & Expenses</h1><p class="subtitle">Loading from Supabase...</p></div>
     <div class="header-btns">
+      <button class="icon-btn nav-menu-btn" onclick="openNavMenu()" title="Sections">☰ <span class="lbl">Menu</span></button>
       <button class="icon-btn" onclick="exportCSV()">⬇ <span class="lbl">Export CSV</span></button>
       <button class="icon-btn" onclick="exportMonthPDF()">📄 <span class="lbl">Month PDF</span></button>
       <button class="icon-btn" onclick="openFilters()">🔍 <span class="lbl">Filters</span></button>
       <button class="icon-btn" id="themeBtn" onclick="toggleTheme()"><span id="themeIcon">\u2600\uFE0F</span><span class="lbl" id="themeText">Light</span></button>
     </div>
+  </div>
+  <!-- Mobile-only navigation pane: slides in from the left, lists every
+       section (tab) as a tappable row. Desktop ignores this entirely. -->
+  <div class="nav-overlay" id="navOverlay" onclick="closeNavMenu()"></div>
+  <div class="nav-pane" id="navPane">
+    <div class="nav-pane-header">
+      <h3>Sections</h3>
+      <button class="nav-pane-close" onclick="closeNavMenu()" aria-label="Close">×</button>
+    </div>
+    <div class="nav-pane-list" id="navPaneList"></div>
   </div>
   <div id="activeFilters" class="active-filters"></div>
   <div class="controls">
@@ -731,6 +765,33 @@ function openFilters(){
   if(_gestureActive||Date.now()-_gestureEndedAt<600)return;
   document.getElementById("filterPanel").classList.add("open");document.getElementById("filterOverlay").classList.add("open");document.getElementById("fpDateFrom").value=gFilters.dateFrom;document.getElementById("fpDateTo").value=gFilters.dateTo;document.getElementById("fpCategory").value=gFilters.category;document.getElementById("fpAmtMin").value=gFilters.amtMin;document.getElementById("fpAmtMax").value=gFilters.amtMax;document.getElementById("fpSearch").value=gFilters.search;document.getElementById("fpStatement").value=gFilters.statement||"";setChipState("fpTypeChips",gFilters.type);setChipState("fpBankChips",gFilters.bank);setChipState("fpReconChips",gFilters.recon||"")}
 function closeFilters(){document.getElementById("filterPanel").classList.remove("open");document.getElementById("filterOverlay").classList.remove("open")}
+
+// ============== Mobile nav pane ==============
+// Slides in from the left with every tab as a tappable row. Used on
+// mobile only; desktop ignores the menu button (display:none).
+function openNavMenu(){
+  if(_gestureActive||Date.now()-_gestureEndedAt<600)return; // same pinch guard
+  populateNavPane();
+  document.getElementById("navPane").classList.add("open");
+  document.getElementById("navOverlay").classList.add("open");
+}
+function closeNavMenu(){
+  document.getElementById("navPane").classList.remove("open");
+  document.getElementById("navOverlay").classList.remove("open");
+}
+function populateNavPane(){
+  const list=document.getElementById("navPaneList");
+  list.innerHTML=TABS.map(t=>`<button class="nav-item${t===activeTab?' active':''}" data-tab="${t}" onclick="navPaneSelect(this.dataset.tab)">${TAB_LABELS[t]}<span class="nav-item-chevron">\u203A</span></button>`).join("");
+}
+function navPaneSelect(tab){
+  // Mirror what the inline tab buttons do, then close the pane.
+  document.querySelectorAll(".tab-btn").forEach(b=>b.classList.toggle("active",b.dataset.tab===tab));
+  activeTab=tab;
+  txnPage=0;
+  render();
+  serializeStateToHash();
+  closeNavMenu();
+}
 function toggleChip(el){el.parentElement.querySelectorAll(".fp-chip").forEach(c=>c.classList.remove("active"));el.classList.add("active")}
 function setChipState(id,val){const c=document.getElementById(id);if(!c)return;c.querySelectorAll(".fp-chip").forEach(x=>{x.classList.remove("active");if(x.dataset.val===val)x.classList.add("active")})}
 function getChipVal(id){const c=document.getElementById(id);if(!c)return"";const a=c.querySelector(".fp-chip.active");return a?a.dataset.val:""}
