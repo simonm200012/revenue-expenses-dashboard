@@ -262,7 +262,10 @@ h1{font-size:32px;font-weight:800;letter-spacing:-1.5px;background:linear-gradie
   .insights{padding:16px;margin-top:16px}
   .insights-grid{grid-template-columns:1fr;gap:10px}
   .controls{flex-direction:column;align-items:stretch;gap:10px}
-  .filter-panel{width:100%;max-width:100%;padding-top:max(20px,env(safe-area-inset-top))}
+  /* Ensure the panel slides fully off-screen on phones. Default uses
+     right:-400px which only hides ~400px of a 100%-wide panel. */
+  .filter-panel{width:100%;max-width:100%;right:-110%;padding-top:max(20px,env(safe-area-inset-top))}
+  .filter-panel.open{right:0}
   .section{padding:16px;border-radius:12px}
   .section-title{font-size:12px;margin-bottom:14px;padding-bottom:8px}
   /* Tables: smaller text + cells, scroll horizontally inside .table-wrap */
@@ -298,7 +301,7 @@ h1{font-size:32px;font-weight:800;letter-spacing:-1.5px;background:linear-gradie
     <div class="fp-group"><div class="fp-label">Type</div><div class="fp-chips" id="fpTypeChips"><span class="fp-chip active" data-val="" onclick="toggleChip(this)">All</span><span class="fp-chip" data-val="In" onclick="toggleChip(this)">Inflow</span><span class="fp-chip" data-val="Out" onclick="toggleChip(this)">Outflow</span></div></div>
     <div class="fp-group"><div class="fp-label">Bank / Account</div><div class="fp-chips" id="fpBankChips"><span class="fp-chip active" data-val="" onclick="toggleChip(this)">All</span><span class="fp-chip" data-val="NLB" onclick="toggleChip(this)">NLB</span><span class="fp-chip" data-val="GORENJSKA BANKA" onclick="toggleChip(this)">Gorenjska</span><span class="fp-chip" data-val="Revolut" onclick="toggleChip(this)">Revolut</span><span class="fp-chip" data-val="Trading212" onclick="toggleChip(this)">Trading212</span></div></div>
     <div class="fp-group"><div class="fp-label">Category</div><select class="fp-select" id="fpCategory"><option value="">All Categories</option></select></div>
-    <div class="fp-group"><div class="fp-label">Amount Range (\u20AC)</div><div class="fp-row"><input class="fp-input" type="number" id="fpAmtMin" placeholder="Min" step="1"><input class="fp-input" type="number" id="fpAmtMax" placeholder="Max" step="1"></div></div>
+    <div class="fp-group"><div class="fp-label">Amount Range (€)</div><div class="fp-row"><input class="fp-input" type="number" id="fpAmtMin" placeholder="Min" step="1"><input class="fp-input" type="number" id="fpAmtMax" placeholder="Max" step="1"></div></div>
     <div class="fp-group"><div class="fp-label">Reconciliation</div><div class="fp-chips" id="fpReconChips"><span class="fp-chip active" data-val="" onclick="toggleChip(this)">All</span><span class="fp-chip" data-val="reconciled" onclick="toggleChip(this)">Reconciled</span><span class="fp-chip" data-val="unreconciled" onclick="toggleChip(this)">Unreconciled</span></div></div>
     <div class="fp-group"><div class="fp-label">Bank Statement</div><select class="fp-select" id="fpStatement"><option value="">All Statements</option></select></div>
     <div class="fp-group"><div class="fp-label">Search Text</div><input class="fp-input" type="text" id="fpSearch" placeholder="Source, category, detail..."></div>
@@ -597,29 +600,19 @@ document.getElementById("tabsBar").innerHTML=TABS.map(t=>`<button class="tab-btn
 document.querySelectorAll(".tab-btn").forEach(b=>b.addEventListener("click",()=>{document.querySelectorAll(".tab-btn").forEach(x=>x.classList.remove("active"));b.classList.add("active");activeTab=b.dataset.tab;txnPage=0;render();serializeStateToHash();}));
 window.addEventListener("resize",checkTabScroll);setTimeout(checkTabScroll,100);
 
-// Filter panel
-// Suppress accidental clicks fired at the end of pinch / multi-touch
-// gestures on iOS. iOS Safari emits a `click` when a finger lifts off a
-// button at the end of a pinch — even though the user was trying to zoom.
-// We block ANY click within ~700ms of any multi-touch / gesture event.
-let _gestureBlockUntil=0;
-// Standard touch path: 2+ fingers down = extend the block window.
-window.addEventListener('touchstart',e=>{if(e.touches&&e.touches.length>1)_gestureBlockUntil=Date.now()+700;},{capture:true,passive:true});
-window.addEventListener('touchmove',e=>{if(e.touches&&e.touches.length>1)_gestureBlockUntil=Date.now()+700;},{capture:true,passive:true});
-// iOS-specific gesture events — most reliable for pinch detection.
-window.addEventListener('gesturestart',()=>{_gestureBlockUntil=Date.now()+10000;},{capture:true});
-window.addEventListener('gesturechange',()=>{_gestureBlockUntil=Date.now()+10000;},{capture:true});
-window.addEventListener('gestureend',()=>{_gestureBlockUntil=Date.now()+700;},{capture:true});
-// Global click blocker — applies to every button on the page, not just openFilters.
-window.addEventListener('click',e=>{
-  if(Date.now()<_gestureBlockUntil){
-    e.stopImmediatePropagation();
-    e.preventDefault();
-  }
-},{capture:true});
+// Filter panel — gesture guard ONLY for openFilters, not all clicks.
+// (Previous version blocked global clicks for too long, preventing the
+// user from closing an open panel after pinching.)
+let _gestureActive=false;
+let _gestureEndedAt=0;
+window.addEventListener('gesturestart',()=>{_gestureActive=true;},{capture:true});
+window.addEventListener('gestureend',()=>{_gestureActive=false;_gestureEndedAt=Date.now();},{capture:true});
+// Fallback for non-Safari engines or missed gesture events:
+window.addEventListener('touchstart',e=>{if(e.touches&&e.touches.length>1){_gestureActive=true;_gestureEndedAt=Date.now();}},{capture:true,passive:true});
+window.addEventListener('touchend',e=>{if((!e.touches||e.touches.length===0)&&_gestureActive){_gestureActive=false;_gestureEndedAt=Date.now();}},{capture:true,passive:true});
 function openFilters(){
-  // Extra guard kept in case a click somehow slips past the global blocker.
-  if(Date.now()<_gestureBlockUntil)return;
+  // Ignore if currently pinching OR within 600ms of a pinch ending.
+  if(_gestureActive||Date.now()-_gestureEndedAt<600)return;
   document.getElementById("filterPanel").classList.add("open");document.getElementById("filterOverlay").classList.add("open");document.getElementById("fpDateFrom").value=gFilters.dateFrom;document.getElementById("fpDateTo").value=gFilters.dateTo;document.getElementById("fpCategory").value=gFilters.category;document.getElementById("fpAmtMin").value=gFilters.amtMin;document.getElementById("fpAmtMax").value=gFilters.amtMax;document.getElementById("fpSearch").value=gFilters.search;document.getElementById("fpStatement").value=gFilters.statement||"";setChipState("fpTypeChips",gFilters.type);setChipState("fpBankChips",gFilters.bank);setChipState("fpReconChips",gFilters.recon||"")}
 function closeFilters(){document.getElementById("filterPanel").classList.remove("open");document.getElementById("filterOverlay").classList.remove("open")}
 function toggleChip(el){el.parentElement.querySelectorAll(".fp-chip").forEach(c=>c.classList.remove("active"));el.classList.add("active")}
