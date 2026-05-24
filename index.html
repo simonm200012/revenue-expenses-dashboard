@@ -234,6 +234,9 @@ h1{font-size:32px;font-weight:800;letter-spacing:-1.5px;background:linear-gradie
 /* ============== MOBILE: phones + small tablets ============== */
 @media(max-width:768px){
   body{-webkit-tap-highlight-color:transparent}
+  /* touch-action: manipulation disables iOS double-tap-to-zoom on buttons
+     so pinch/zoom gestures don't accidentally trigger button taps. */
+  button,.icon-btn,.tab-btn,.fp-btn,.chip{touch-action:manipulation}
   #app{padding:14px 12px;padding-left:max(12px,env(safe-area-inset-left));padding-right:max(12px,env(safe-area-inset-right));padding-bottom:max(20px,env(safe-area-inset-bottom))}
   h1{font-size:26px;letter-spacing:-1px}
   .subtitle{font-size:11px}
@@ -241,6 +244,16 @@ h1{font-size:32px;font-weight:800;letter-spacing:-1.5px;background:linear-gradie
   .header-btns{gap:6px}
   .icon-btn{padding:10px 12px;font-size:13px;min-height:42px}
   .icon-btn .lbl{display:none}
+  /* Spending tab spark-rows — keep label readable, shrink canvas */
+  .spark-row{gap:6px}
+  .spark-canvas{width:50px !important}
+  .spark-label{font-size:11px}
+  .spark-value{font-size:10px;min-width:48px}
+  .spark-delta{font-size:9px;min-width:38px}
+  /* Treemap stays inside container */
+  .treemap,.treemap-item{max-width:100%}
+  /* Net Worth tab inputs side-by-side become stacked */
+  .nw-row{flex-direction:column;align-items:stretch}
   .grid-2,.compare-grid,.proj-cards{grid-template-columns:1fr}
   .span-2{grid-column:span 1}
   .kpis{flex-direction:column;gap:10px;margin-bottom:18px}
@@ -585,7 +598,15 @@ document.querySelectorAll(".tab-btn").forEach(b=>b.addEventListener("click",()=>
 window.addEventListener("resize",checkTabScroll);setTimeout(checkTabScroll,100);
 
 // Filter panel
-function openFilters(){document.getElementById("filterPanel").classList.add("open");document.getElementById("filterOverlay").classList.add("open");document.getElementById("fpDateFrom").value=gFilters.dateFrom;document.getElementById("fpDateTo").value=gFilters.dateTo;document.getElementById("fpCategory").value=gFilters.category;document.getElementById("fpAmtMin").value=gFilters.amtMin;document.getElementById("fpAmtMax").value=gFilters.amtMax;document.getElementById("fpSearch").value=gFilters.search;document.getElementById("fpStatement").value=gFilters.statement||"";setChipState("fpTypeChips",gFilters.type);setChipState("fpBankChips",gFilters.bank);setChipState("fpReconChips",gFilters.recon||"")}
+// Track multi-finger touches globally — used to suppress accidental
+// button clicks fired at the end of pinch-to-zoom gestures on iOS.
+let _lastMultiTouchAt=0;
+window.addEventListener('touchstart',e=>{if(e.touches&&e.touches.length>1)_lastMultiTouchAt=Date.now();},{capture:true,passive:true});
+function openFilters(){
+  // Suppress clicks that fire within 500ms of a multi-touch gesture
+  // (e.g. pinching to zoom out while finger lands on the search icon).
+  if(Date.now()-_lastMultiTouchAt<500)return;
+  document.getElementById("filterPanel").classList.add("open");document.getElementById("filterOverlay").classList.add("open");document.getElementById("fpDateFrom").value=gFilters.dateFrom;document.getElementById("fpDateTo").value=gFilters.dateTo;document.getElementById("fpCategory").value=gFilters.category;document.getElementById("fpAmtMin").value=gFilters.amtMin;document.getElementById("fpAmtMax").value=gFilters.amtMax;document.getElementById("fpSearch").value=gFilters.search;document.getElementById("fpStatement").value=gFilters.statement||"";setChipState("fpTypeChips",gFilters.type);setChipState("fpBankChips",gFilters.bank);setChipState("fpReconChips",gFilters.recon||"")}
 function closeFilters(){document.getElementById("filterPanel").classList.remove("open");document.getElementById("filterOverlay").classList.remove("open")}
 function toggleChip(el){el.parentElement.querySelectorAll(".fp-chip").forEach(c=>c.classList.remove("active"));el.classList.add("active")}
 function setChipState(id,val){const c=document.getElementById(id);if(!c)return;c.querySelectorAll(".fp-chip").forEach(x=>{x.classList.remove("active");if(x.dataset.val===val)x.classList.add("active")})}
