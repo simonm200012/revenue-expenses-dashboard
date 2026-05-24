@@ -281,10 +281,17 @@ html.is-mobile-device .txn-table{font-size:11px}
 html.is-mobile-device .txn-table th{padding:8px 8px;font-size:9px;letter-spacing:.5px}
 html.is-mobile-device .txn-table td{padding:7px 8px}
 html.is-mobile-device .table-wrap{max-height:65vh;-webkit-overflow-scrolling:touch}
-html.is-mobile-device .tabs-wrap{margin-bottom:4px}
-html.is-mobile-device .tabs{padding:4px;gap:2px;-webkit-overflow-scrolling:touch;scroll-snap-type:x proximity;scroll-padding:0 40px}
-html.is-mobile-device .tab-btn{padding:11px 14px;font-size:13px;min-height:44px;scroll-snap-align:center;flex-shrink:0}
+/* Tabs wrap into multiple rows on mobile instead of scrolling — every
+   tab is visible at once, no swiping required. */
+html.is-mobile-device .tabs-wrap{margin-bottom:4px;overflow:visible}
+html.is-mobile-device .tabs-wrap::after{display:none}
+html.is-mobile-device .tabs{padding:4px;gap:4px;flex-wrap:wrap;overflow:visible}
+html.is-mobile-device .tab-btn{padding:9px 12px;font-size:12px;min-height:38px;flex:0 0 auto}
 html.is-mobile-device .tab-btn.active{background:rgba(16,185,129,0.22);color:#10b981;box-shadow:0 0 0 1px rgba(16,185,129,0.4) inset;font-weight:700}
+/* Year filter: not full width on mobile — sized to its content like desktop. */
+html.is-mobile-device .controls{flex-direction:row;flex-wrap:wrap;align-items:center;gap:8px}
+html.is-mobile-device .controls > select,html.is-mobile-device #yearFilter{width:auto;flex:0 0 auto;min-width:120px;max-width:200px}
+html.is-mobile-device .search-input{flex:1 1 auto;min-width:140px}
 html.is-mobile-device input,html.is-mobile-device select,html.is-mobile-device textarea,html.is-mobile-device .fp-input,html.is-mobile-device .fp-select{font-size:16px !important}
 html.is-mobile-device .search-input{font-size:16px !important;min-width:0;width:100%}
 html.is-mobile-device .fp-btn{padding:12px;min-height:44px}
@@ -340,12 +347,16 @@ html.is-mobile-device .treemap,html.is-mobile-device .treemap-item{max-width:100
   .txn-table td{padding:7px 8px}
   .table-wrap{max-height:65vh;-webkit-overflow-scrolling:touch}
   /* Tabs: bigger touch targets, smooth horizontal scroll */
-  /* Tabs row: bigger touch targets, horizontal momentum scroll,
-     active tab is loud + snap-aligned so it stays visible after taps. */
-  .tabs-wrap{margin-bottom:4px}
-  .tabs{padding:4px;gap:2px;-webkit-overflow-scrolling:touch;scroll-snap-type:x proximity;scroll-padding:0 40px}
-  .tab-btn{padding:11px 14px;font-size:13px;min-height:44px;scroll-snap-align:center;flex-shrink:0}
+  /* Tabs wrap into multiple rows on mobile — every tab visible, no scrolling. */
+  .tabs-wrap{margin-bottom:4px;overflow:visible}
+  .tabs-wrap::after{display:none}
+  .tabs{padding:4px;gap:4px;flex-wrap:wrap;overflow:visible}
+  .tab-btn{padding:9px 12px;font-size:12px;min-height:38px;flex:0 0 auto}
   .tab-btn.active{background:rgba(16,185,129,0.22);color:#10b981;box-shadow:0 0 0 1px rgba(16,185,129,0.4) inset;font-weight:700}
+  /* Year filter sized to its content on mobile, not stretched full-width. */
+  .controls{flex-direction:row;flex-wrap:wrap;align-items:center;gap:8px}
+  .controls > select,#yearFilter{width:auto;flex:0 0 auto;min-width:120px;max-width:200px}
+  .search-input{flex:1 1 auto;min-width:140px}
   /* iOS: prevent input zoom by ensuring font-size >= 16px on focused inputs */
   input,select,textarea,.fp-input,.fp-select{font-size:16px !important}
   .search-input{font-size:16px !important;min-width:0;width:100%}
