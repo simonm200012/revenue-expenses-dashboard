@@ -274,8 +274,12 @@ h1{font-size:32px;font-weight:800;letter-spacing:-1.5px;background:linear-gradie
   .txn-table td{padding:7px 8px}
   .table-wrap{max-height:65vh;-webkit-overflow-scrolling:touch}
   /* Tabs: bigger touch targets, smooth horizontal scroll */
-  .tabs{padding:3px;-webkit-overflow-scrolling:touch}
-  .tab-btn{padding:10px 12px;font-size:12px;min-height:40px}
+  /* Tabs row: bigger touch targets, horizontal momentum scroll,
+     active tab is loud + snap-aligned so it stays visible after taps. */
+  .tabs-wrap{margin-bottom:4px}
+  .tabs{padding:4px;gap:2px;-webkit-overflow-scrolling:touch;scroll-snap-type:x proximity;scroll-padding:0 40px}
+  .tab-btn{padding:11px 14px;font-size:13px;min-height:44px;scroll-snap-align:center;flex-shrink:0}
+  .tab-btn.active{background:rgba(16,185,129,0.22);color:#10b981;box-shadow:0 0 0 1px rgba(16,185,129,0.4) inset;font-weight:700}
   /* iOS: prevent input zoom by ensuring font-size >= 16px on focused inputs */
   input,select,textarea,.fp-input,.fp-select{font-size:16px !important}
   .search-input{font-size:16px !important;min-width:0;width:100%}
@@ -597,8 +601,20 @@ function checkTabScroll(){const w=document.getElementById("tabsWrap");const t=w.
 
 // Build tabs
 document.getElementById("tabsBar").innerHTML=TABS.map(t=>`<button class="tab-btn${t===activeTab?' active':''}" data-tab="${t}">${TAB_LABELS[t]}</button>`).join("");
-document.querySelectorAll(".tab-btn").forEach(b=>b.addEventListener("click",()=>{document.querySelectorAll(".tab-btn").forEach(x=>x.classList.remove("active"));b.classList.add("active");activeTab=b.dataset.tab;txnPage=0;render();serializeStateToHash();}));
+document.querySelectorAll(".tab-btn").forEach(b=>b.addEventListener("click",()=>{
+  document.querySelectorAll(".tab-btn").forEach(x=>x.classList.remove("active"));
+  b.classList.add("active");
+  activeTab=b.dataset.tab;
+  txnPage=0;
+  render();
+  serializeStateToHash();
+  // Center the active tab in the scroll container so users never lose track
+  // of which tab is selected after the bar scrolls horizontally.
+  try{b.scrollIntoView({behavior:"smooth",block:"nearest",inline:"center"});}catch(_){}
+}));
 window.addEventListener("resize",checkTabScroll);setTimeout(checkTabScroll,100);
+// On first load, scroll the active tab into view too.
+setTimeout(()=>{const a=document.querySelector(".tab-btn.active");if(a)try{a.scrollIntoView({behavior:"auto",block:"nearest",inline:"center"});}catch(_){}},200);
 
 // Filter panel — gesture guard ONLY for openFilters, not all clicks.
 // (Previous version blocked global clicks for too long, preventing the
