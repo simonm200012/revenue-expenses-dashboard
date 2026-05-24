@@ -334,6 +334,10 @@ html.is-mobile-device #mobileStickyBar .controls{margin-bottom:0}
 /* Compact header inside sticky bar so it doesn't dominate the screen */
 html.is-mobile-device #mobileStickyBar h1{font-size:20px}
 html.is-mobile-device #mobileStickyBar .subtitle{font-size:10px}
+/* Year selector inside the header button row */
+html.is-mobile-device .year-in-header{height:42px;min-height:42px;padding:0 10px;font-size:13px !important;border-radius:8px;background:var(--input-bg);border:1px solid var(--border2);color:var(--text);width:auto !important;min-width:110px !important;max-width:140px !important}
+/* On mobile, the controls strip is empty after the year moves into the header — hide it. */
+html.is-mobile-device .controls{display:none !important}
 /* Prevent inner content from stretching the page wider than the viewport.
    Sections shrink to fit, wide tables/heatmaps scroll internally. */
 html.is-mobile-device .grid{min-width:0}
@@ -802,12 +806,21 @@ function setupMobileStickyBar(){
   const header=document.querySelector(".header");
   const controls=document.querySelector(".controls");
   const activeFilters=document.getElementById("activeFilters");
+  const yearFilter=document.getElementById("yearFilter");
+  const headerBtns=document.querySelector(".header-btns");
   if(!header||!controls||!header.parentNode)return;
+  // Move the year selector into the icon-button row, after the theme toggle.
+  if(yearFilter&&headerBtns){
+    headerBtns.appendChild(yearFilter);
+    yearFilter.classList.add("year-in-header");
+  }
   const wrap=document.createElement("div");
   wrap.id="mobileStickyBar";
   header.parentNode.insertBefore(wrap,header);
   wrap.appendChild(header);
   if(activeFilters)wrap.appendChild(activeFilters);
+  // .controls still wraps in case other controls land there in future;
+  // currently empty on mobile (tabs hidden, year selector moved into header).
   wrap.appendChild(controls);
 }
 if(document.readyState==="loading"){
