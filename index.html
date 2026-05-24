@@ -258,7 +258,7 @@ h1{font-size:32px;font-weight:800;letter-spacing:-1.5px;background:linear-gradie
    key mobile layout rules regardless of viewport reporting. This is
    the safety net for iPhones in "Request Desktop Website" mode where
    media queries get fooled. */
-html.is-mobile-device #app{padding:14px 12px;padding-left:max(12px,env(safe-area-inset-left));padding-right:max(12px,env(safe-area-inset-right));padding-bottom:max(20px,env(safe-area-inset-bottom))}
+html.is-mobile-device #app{padding:14px 12px;padding-top:max(14px,env(safe-area-inset-top));padding-left:max(12px,env(safe-area-inset-left));padding-right:max(12px,env(safe-area-inset-right));padding-bottom:max(20px,env(safe-area-inset-bottom))}
 html.is-mobile-device h1{font-size:26px;letter-spacing:-1px}
 html.is-mobile-device .subtitle{font-size:11px}
 html.is-mobile-device .header{gap:8px;margin-bottom:18px}
@@ -303,7 +303,7 @@ html.is-mobile-device .treemap,html.is-mobile-device .treemap-item{max-width:100
   /* touch-action: manipulation disables iOS double-tap-to-zoom on buttons
      so pinch/zoom gestures don't accidentally trigger button taps. */
   button,.icon-btn,.tab-btn,.fp-btn,.chip{touch-action:manipulation}
-  #app{padding:14px 12px;padding-left:max(12px,env(safe-area-inset-left));padding-right:max(12px,env(safe-area-inset-right));padding-bottom:max(20px,env(safe-area-inset-bottom))}
+  #app{padding:14px 12px;padding-top:max(14px,env(safe-area-inset-top));padding-left:max(12px,env(safe-area-inset-left));padding-right:max(12px,env(safe-area-inset-right));padding-bottom:max(20px,env(safe-area-inset-bottom))}
   h1{font-size:26px;letter-spacing:-1px}
   .subtitle{font-size:11px}
   .header{gap:8px;margin-bottom:18px}
