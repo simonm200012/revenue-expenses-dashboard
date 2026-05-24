@@ -598,14 +598,28 @@ document.querySelectorAll(".tab-btn").forEach(b=>b.addEventListener("click",()=>
 window.addEventListener("resize",checkTabScroll);setTimeout(checkTabScroll,100);
 
 // Filter panel
-// Track multi-finger touches globally — used to suppress accidental
-// button clicks fired at the end of pinch-to-zoom gestures on iOS.
-let _lastMultiTouchAt=0;
-window.addEventListener('touchstart',e=>{if(e.touches&&e.touches.length>1)_lastMultiTouchAt=Date.now();},{capture:true,passive:true});
+// Suppress accidental clicks fired at the end of pinch / multi-touch
+// gestures on iOS. iOS Safari emits a `click` when a finger lifts off a
+// button at the end of a pinch — even though the user was trying to zoom.
+// We block ANY click within ~700ms of any multi-touch / gesture event.
+let _gestureBlockUntil=0;
+// Standard touch path: 2+ fingers down = extend the block window.
+window.addEventListener('touchstart',e=>{if(e.touches&&e.touches.length>1)_gestureBlockUntil=Date.now()+700;},{capture:true,passive:true});
+window.addEventListener('touchmove',e=>{if(e.touches&&e.touches.length>1)_gestureBlockUntil=Date.now()+700;},{capture:true,passive:true});
+// iOS-specific gesture events — most reliable for pinch detection.
+window.addEventListener('gesturestart',()=>{_gestureBlockUntil=Date.now()+10000;},{capture:true});
+window.addEventListener('gesturechange',()=>{_gestureBlockUntil=Date.now()+10000;},{capture:true});
+window.addEventListener('gestureend',()=>{_gestureBlockUntil=Date.now()+700;},{capture:true});
+// Global click blocker — applies to every button on the page, not just openFilters.
+window.addEventListener('click',e=>{
+  if(Date.now()<_gestureBlockUntil){
+    e.stopImmediatePropagation();
+    e.preventDefault();
+  }
+},{capture:true});
 function openFilters(){
-  // Suppress clicks that fire within 500ms of a multi-touch gesture
-  // (e.g. pinching to zoom out while finger lands on the search icon).
-  if(Date.now()-_lastMultiTouchAt<500)return;
+  // Extra guard kept in case a click somehow slips past the global blocker.
+  if(Date.now()<_gestureBlockUntil)return;
   document.getElementById("filterPanel").classList.add("open");document.getElementById("filterOverlay").classList.add("open");document.getElementById("fpDateFrom").value=gFilters.dateFrom;document.getElementById("fpDateTo").value=gFilters.dateTo;document.getElementById("fpCategory").value=gFilters.category;document.getElementById("fpAmtMin").value=gFilters.amtMin;document.getElementById("fpAmtMax").value=gFilters.amtMax;document.getElementById("fpSearch").value=gFilters.search;document.getElementById("fpStatement").value=gFilters.statement||"";setChipState("fpTypeChips",gFilters.type);setChipState("fpBankChips",gFilters.bank);setChipState("fpReconChips",gFilters.recon||"")}
 function closeFilters(){document.getElementById("filterPanel").classList.remove("open");document.getElementById("filterOverlay").classList.remove("open")}
 function toggleChip(el){el.parentElement.querySelectorAll(".fp-chip").forEach(c=>c.classList.remove("active"));el.classList.add("active")}
