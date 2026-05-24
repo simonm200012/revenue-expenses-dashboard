@@ -2,7 +2,7 @@
 // Caches the app shell so it loads instantly and works offline.
 // Data (Supabase queries, fuel-prices.json, Anthropic API) always goes to the network.
 
-const VERSION = 'v3';
+const VERSION = 'v4';
 const SHELL_CACHE = 'shell-' + VERSION;
 const SHELL_ASSETS = [
   './',
@@ -10,8 +10,17 @@ const SHELL_ASSETS = [
   'manifest.json',
   'icons/icon-192.png',
   'icons/icon-512.png',
+  'icons/icon-512-maskable.png',
   'icons/apple-touch-icon.png',
-  'icons/favicon-32.png'
+  'icons/favicon-32.png',
+  // iOS launch splash screens — cached so first-run-after-install is instant.
+  'icons/splash-1290x2796.png',
+  'icons/splash-1179x2556.png',
+  'icons/splash-1170x2532.png',
+  'icons/splash-1125x2436.png',
+  'icons/splash-1242x2688.png',
+  'icons/splash-828x1792.png',
+  'icons/splash-750x1334.png'
 ];
 
 self.addEventListener('install', event => {
