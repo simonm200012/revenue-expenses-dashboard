@@ -305,6 +305,19 @@ html.is-mobile-device .spark-label{font-size:11px}
 html.is-mobile-device .spark-value{font-size:10px;min-width:48px}
 html.is-mobile-device .spark-delta{font-size:9px;min-width:38px}
 html.is-mobile-device .treemap,html.is-mobile-device .treemap-item{max-width:100%}
+/* Prevent inner content from stretching the page wider than the viewport.
+   Sections shrink to fit, wide tables/heatmaps scroll internally. */
+html.is-mobile-device .grid{min-width:0}
+html.is-mobile-device .grid > *{min-width:0;max-width:100%}
+html.is-mobile-device .section{overflow-x:auto;-webkit-overflow-scrolling:touch}
+html.is-mobile-device #heatmapContainer{overflow-x:auto;-webkit-overflow-scrolling:touch}
+html.is-mobile-device .heatmap-month-row,html.is-mobile-device .heatmap-row{min-width:max-content}
+/* Net Worth tables can have 6 columns — let inner table scroll horizontally
+   while the section keeps the page from stretching. */
+html.is-mobile-device .section .txn-table{min-width:560px}
+html.is-mobile-device #nwSetup{min-width:480px}
+/* Inputs inside Net Worth tables shouldnt force wide minimums on mobile. */
+html.is-mobile-device .section .txn-table input.fp-input{width:120px !important;min-width:0}
 @media(max-width:768px),(pointer:coarse) and (max-width:1100px){
   body{-webkit-tap-highlight-color:transparent}
   /* touch-action: manipulation disables iOS double-tap-to-zoom on buttons
@@ -325,6 +338,16 @@ html.is-mobile-device .treemap,html.is-mobile-device .treemap-item{max-width:100
   .spark-delta{font-size:9px;min-width:38px}
   /* Treemap stays inside container */
   .treemap,.treemap-item{max-width:100%}
+  /* Sections cap at viewport width; wide inner content (tables, heatmaps)
+     scrolls within the section instead of stretching the page. */
+  .grid{min-width:0}
+  .grid > *{min-width:0;max-width:100%}
+  .section{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  #heatmapContainer{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .heatmap-month-row,.heatmap-row{min-width:max-content}
+  .section .txn-table{min-width:560px}
+  #nwSetup{min-width:480px}
+  .section .txn-table input.fp-input{width:120px !important;min-width:0}
   /* Net Worth tab inputs side-by-side become stacked */
   .nw-row{flex-direction:column;align-items:stretch}
   .grid-2,.compare-grid,.proj-cards{grid-template-columns:1fr}
