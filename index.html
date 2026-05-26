@@ -2231,6 +2231,245 @@ function render(){
 // ============================================================
 const PLAN_KEY = 'plan-state-v1';
 const PLAN_NARRATIVE_KEY = 'plan-narrative-cache';
+const EDU_CACHE_KEY = 'plan-edu-cache-v1';
+
+// Educational topic definitions. AI writes the body on first open and we
+// cache it forever in localStorage (concepts don't change month to month).
+// Prompts explicitly forbid investment recommendations / specific securities.
+const EDU_TOPICS = {
+  short: {
+    title: 'Short-term cash (0\u20133 yrs)',
+    icon: '\u{1F4B0}',
+    color: '#10b981',
+    bgFrom: 'rgba(16,185,129,0.10)',
+    bgTo: 'rgba(16,185,129,0.02)',
+    border: 'rgba(16,185,129,0.30)',
+    summary: 'Emergency fund and money you might need within a few years. Capital preservation first, return second.',
+    prompt: `Write an educational guide (in English) about managing short-term cash in personal finance for someone in the European Union / Slovenia. Cover these concepts clearly:
+
+1. What an emergency fund is and the commonly-discussed range of 3\u20136 months of essential expenses
+2. How to size it for your situation (rent + groceries + utilities + insurance + minimum debt payments)
+3. The general categories of where short-term cash is typically held (high-yield savings accounts, money market funds, short-duration government bonds) \u2014 explain what each IS, never name specific products, brokers, or banks
+4. Typical real (inflation-adjusted) returns for these categories: around 0\u20131% real over the long run, sometimes negative during high-inflation periods
+5. Why "yield chasing" with short-term money is generally considered risky
+6. 3 questions the reader should ask themselves before deciding where to park short-term cash
+
+Write in clear, plain English. About 350\u2013500 words total. Use short paragraphs (2\u20133 sentences each). Use \u20AC for currency examples. No markdown headers, no bullet lists; just paragraphs separated by blank lines.
+
+IMPORTANT CONSTRAINTS \u2014 you MUST follow these:
+- DO NOT recommend specific products (no ETF tickers, no bank names, no broker names, no fund names)
+- DO NOT predict future returns or interest rates
+- DO NOT tell the reader what they "should" do; describe what people typically consider
+- DO NOT give tax advice
+- DO NOT mention specific yields or interest rates currently available in the market
+- This is educational reference only; the user must consult a licensed advisor for personalized decisions.`
+  },
+  medium: {
+    title: 'Medium-term (3\u201310 yrs)',
+    icon: '\u{1F3E0}',
+    color: '#06b6d4',
+    bgFrom: 'rgba(6,182,212,0.10)',
+    bgTo: 'rgba(6,182,212,0.02)',
+    border: 'rgba(6,182,212,0.30)',
+    summary: 'House deposit, car, sabbatical, kids\u2019 near-future expenses. Balance growth potential with capital protection.',
+    prompt: `Write an educational guide (in English) about managing medium-term savings (3\u201310 year time horizon) in personal finance for someone in the European Union / Slovenia. Cover these concepts:
+
+1. The general idea of why a medium time horizon allows for some growth potential but still requires meaningful capital protection
+2. Common asset categories discussed for this horizon: bond funds (government, corporate), conservative mixed/balanced funds, cash-equivalent allocations \u2014 explain what each category IS as a concept, never name specific products
+3. The concept of "glide path" / shifting more conservative as the goal date approaches
+4. Sequence of returns risk and why it matters more as the goal nears
+5. Typical historical real return ranges for these asset classes (be careful: state them as ranges with disclaimers that past performance doesn't predict future returns)
+6. Common goals people in this horizon save toward (house deposit, family expenses, planned career break) and how that influences risk tolerance
+7. 3 questions the reader should ask themselves before deciding
+
+Write in clear, plain English. About 350\u2013500 words. Short paragraphs (2\u20133 sentences each). Use \u20AC. No markdown headers, no bullet lists.
+
+IMPORTANT CONSTRAINTS:
+- DO NOT recommend specific products (no ETF tickers, no fund names, no broker names)
+- DO NOT predict future returns
+- DO NOT tell the reader what to do; describe what people typically consider
+- DO NOT give tax advice
+- Educational reference only.`
+  },
+  long: {
+    title: 'Long-term (10+ yrs)',
+    icon: '\u{1F4C8}',
+    color: '#8b5cf6',
+    bgFrom: 'rgba(139,92,246,0.10)',
+    bgTo: 'rgba(139,92,246,0.02)',
+    border: 'rgba(139,92,246,0.30)',
+    summary: 'Retirement, financial independence. Compounding dominates; time in the market matters more than timing.',
+    prompt: `Write an educational guide (in English) about long-term investing (10+ year time horizon) in personal finance for someone in the European Union / Slovenia. Cover these concepts:
+
+1. Compounding: the basic mechanism and a worked example (e.g. \u20AC200/month for 30 years at an assumed 5% real return \u2014 clearly label the assumption)
+2. Why long horizons can accommodate more volatility: time-diversification of returns
+3. The concept of diversified equity index investing (what an index is, what broad-market means, what "passive" investing refers to)
+4. Asset allocation as a concept (the stocks/bonds split, age-based glide paths, target-date funds)
+5. Common pitfalls: panic selling during drawdowns, market timing attempts, concentration in single stocks or sectors
+6. The concept of TER (total expense ratio) and why fees compound over decades
+7. Tax-efficient considerations in a generic European context (distributing vs accumulating funds, capital gains vs dividends, holding period implications) \u2014 keep this general, do NOT give Slovenian-specific tax advice
+8. 3 questions the reader should ask themselves before deciding their long-term approach
+
+Write in clear, plain English. About 450\u2013600 words. Short paragraphs (2\u20133 sentences each). Use \u20AC. No markdown headers, no bullet lists.
+
+IMPORTANT CONSTRAINTS:
+- DO NOT recommend specific ETFs, mutual funds, stocks, brokers, or platforms (no tickers, no fund names, no broker names)
+- DO NOT predict future returns; any percentage you use must be clearly labeled as a historical observation or assumption with the caveat that past performance does not predict future results
+- DO NOT tell the reader what to do
+- DO NOT give specific tax advice (mention concepts generically, recommend consulting a tax advisor)
+- Educational reference only.`
+  },
+  concepts: {
+    title: 'Key concepts to learn',
+    icon: '\u{1F4DA}',
+    color: '#f59e0b',
+    bgFrom: 'rgba(245,158,11,0.10)',
+    bgTo: 'rgba(245,158,11,0.02)',
+    border: 'rgba(245,158,11,0.30)',
+    summary: 'Vocabulary for productive research: TER, ETF distribution vs accumulation, dollar-cost averaging, rebalancing.',
+    prompt: `Write an educational glossary (in English) of essential personal-finance investing terms for someone in the European Union / Slovenia who is just starting to research. Define each term clearly in 2\u20134 sentences, with a short example where helpful. Cover at minimum:
+
+1. ETF (exchange-traded fund) \u2014 what it is, how it differs from a mutual fund
+2. Index fund \u2014 what an index is, what "tracking" means
+3. TER (total expense ratio) \u2014 what it includes, why a 0.07% vs 1.5% fee compounds dramatically over decades, with an illustrative example
+4. Distributing vs Accumulating ETFs \u2014 the difference in how dividends are handled, why one or the other might be preferred in different tax regimes
+5. Dollar-cost averaging (DCA) \u2014 what it is, the trade-offs vs lump-sum investing
+6. Rebalancing \u2014 what it means, why people do it, common frequencies
+7. UCITS \u2014 what it is, why it matters for European retail investors
+8. Total return vs price return \u2014 what gets included
+9. Volatility and standard deviation as a measure of risk
+10. Drawdown \u2014 what peak-to-trough means and why it matters more than annualized returns for emotional risk
+11. Capital gains tax in a generic European context \u2014 mention that holding periods and tax regimes vary by country, recommend consulting a tax advisor
+
+Write in clear, plain English. About 500\u2013700 words. Use short paragraphs. Number each term (1., 2., 3., etc.). Use \u20AC for examples.
+
+IMPORTANT CONSTRAINTS:
+- DO NOT recommend specific products (no tickers, no fund names, no broker names)
+- DO NOT predict future returns
+- DO NOT tell the reader what to do; only define and explain concepts
+- DO NOT give country-specific tax advice
+- Educational reference only.`
+  }
+};
+
+function loadEduCache(){
+  try { return JSON.parse(localStorage.getItem(EDU_CACHE_KEY) || '{}'); } catch { return {}; }
+}
+function saveEduCache(c){ localStorage.setItem(EDU_CACHE_KEY, JSON.stringify(c)); }
+
+async function fetchEducation(topicKey){
+  const cache = loadEduCache();
+  if(cache[topicKey] && cache[topicKey].text) return cache[topicKey].text;
+  if(!CHAT.apiKey) throw new Error('Add your Anthropic API key in chat settings (\u2699) to load the guide.');
+  const topic = EDU_TOPICS[topicKey];
+  if(!topic) throw new Error('Unknown topic');
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method:'POST',
+    headers:{
+      'content-type':'application/json',
+      'x-api-key':CHAT.apiKey,
+      'anthropic-version':'2023-06-01',
+      'anthropic-dangerous-direct-browser-access':'true'
+    },
+    body: JSON.stringify({
+      model:'claude-sonnet-4-5',
+      max_tokens:1500,
+      messages:[{role:'user', content:topic.prompt}]
+    })
+  });
+  if(!res.ok){
+    const body = await res.text();
+    let m = 'AI error '+res.status;
+    try{ const j = JSON.parse(body); if(j.error && j.error.message) m = j.error.message; }catch{}
+    throw new Error(m);
+  }
+  const data = await res.json();
+  const text = (data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('').trim();
+  if(!text) throw new Error('Empty AI response');
+  cache[topicKey] = {text, at:new Date().toISOString(), model:'claude-sonnet-4-5'};
+  saveEduCache(cache);
+  return text;
+}
+
+function ensureEducationModal(){
+  if(document.getElementById('eduModalOverlay')) return;
+  const overlay = document.createElement('div');
+  overlay.id = 'eduModalOverlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);z-index:9999;display:none;align-items:flex-start;justify-content:center;overflow-y:auto;padding:max(20px,env(safe-area-inset-top)) 14px max(20px,env(safe-area-inset-bottom));';
+  overlay.onclick = (e)=>{ if(e.target===overlay) closeEducation(); };
+  overlay.innerHTML = `<div id="eduModalCard" style="background:var(--card-bg,#0f172a);border:1px solid var(--border,#334155);border-radius:16px;max-width:760px;width:100%;margin:auto;box-shadow:0 30px 80px rgba(0,0,0,0.5);overflow:hidden;display:flex;flex-direction:column;max-height:calc(100vh - 80px)">
+    <div id="eduModalHeader" style="padding:20px 24px;border-bottom:1px solid var(--border,#334155);display:flex;align-items:center;gap:14px;flex-shrink:0">
+      <span id="eduModalIcon" style="font-size:32px"></span>
+      <div style="flex:1;min-width:0">
+        <div id="eduModalTitle" style="font-size:18px;font-weight:700;color:var(--text);line-height:1.2"></div>
+        <div id="eduModalSubtitle" style="font-size:11px;color:var(--text4);text-transform:uppercase;letter-spacing:.08em;margin-top:4px">AI-written educational guide \u2022 not financial advice</div>
+      </div>
+      <button onclick="closeEducation()" style="background:transparent;border:1px solid var(--border);color:var(--text3);width:36px;height:36px;border-radius:10px;cursor:pointer;font-size:18px;display:flex;align-items:center;justify-content:center;flex-shrink:0">\u00D7</button>
+    </div>
+    <div id="eduModalBody" style="padding:24px;overflow-y:auto;flex:1;color:var(--text3);font-size:14px;line-height:1.65"></div>
+    <div style="padding:14px 24px;border-top:1px solid var(--border,#334155);background:var(--card-bg-2,rgba(255,255,255,0.02));display:flex;justify-content:space-between;align-items:center;gap:10px;flex-shrink:0;flex-wrap:wrap">
+      <span style="font-size:11px;color:var(--text4);font-style:italic">Past performance does not predict future returns.</span>
+      <div style="display:flex;gap:8px">
+        <button id="eduRegenBtn" onclick="regenerateEducation()" style="background:transparent;border:1px solid var(--border);color:var(--text4);padding:6px 12px;border-radius:8px;cursor:pointer;font-size:12px">\u21BB Regenerate</button>
+        <button onclick="closeEducation()" style="background:#10b981;color:white;border:none;padding:6px 16px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600">Close</button>
+      </div>
+    </div>
+  </div>`;
+  document.body.appendChild(overlay);
+  // ESC closes
+  document.addEventListener('keydown', (e)=>{
+    if(e.key === 'Escape' && overlay.style.display === 'flex') closeEducation();
+  });
+}
+
+let _eduCurrentTopic = null;
+
+async function openEducation(topicKey){
+  ensureEducationModal();
+  const topic = EDU_TOPICS[topicKey];
+  if(!topic) return;
+  _eduCurrentTopic = topicKey;
+  const overlay = document.getElementById('eduModalOverlay');
+  document.getElementById('eduModalIcon').textContent = topic.icon;
+  document.getElementById('eduModalTitle').textContent = topic.title;
+  document.getElementById('eduModalTitle').style.color = topic.color;
+  document.getElementById('eduModalBody').innerHTML = '<div style="display:flex;align-items:center;justify-content:center;min-height:160px;color:var(--text4)"><div style="text-align:center"><div style="font-size:28px;margin-bottom:10px">\u26A1</div><div>Loading guide\u2026</div><div style="font-size:11px;margin-top:6px">First open takes ~5\u201310s. Cached after.</div></div></div>';
+  overlay.style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+  try {
+    const text = await fetchEducation(topicKey);
+    renderEducationText(text);
+  } catch(err){
+    document.getElementById('eduModalBody').innerHTML = '<div style="padding:14px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.3);border-radius:10px;color:#fca5a5">'+escapeHtml(err.message)+'</div>';
+  }
+}
+
+function renderEducationText(text){
+  // Render paragraphs (split on blank lines) for readable formatting.
+  const body = document.getElementById('eduModalBody');
+  const paragraphs = text.split(/\n\s*\n/).map(p=>p.trim()).filter(Boolean);
+  body.innerHTML = paragraphs.map(p=>{
+    // Light formatting: bold "1. ", "2. " style numbering for the concepts glossary
+    const html = escapeHtml(p).replace(/^(\d+)\.\s/, '<strong>$1.</strong> ');
+    return `<p style="margin:0 0 14px 0">${html}</p>`;
+  }).join('');
+}
+
+function closeEducation(){
+  const overlay = document.getElementById('eduModalOverlay');
+  if(overlay) overlay.style.display = 'none';
+  document.body.style.overflow = '';
+  _eduCurrentTopic = null;
+}
+
+async function regenerateEducation(){
+  if(!_eduCurrentTopic) return;
+  if(!confirm('Regenerate this guide? Uses one Claude Sonnet call (~\u20AC0.02). The current cached version will be replaced.')) return;
+  const cache = loadEduCache();
+  delete cache[_eduCurrentTopic];
+  saveEduCache(cache);
+  openEducation(_eduCurrentTopic);
+}
 
 function loadPlanState(){
   try{
@@ -2561,31 +2800,29 @@ function renderPlan(){
       <button onclick="addBucket()" style="margin-top:12px;background:#10b981;border:none;color:white;padding:8px 14px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600">+ Add bucket</button>
     </div>
 
-    <!-- SECTION 4: Education / research notes -->
+    <!-- SECTION 4: Education / AI-written reference (in-app modals) -->
     <div class="section" style="margin-bottom:16px">
-      <div class="section-title">Where to put the leftover \u2014 educational reference</div>
+      <div class="section-title">Where to put the leftover \u2014 educational guides</div>
       <p style="color:var(--text3,#94a3b8);font-size:12px;margin-bottom:14px">
-        <strong>Not financial advice.</strong> This is general educational reference, not a recommendation for your situation. Your choices depend on your time horizon, risk tolerance, tax situation, and existing portfolio. Consult a licensed advisor for personalized guidance.
+        <strong>Not financial advice.</strong> Tap any card to open an AI-written guide explaining the concepts (asset class basics, time horizons, key terms). Guides are cached locally so they open instantly after first read.
       </p>
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px">
-        <div style="padding:14px;background:rgba(16,185,129,0.06);border:1px solid rgba(16,185,129,0.2);border-radius:10px">
-          <div style="font-weight:700;color:#10b981;margin-bottom:6px">Short-term cash (0\u20133yr)</div>
-          <p style="font-size:12px;color:var(--text3);margin:0">Emergency fund, near-term goals. Held in instant-access savings or money market. Typical real return: 0\u20131% after inflation. <a href="https://www.bogleheads.org/wiki/Emergency_fund" target="_blank" rel="noopener" style="color:#10b981">Bogleheads on emergency funds \u2197</a></p>
-        </div>
-        <div style="padding:14px;background:rgba(6,182,212,0.06);border:1px solid rgba(6,182,212,0.2);border-radius:10px">
-          <div style="font-weight:700;color:#06b6d4;margin-bottom:6px">Medium-term (3\u201310yr)</div>
-          <p style="font-size:12px;color:var(--text3);margin:0">Goals like a deposit, car, sabbatical. Bond funds or conservative mixed portfolios are commonly discussed. <a href="https://www.atvp.si/sl/javnost/za-vlagatelje" target="_blank" rel="noopener" style="color:#06b6d4">ATVP investor info (SI) \u2197</a></p>
-        </div>
-        <div style="padding:14px;background:rgba(139,92,246,0.06);border:1px solid rgba(139,92,246,0.2);border-radius:10px">
-          <div style="font-weight:700;color:#8b5cf6;margin-bottom:6px">Long-term (10yr+)</div>
-          <p style="font-size:12px;color:var(--text3);margin:0">Retirement, financial independence. Diversified equity index funds are commonly discussed in long-term portfolios. <a href="https://www.bogleheads.org/wiki/Three-fund_portfolio" target="_blank" rel="noopener" style="color:#8b5cf6">Bogleheads three-fund portfolio \u2197</a></p>
-        </div>
-        <div style="padding:14px;background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.2);border-radius:10px">
-          <div style="font-weight:700;color:#f59e0b;margin-bottom:6px">Concepts to research</div>
-          <p style="font-size:12px;color:var(--text3);margin:0">TER (total expense ratio), ETF distribution vs accumulation, capital gains tax in Slovenia (25% rule). <a href="https://www.investopedia.com/articles/exchangetradedfunds/05/060605.asp" target="_blank" rel="noopener" style="color:#f59e0b">Investopedia ETF basics \u2197</a></p>
-        </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px">
+        ${['short','medium','long','concepts'].map(k=>{
+          const topic=EDU_TOPICS[k];
+          return `<button class="edu-card" onclick="openEducation('${k}')" style="text-align:left;cursor:pointer;padding:18px;background:linear-gradient(135deg,${topic.bgFrom},${topic.bgTo});border:1px solid ${topic.border};border-radius:14px;color:var(--text);font-family:inherit;display:flex;flex-direction:column;gap:8px;transition:transform .15s ease,box-shadow .15s ease" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 8px 20px rgba(0,0,0,0.25)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
+            <div style="display:flex;align-items:center;gap:10px">
+              <span style="font-size:28px">${topic.icon}</span>
+              <span style="font-weight:700;color:${topic.color};font-size:15px">${escapeHtml(topic.title)}</span>
+            </div>
+            <p style="font-size:12px;color:var(--text3);margin:0;line-height:1.5">${escapeHtml(topic.summary)}</p>
+            <div style="margin-top:auto;display:flex;align-items:center;gap:6px;color:${topic.color};font-size:12px;font-weight:600">
+              <span>Read full guide</span>
+              <span>\u2192</span>
+            </div>
+          </button>`;
+        }).join('')}
       </div>
-      <p style="color:var(--text4);font-size:11px;margin-top:14px;font-style:italic">Past performance does not predict future returns. All asset classes can lose value, including diversified equity indexes. The links above are independent educational resources; I have no affiliation with any of them.</p>
+      <p style="color:var(--text4);font-size:11px;margin-top:14px;font-style:italic">Past performance does not predict future returns. Educational content only \u2014 consult an ATVP-licensed advisor before making investment decisions in Slovenia.</p>
     </div>
 
     <!-- SECTION 5: AI narrative -->
