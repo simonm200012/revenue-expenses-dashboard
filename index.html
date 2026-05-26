@@ -705,8 +705,8 @@ const fmt=v=>v>=1000?(v/1000).toFixed(1)+"k":Math.round(v).toLocaleString();
 const fmtE=v=>"\u20AC"+Math.round(v).toLocaleString();
 
 let activeTab="overview",yearFilter="All",charts={},txnPage=0;
-const TABS=["overview","networth","spending","income","trends","recurring","transactions","compare","projection","investments","fuel","rules"];
-const TAB_LABELS={overview:"Overview",networth:"Net Worth",spending:"Spending",income:"Income",trends:"Trends",recurring:"Recurring",transactions:"Transactions",compare:"Compare",projection:"Projection",investments:"Investments",fuel:"Gas Prices",rules:"Rules"};
+const TABS=["overview","networth","spending","income","trends","recurring","transactions","compare","projection","plan","investments","fuel","rules"];
+const TAB_LABELS={overview:"Overview",networth:"Net Worth",spending:"Spending",income:"Income",trends:"Trends",recurring:"Recurring",transactions:"Transactions",compare:"Compare",projection:"Projection",plan:"Plan",investments:"Investments",fuel:"Gas Prices",rules:"Rules"};
 let gFilters={type:"",bank:"",category:"",dateFrom:"",dateTo:"",amtMin:"",amtMax:"",search:"",recon:"",statement:""};
 
 let dashboardSubtitle='Loading from Supabase...';
@@ -2182,8 +2182,9 @@ function render(){
   const isFuel=activeTab==='fuel';
   const isInvestments=activeTab==='investments';
   const isNetWorth=activeTab==='networth';
-  document.getElementById('activeFilters').style.display=(isRules||isFuel||isInvestments||isNetWorth)?'none':'flex';
-  document.getElementById('yearFilter').style.display=(isRules||isFuel||isInvestments||isNetWorth)?'none':'inline-block';
+  const isPlan=activeTab==='plan';
+  document.getElementById('activeFilters').style.display=(isRules||isFuel||isInvestments||isNetWorth||isPlan)?'none':'flex';
+  document.getElementById('yearFilter').style.display=(isRules||isFuel||isInvestments||isNetWorth||isPlan)?'none':'inline-block';
   document.querySelector('.subtitle').innerHTML=dashboardSubtitle;
   if(isRules){
     document.getElementById('kpis').innerHTML='';
@@ -2206,10 +2207,407 @@ function render(){
     renderNetWorth();
     return;
   }
+  if(isPlan){
+    document.getElementById('kpis').innerHTML='';
+    document.getElementById('insightsSection').innerHTML='';
+    renderPlan();
+    return;
+  }
   renderActiveTags();
   renderKPIs();
   renderInsights();
   ({overview:renderOverview,spending:renderSpending,income:renderIncome,trends:renderTrends,recurring:renderRecurring,transactions:renderTransactions,compare:renderCompare,projection:renderProjection,rules:renderRules})[activeTab]();
+}
+
+// ============================================================
+// PLAN / CASH FLOW TAB
+// Computes a monthly baseline (income, committed, variable, surplus)
+// from your transaction history. Lets you define goal buckets with
+// targets and dates; computes required monthly contributions and
+// shows allocation versus surplus. AI narrative is one-shot, on
+// successful render, describing patterns in YOUR data — never
+// recommendations or specific investments (that is regulated
+// financial advice).
+// ============================================================
+const PLAN_KEY = 'plan-state-v1';
+const PLAN_NARRATIVE_KEY = 'plan-narrative-cache';
+
+function loadPlanState(){
+  try{
+    const raw = localStorage.getItem(PLAN_KEY);
+    if(!raw) return {overrides:{}, buckets:[]};
+    const s = JSON.parse(raw);
+    return {overrides: s.overrides || {}, buckets: Array.isArray(s.buckets) ? s.buckets : []};
+  }catch{ return {overrides:{}, buckets:[]}; }
+}
+function savePlanState(s){
+  localStorage.setItem(PLAN_KEY, JSON.stringify(s));
+}
+
+// Compute the auto baseline. Returns:
+//   incomeAuto, committedAuto, variableAuto (medians), surplusAuto,
+//   incomeFinal, committedFinal, variableFinal, surplusFinal (after overrides),
+//   committedItems[], variableByCategory[]
+function computePlanBaseline(overrides){
+  const months = MONTHLY.slice(-6); // last 6 months
+  const medians = arr => {
+    const s = [...arr].sort((a,b)=>a-b);
+    return s.length ? s[Math.floor(s.length/2)] : 0;
+  };
+  const incomeAuto = Math.round(medians(months.map(m=>m.Inflow)));
+  // Recurring outflows = committed. detectRecurring respects current filters,
+  // but for the planner we want ALL recurring across the full dataset, so we
+  // temporarily skip filter side-effects by reading detectRecurring's output
+  // directly (it already does the consistency check).
+  const recurring = detectRecurring();
+  const committedItems = recurring
+    .filter(r => r.type === 'Out')
+    .map(r => ({source:r.source, monthly: Math.round(r.annual/12), category:r.category, freq:r.freq, count:r.count}))
+    .sort((a,b)=>b.monthly - a.monthly);
+  const committedAuto = committedItems.reduce((s,c)=>s+c.monthly, 0);
+  // Variable expenses = median total outflow - committed
+  const outflowMedian = Math.round(medians(months.map(m=>m.Outflow)));
+  const variableAuto = Math.max(0, outflowMedian - committedAuto);
+  const surplusAuto = incomeAuto - committedAuto - variableAuto;
+
+  // Apply user overrides where set (and >0). Empty string / null = use auto.
+  const o = overrides || {};
+  const incomeFinal = (o.income != null && o.income !== '') ? Number(o.income) : incomeAuto;
+  const committedFinal = (o.committed != null && o.committed !== '') ? Number(o.committed) : committedAuto;
+  const variableFinal = (o.variable != null && o.variable !== '') ? Number(o.variable) : variableAuto;
+  const surplusFinal = incomeFinal - committedFinal - variableFinal;
+
+  // Variable breakdown by category (top 6, last 6 months, OUT only, excluding recurring sources)
+  const recurringSources = new Set(recurring.map(r=>r.source));
+  const sinceISO = (() => { const d=new Date(); d.setMonth(d.getMonth()-6); return d.toISOString().slice(0,10); })();
+  const byCat = {};
+  for(const t of TXNS){
+    if(t.t!=='Out') continue;
+    if(t.d < sinceISO) continue;
+    if(recurringSources.has(t.s)) continue;
+    const c = t.c || 'Uncategorized';
+    byCat[c] = (byCat[c]||0) + t.v;
+  }
+  const variableByCategory = Object.entries(byCat)
+    .map(([c, total])=>({category:c, monthly: Math.round(total/6)}))
+    .sort((a,b)=>b.monthly - a.monthly)
+    .slice(0, 8);
+
+  return {
+    incomeAuto, committedAuto, variableAuto, surplusAuto,
+    incomeFinal, committedFinal, variableFinal, surplusFinal,
+    committedItems, variableByCategory
+  };
+}
+
+function newBucketId(){ return 'b_' + Date.now() + '_' + Math.random().toString(36).slice(2,7); }
+
+function addBucket(){
+  const state = loadPlanState();
+  state.buckets.push({
+    id: newBucketId(),
+    name: 'New goal',
+    target: 1000,
+    current: 0,
+    targetDate: '',
+    priority: 3,
+    notes: ''
+  });
+  savePlanState(state);
+  renderPlan();
+}
+function removeBucket(id){
+  if(!confirm('Delete this goal bucket?')) return;
+  const state = loadPlanState();
+  state.buckets = state.buckets.filter(b => b.id !== id);
+  savePlanState(state);
+  renderPlan();
+}
+function updateBucket(id, field, value){
+  const state = loadPlanState();
+  const b = state.buckets.find(x => x.id === id);
+  if(!b) return;
+  if(['target','current','priority'].includes(field)) value = Number(value) || 0;
+  b[field] = value;
+  savePlanState(state);
+  // Re-render allocation/totals but keep focus where possible
+  renderPlan();
+}
+function updateOverride(field, value){
+  const state = loadPlanState();
+  state.overrides = state.overrides || {};
+  state.overrides[field] = (value === '' || value == null) ? null : Number(value);
+  savePlanState(state);
+  renderPlan();
+}
+function clearOverride(field){
+  const state = loadPlanState();
+  if(state.overrides) delete state.overrides[field];
+  savePlanState(state);
+  renderPlan();
+}
+
+// Compute monthly contribution required per bucket and assign surplus by priority.
+function computeAllocations(buckets, surplus){
+  const today = new Date();
+  const rows = buckets.map(b => {
+    const remaining = Math.max(0, (Number(b.target)||0) - (Number(b.current)||0));
+    let monthsLeft = null, required = null;
+    if(b.targetDate){
+      const td = new Date(b.targetDate);
+      monthsLeft = Math.max(1, Math.round((td - today) / (1000*60*60*24*30.44)));
+      required = Math.ceil(remaining / monthsLeft);
+    }
+    return {...b, remaining, monthsLeft, required};
+  });
+  // Sort by priority asc (1 = highest), then by earliest target date
+  rows.sort((a,b)=>{
+    const pa = Number(a.priority)||5, pb = Number(b.priority)||5;
+    if(pa !== pb) return pa - pb;
+    if(a.targetDate && b.targetDate) return a.targetDate.localeCompare(b.targetDate);
+    return 0;
+  });
+  // Allocate surplus
+  let remainingSurplus = surplus;
+  for(const r of rows){
+    if(r.required == null){
+      // Ongoing / no date — skip allocation, leave for user decision
+      r.allocated = 0;
+      r.status = 'ongoing';
+      continue;
+    }
+    if(remainingSurplus >= r.required){
+      r.allocated = r.required;
+      r.status = 'funded';
+      remainingSurplus -= r.required;
+    } else if(remainingSurplus > 0){
+      r.allocated = remainingSurplus;
+      r.status = 'partial';
+      remainingSurplus = 0;
+    } else {
+      r.allocated = 0;
+      r.status = 'underfunded';
+    }
+  }
+  return {rows, leftover: remainingSurplus};
+}
+
+async function generatePlanNarrative(baseline){
+  // Only call AI if user has a key and we have enough data.
+  if(!CHAT.apiKey){ return null; }
+  if(MONTHLY.length < 6){ return null; }
+  // Cache key based on input signature so re-renders don't re-bill.
+  const sig = JSON.stringify({
+    inc: baseline.incomeFinal,
+    com: baseline.committedFinal,
+    vari: baseline.variableFinal,
+    months: MONTHLY.length,
+    last: MONTHLY[MONTHLY.length-1]?.YM
+  });
+  const cacheRaw = localStorage.getItem(PLAN_NARRATIVE_KEY);
+  if(cacheRaw){
+    try { const c = JSON.parse(cacheRaw); if(c.sig === sig && c.text) return c.text; } catch{}
+  }
+  // Build a compact summary of monthly history for AI context
+  const last12 = MONTHLY.slice(-12).map(m=>({YM:m.YM, in:Math.round(m.Inflow), out:Math.round(m.Outflow), net:Math.round(m.Net)}));
+  const prompt = `You are a concise personal-finance analyst. Looking at the user's last ${last12.length} months of cash flow, describe their surplus pattern in 2-3 plain English sentences. Mention 1-2 specific observations with numbers. Do NOT recommend specific investments, securities, ETFs, stocks, or strategies. Do NOT predict future returns. Stick to factual patterns in their own data. Use \u20AC (EUR). No markdown.
+
+Baseline (auto-detected):
+- Median income (L6M): \u20AC${baseline.incomeAuto}/mo
+- Committed expenses (recurring, L6M): \u20AC${baseline.committedAuto}/mo
+- Variable expenses (L6M median): \u20AC${baseline.variableAuto}/mo
+- Implied monthly surplus: \u20AC${baseline.surplusAuto}/mo
+
+Monthly history (last ${last12.length} months, in EUR):
+${last12.map(m=>`${m.YM}: income \u20AC${m.in}, expenses \u20AC${m.out}, net \u20AC${m.net}`).join('\n')}`;
+  try{
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method:'POST',
+      headers:{
+        'content-type':'application/json',
+        'x-api-key':CHAT.apiKey,
+        'anthropic-version':'2023-06-01',
+        'anthropic-dangerous-direct-browser-access':'true'
+      },
+      body: JSON.stringify({
+        model:'claude-haiku-4-5',
+        max_tokens:240,
+        messages:[{role:'user', content:prompt}]
+      })
+    });
+    if(!res.ok){
+      const body = await res.text();
+      let m = 'AI error '+res.status;
+      try{ const j = JSON.parse(body); if(j.error && j.error.message) m = j.error.message; }catch{}
+      return 'Narrative unavailable: '+m;
+    }
+    const data = await res.json();
+    const text = (data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('').trim();
+    if(text){
+      localStorage.setItem(PLAN_NARRATIVE_KEY, JSON.stringify({sig, text, at: new Date().toISOString()}));
+    }
+    return text || null;
+  }catch(err){
+    return 'Narrative unavailable: '+err.message;
+  }
+}
+
+function renderPlan(){
+  const el = document.getElementById('content');
+  const state = loadPlanState();
+  const b = computePlanBaseline(state.overrides);
+  const alloc = computeAllocations(state.buckets || [], b.surplusFinal);
+
+  const fmtE = v => '\u20AC' + (Math.round(v) || 0).toLocaleString();
+  const incOverride = (state.overrides && state.overrides.income != null);
+  const comOverride = (state.overrides && state.overrides.committed != null);
+  const varOverride = (state.overrides && state.overrides.variable != null);
+  const surplusColor = b.surplusFinal > 0 ? '#10b981' : (b.surplusFinal < 0 ? '#ef4444' : '#94a3b8');
+
+  // Buckets table rows
+  const bucketRows = alloc.rows.length === 0
+    ? `<tr><td colspan="7" style="text-align:center;color:var(--text4);padding:24px 0">No goal buckets yet. Click "Add bucket" below.</td></tr>`
+    : alloc.rows.map(r => {
+        const statusBadge = {
+          funded: '<span style="color:#10b981">\u2713 funded</span>',
+          partial: '<span style="color:#f59e0b">partial</span>',
+          underfunded: '<span style="color:#ef4444">underfunded</span>',
+          ongoing: '<span style="color:#94a3b8">ongoing</span>'
+        }[r.status] || '';
+        return `<tr>
+          <td><input type="text" value="${escapeAttr(r.name)}" onchange="updateBucket('${r.id}','name',this.value)" style="width:100%;background:transparent;border:none;color:var(--text);font-size:13px" /></td>
+          <td><input type="number" value="${r.target}" step="50" onchange="updateBucket('${r.id}','target',this.value)" style="width:90px;text-align:right;background:var(--input-bg,#0f172a);border:1px solid var(--border,#334155);color:var(--text);padding:4px 6px;border-radius:6px;font-size:12px" /></td>
+          <td><input type="number" value="${r.current}" step="50" onchange="updateBucket('${r.id}','current',this.value)" style="width:90px;text-align:right;background:var(--input-bg,#0f172a);border:1px solid var(--border,#334155);color:var(--text);padding:4px 6px;border-radius:6px;font-size:12px" /></td>
+          <td><input type="date" value="${escapeAttr(r.targetDate||'')}" onchange="updateBucket('${r.id}','targetDate',this.value)" style="background:var(--input-bg,#0f172a);border:1px solid var(--border,#334155);color:var(--text);padding:4px 6px;border-radius:6px;font-size:12px" /></td>
+          <td>
+            <select onchange="updateBucket('${r.id}','priority',this.value)" style="background:var(--input-bg,#0f172a);border:1px solid var(--border,#334155);color:var(--text);padding:4px 6px;border-radius:6px;font-size:12px">
+              ${[1,2,3,4,5].map(n=>`<option value="${n}" ${n===Number(r.priority)?'selected':''}>${n}</option>`).join('')}
+            </select>
+          </td>
+          <td style="font-family:'JetBrains Mono',monospace;text-align:right">${r.required != null ? fmtE(r.required) + '/mo' : '\u2014'}</td>
+          <td style="font-family:'JetBrains Mono',monospace;text-align:right;color:${r.status==='funded'?'#10b981':(r.status==='partial'?'#f59e0b':(r.status==='underfunded'?'#ef4444':'#94a3b8'))}">${r.allocated > 0 ? fmtE(r.allocated)+'/mo' : '\u2014'}<br><span style="font-size:10px;font-weight:normal">${statusBadge}</span></td>
+          <td style="text-align:right"><button onclick="removeBucket('${r.id}')" style="background:transparent;border:1px solid var(--border,#334155);color:var(--text4);padding:4px 8px;border-radius:6px;cursor:pointer;font-size:11px">Delete</button></td>
+        </tr>`;
+      }).join('');
+
+  el.innerHTML = `
+    <!-- SECTION 1: Monthly baseline -->
+    <div class="section" style="margin-bottom:16px">
+      <div class="section-title">Monthly baseline (auto from your last 6 months)</div>
+      <p style="color:var(--text3,#94a3b8);margin-bottom:14px;font-size:12px">Auto-detected from your transactions. Override any cell if you know it'll be different. Click \u21BA to revert to auto.</p>
+      <table class="txn-table" style="margin-top:6px">
+        <thead><tr><th>Item</th><th style="text-align:right">Auto (\u20AC/mo)</th><th style="text-align:right">Your value (\u20AC/mo)</th><th></th></tr></thead>
+        <tbody>
+          <tr>
+            <td>Income (median)</td>
+            <td style="text-align:right;font-family:'JetBrains Mono',monospace;color:#10b981">${fmtE(b.incomeAuto)}</td>
+            <td style="text-align:right"><input type="number" placeholder="${b.incomeAuto}" value="${incOverride?state.overrides.income:''}" onchange="updateOverride('income',this.value)" style="width:120px;text-align:right;background:var(--input-bg,#0f172a);border:1px solid var(--border,#334155);color:var(--text);padding:6px 8px;border-radius:6px"></td>
+            <td>${incOverride?`<button onclick="clearOverride('income')" title="Revert to auto" style="background:transparent;border:1px solid var(--border);color:var(--text4);width:28px;height:28px;border-radius:6px;cursor:pointer">\u21BA</button>`:''}</td>
+          </tr>
+          <tr>
+            <td>Committed expenses (detected recurring)</td>
+            <td style="text-align:right;font-family:'JetBrains Mono',monospace;color:#ef4444">${fmtE(b.committedAuto)}</td>
+            <td style="text-align:right"><input type="number" placeholder="${b.committedAuto}" value="${comOverride?state.overrides.committed:''}" onchange="updateOverride('committed',this.value)" style="width:120px;text-align:right;background:var(--input-bg,#0f172a);border:1px solid var(--border,#334155);color:var(--text);padding:6px 8px;border-radius:6px"></td>
+            <td>${comOverride?`<button onclick="clearOverride('committed')" title="Revert to auto" style="background:transparent;border:1px solid var(--border);color:var(--text4);width:28px;height:28px;border-radius:6px;cursor:pointer">\u21BA</button>`:''}</td>
+          </tr>
+          <tr>
+            <td>Variable expenses (groceries, gas, etc.)</td>
+            <td style="text-align:right;font-family:'JetBrains Mono',monospace;color:#f59e0b">${fmtE(b.variableAuto)}</td>
+            <td style="text-align:right"><input type="number" placeholder="${b.variableAuto}" value="${varOverride?state.overrides.variable:''}" onchange="updateOverride('variable',this.value)" style="width:120px;text-align:right;background:var(--input-bg,#0f172a);border:1px solid var(--border,#334155);color:var(--text);padding:6px 8px;border-radius:6px"></td>
+            <td>${varOverride?`<button onclick="clearOverride('variable')" title="Revert to auto" style="background:transparent;border:1px solid var(--border);color:var(--text4);width:28px;height:28px;border-radius:6px;cursor:pointer">\u21BA</button>`:''}</td>
+          </tr>
+          <tr style="border-top:2px solid var(--border,#334155)">
+            <td style="font-weight:700">Monthly surplus available to allocate</td>
+            <td></td>
+            <td style="text-align:right;font-family:'JetBrains Mono',monospace;font-size:18px;font-weight:700;color:${surplusColor}">${fmtE(b.surplusFinal)}</td>
+            <td></td>
+          </tr>
+        </tbody>
+      </table>
+      <details style="margin-top:10px">
+        <summary style="cursor:pointer;color:var(--text4);font-size:12px">Show breakdown (${b.committedItems.length} recurring \u2022 ${b.variableByCategory.length} variable categories)</summary>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:10px">
+          <div>
+            <div style="font-size:11px;text-transform:uppercase;color:var(--text4);margin-bottom:6px">Detected recurring (committed)</div>
+            ${b.committedItems.length === 0
+              ? '<p style="color:var(--text4);font-size:12px">None detected yet (need 3+ months of consistent activity per source).</p>'
+              : `<table class="txn-table" style="font-size:12px"><tbody>${b.committedItems.map(c=>`<tr><td>${escapeHtml(c.source)}<div style="color:var(--text4);font-size:10px">${escapeHtml(c.category)} \u2022 ${c.freq}</div></td><td style="text-align:right;font-family:'JetBrains Mono',monospace">${fmtE(c.monthly)}</td></tr>`).join('')}</tbody></table>`}
+          </div>
+          <div>
+            <div style="font-size:11px;text-transform:uppercase;color:var(--text4);margin-bottom:6px">Variable spend by category (L6M avg)</div>
+            ${b.variableByCategory.length === 0
+              ? '<p style="color:var(--text4);font-size:12px">No variable spend categories yet.</p>'
+              : `<table class="txn-table" style="font-size:12px"><tbody>${b.variableByCategory.map(v=>`<tr><td>${escapeHtml(v.category)}</td><td style="text-align:right;font-family:'JetBrains Mono',monospace">${fmtE(v.monthly)}</td></tr>`).join('')}</tbody></table>`}
+          </div>
+        </div>
+      </details>
+    </div>
+
+    <!-- SECTION 2 + 3: Goal buckets + allocation -->
+    <div class="section" style="margin-bottom:16px">
+      <div class="section-title">Goal buckets &amp; allocation</div>
+      <p style="color:var(--text3,#94a3b8);margin-bottom:14px;font-size:12px">Define what you're saving toward. Dashboard computes the monthly contribution needed for each (based on target amount and date), then allocates your \u20AC${fmtE(b.surplusFinal).replace('\u20AC','')} surplus across buckets by priority (1 = highest).</p>
+      <div style="overflow-x:auto">
+        <table class="txn-table">
+          <thead><tr><th>Name</th><th style="text-align:right">Target (\u20AC)</th><th style="text-align:right">Current (\u20AC)</th><th>Target date</th><th>Priority</th><th style="text-align:right">Required</th><th style="text-align:right">Allocated</th><th></th></tr></thead>
+          <tbody>${bucketRows}</tbody>
+          ${alloc.rows.length > 0 ? `<tfoot><tr style="border-top:2px solid var(--border,#334155)">
+            <td colspan="6" style="font-weight:700;text-align:right">Leftover after all funded buckets</td>
+            <td style="text-align:right;font-family:'JetBrains Mono',monospace;font-weight:700;color:${alloc.leftover>0?'#10b981':'#94a3b8'}">${fmtE(alloc.leftover)}/mo</td>
+            <td></td>
+          </tr></tfoot>` : ''}
+        </table>
+      </div>
+      <button onclick="addBucket()" style="margin-top:12px;background:#10b981;border:none;color:white;padding:8px 14px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600">+ Add bucket</button>
+    </div>
+
+    <!-- SECTION 4: Education / research notes -->
+    <div class="section" style="margin-bottom:16px">
+      <div class="section-title">Where to put the leftover \u2014 educational reference</div>
+      <p style="color:var(--text3,#94a3b8);font-size:12px;margin-bottom:14px">
+        <strong>Not financial advice.</strong> This is general educational reference, not a recommendation for your situation. Your choices depend on your time horizon, risk tolerance, tax situation, and existing portfolio. Consult a licensed advisor for personalized guidance.
+      </p>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px">
+        <div style="padding:14px;background:rgba(16,185,129,0.06);border:1px solid rgba(16,185,129,0.2);border-radius:10px">
+          <div style="font-weight:700;color:#10b981;margin-bottom:6px">Short-term cash (0\u20133yr)</div>
+          <p style="font-size:12px;color:var(--text3);margin:0">Emergency fund, near-term goals. Held in instant-access savings or money market. Typical real return: 0\u20131% after inflation. <a href="https://www.bogleheads.org/wiki/Emergency_fund" target="_blank" rel="noopener" style="color:#10b981">Bogleheads on emergency funds \u2197</a></p>
+        </div>
+        <div style="padding:14px;background:rgba(6,182,212,0.06);border:1px solid rgba(6,182,212,0.2);border-radius:10px">
+          <div style="font-weight:700;color:#06b6d4;margin-bottom:6px">Medium-term (3\u201310yr)</div>
+          <p style="font-size:12px;color:var(--text3);margin:0">Goals like a deposit, car, sabbatical. Bond funds or conservative mixed portfolios are commonly discussed. <a href="https://www.atvp.si/sl/javnost/za-vlagatelje" target="_blank" rel="noopener" style="color:#06b6d4">ATVP investor info (SI) \u2197</a></p>
+        </div>
+        <div style="padding:14px;background:rgba(139,92,246,0.06);border:1px solid rgba(139,92,246,0.2);border-radius:10px">
+          <div style="font-weight:700;color:#8b5cf6;margin-bottom:6px">Long-term (10yr+)</div>
+          <p style="font-size:12px;color:var(--text3);margin:0">Retirement, financial independence. Diversified equity index funds are commonly discussed in long-term portfolios. <a href="https://www.bogleheads.org/wiki/Three-fund_portfolio" target="_blank" rel="noopener" style="color:#8b5cf6">Bogleheads three-fund portfolio \u2197</a></p>
+        </div>
+        <div style="padding:14px;background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.2);border-radius:10px">
+          <div style="font-weight:700;color:#f59e0b;margin-bottom:6px">Concepts to research</div>
+          <p style="font-size:12px;color:var(--text3);margin:0">TER (total expense ratio), ETF distribution vs accumulation, capital gains tax in Slovenia (25% rule). <a href="https://www.investopedia.com/articles/exchangetradedfunds/05/060605.asp" target="_blank" rel="noopener" style="color:#f59e0b">Investopedia ETF basics \u2197</a></p>
+        </div>
+      </div>
+      <p style="color:var(--text4);font-size:11px;margin-top:14px;font-style:italic">Past performance does not predict future returns. All asset classes can lose value, including diversified equity indexes. The links above are independent educational resources; I have no affiliation with any of them.</p>
+    </div>
+
+    <!-- SECTION 5: AI narrative -->
+    <div class="section">
+      <div class="section-title">AI pattern observation</div>
+      <p style="color:var(--text3);font-size:12px;margin-bottom:10px">Describes patterns in YOUR cash flow data \u2014 never investment recommendations.</p>
+      <div id="planNarrative" style="padding:14px;background:var(--card-bg-2,rgba(255,255,255,0.02));border:1px solid var(--border,#334155);border-radius:10px;color:var(--text3);font-size:13px;line-height:1.6;min-height:60px">
+        ${CHAT.apiKey ? 'Loading\u2026' : '<em>Add your Anthropic API key in the chat settings (\u2699) to enable this section.</em>'}
+      </div>
+    </div>
+  `;
+
+  // Fire AI narrative async (does not block render)
+  if(CHAT.apiKey){
+    generatePlanNarrative(b).then(text => {
+      const node = document.getElementById('planNarrative');
+      if(node){
+        if(text){ node.textContent = text; }
+        else { node.innerHTML = '<em>Not enough data yet (need ~6 months of transactions).</em>'; }
+      }
+    });
+  }
 }
 
 applyTheme();
