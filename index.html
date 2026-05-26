@@ -2572,6 +2572,115 @@ function updateBucket(id, field, value){
   // Re-render allocation/totals but keep focus where possible
   renderPlan();
 }
+// Investment growth calculator: persists inputs in plan state and updates
+// the results table + chart live as user types (no full re-render = no
+// focus loss). Pure compound-interest math, no advice.
+function updateCalc(field, value){
+  const state = loadPlanState();
+  state.calc = state.calc || {};
+  state.calc[field] = (value === '' || value == null) ? null : Number(value);
+  savePlanState(state);
+  refreshCalculator();
+}
+function setCalcReturn(rate){
+  const inp = document.getElementById('calcReturn');
+  if(inp){ inp.value = String(rate); }
+  updateCalc('annualReturn', rate);
+}
+function computeProjection(initial, monthly, years, annualReturn, inflation){
+  const months = Math.max(0, Math.round(years * 12));
+  const r = Math.pow(1 + annualReturn/100, 1/12) - 1; // monthly compounding from annual rate
+  const series = [];
+  let balance = Number(initial) || 0;
+  let contributed = Number(initial) || 0;
+  // Year-0 snapshot
+  series.push({year:0, nominal:balance, real:balance, contributed:contributed, growth:0});
+  for(let m=1; m<=months; m++){
+    balance = balance * (1+r) + (Number(monthly) || 0);
+    contributed += (Number(monthly) || 0);
+    if(m % 12 === 0){
+      const year = m/12;
+      const real = balance / Math.pow(1 + inflation/100, year);
+      const growth = balance - contributed;
+      series.push({year, nominal:balance, real, contributed, growth});
+    }
+  }
+  return series;
+}
+function refreshCalculator(){
+  const initial = Number(document.getElementById('calcInitial')?.value) || 0;
+  const monthly = Number(document.getElementById('calcMonthly')?.value) || 0;
+  const years = Math.max(1, Math.min(60, Number(document.getElementById('calcYears')?.value) || 20));
+  const annualReturn = Number(document.getElementById('calcReturn')?.value);
+  const inflation = Math.max(0, Number(document.getElementById('calcInflation')?.value) || 0);
+  if(isNaN(annualReturn)) return;
+  const series = computeProjection(initial, monthly, years, annualReturn, inflation);
+  const last = series[series.length-1];
+  const fmtE = v => '\u20AC' + Math.round(v).toLocaleString();
+  const growthColor = last.growth >= 0 ? '#10b981' : '#ef4444';
+  const realLossPct = last.contributed > 0 ? ((last.real - last.contributed) / last.contributed * 100) : 0;
+  const resultsEl = document.getElementById('calcResults');
+  if(resultsEl){
+    resultsEl.innerHTML = `
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px">
+        <div style="padding:12px 14px;background:rgba(148,163,184,0.06);border:1px solid var(--border,#334155);border-radius:10px">
+          <div style="font-size:10px;color:var(--text4);text-transform:uppercase;letter-spacing:.06em">Total contributed</div>
+          <div style="font-size:18px;font-weight:700;color:var(--text);font-family:'JetBrains Mono',monospace;margin-top:4px">${fmtE(last.contributed)}</div>
+          <div style="font-size:10px;color:var(--text4);margin-top:2px">${initial>0?'\u20AC'+initial.toLocaleString()+' initial + ':''}\u20AC${monthly.toLocaleString()}/mo \u00D7 ${years*12} mo</div>
+        </div>
+        <div style="padding:12px 14px;background:rgba(16,185,129,0.06);border:1px solid rgba(16,185,129,0.25);border-radius:10px">
+          <div style="font-size:10px;color:var(--text4);text-transform:uppercase;letter-spacing:.06em">Final value (nominal)</div>
+          <div style="font-size:18px;font-weight:700;color:#10b981;font-family:'JetBrains Mono',monospace;margin-top:4px">${fmtE(last.nominal)}</div>
+          <div style="font-size:10px;color:var(--text4);margin-top:2px">After ${years} years at ${annualReturn}% assumed return</div>
+        </div>
+        <div style="padding:12px 14px;background:rgba(6,182,212,0.06);border:1px solid rgba(6,182,212,0.25);border-radius:10px">
+          <div style="font-size:10px;color:var(--text4);text-transform:uppercase;letter-spacing:.06em">Final value (real, today's \u20AC)</div>
+          <div style="font-size:18px;font-weight:700;color:#06b6d4;font-family:'JetBrains Mono',monospace;margin-top:4px">${fmtE(last.real)}</div>
+          <div style="font-size:10px;color:var(--text4);margin-top:2px">Adjusted for ${inflation}% inflation</div>
+        </div>
+        <div style="padding:12px 14px;background:rgba(139,92,246,0.06);border:1px solid rgba(139,92,246,0.25);border-radius:10px">
+          <div style="font-size:10px;color:var(--text4);text-transform:uppercase;letter-spacing:.06em">Compound growth</div>
+          <div style="font-size:18px;font-weight:700;color:${growthColor};font-family:'JetBrains Mono',monospace;margin-top:4px">${last.growth>=0?'+':''}${fmtE(last.growth)}</div>
+          <div style="font-size:10px;color:var(--text4);margin-top:2px">Real after-inflation: ${realLossPct>=0?'+':''}${realLossPct.toFixed(1)}% vs contributed</div>
+        </div>
+      </div>`;
+  }
+  // Draw / update chart
+  const canvas = document.getElementById('calcChart');
+  if(!canvas || typeof Chart === 'undefined') return;
+  if(charts.calc){ try { charts.calc.destroy(); } catch{} }
+  const labels = series.map(s => s.year === 0 ? 'Today' : 'Year ' + s.year);
+  const isDark = document.documentElement.dataset.theme !== 'light';
+  const gridColor = isDark ? 'rgba(148,163,184,0.10)' : 'rgba(15,23,42,0.08)';
+  const tickColor = isDark ? '#94a3b8' : '#475569';
+  charts.calc = new Chart(canvas, {
+    type:'line',
+    data:{
+      labels,
+      datasets:[
+        {label:'Nominal value', data:series.map(s=>Math.round(s.nominal)), borderColor:'#10b981', backgroundColor:'rgba(16,185,129,0.12)', fill:true, borderWidth:2.5, pointRadius:0, tension:.3},
+        {label:'Real value (today\u2019s \u20AC)', data:series.map(s=>Math.round(s.real)), borderColor:'#06b6d4', backgroundColor:'rgba(6,182,212,0.06)', fill:false, borderWidth:2, pointRadius:0, tension:.3, borderDash:[6,4]},
+        {label:'Total contributed', data:series.map(s=>Math.round(s.contributed)), borderColor:'#94a3b8', backgroundColor:'transparent', fill:false, borderWidth:1.5, pointRadius:0, tension:0, borderDash:[2,3]}
+      ]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      interaction:{mode:'index', intersect:false},
+      scales:{
+        x:{ticks:{color:tickColor, maxTicksLimit:12, font:{size:11}}, grid:{color:gridColor}},
+        y:{ticks:{color:tickColor, font:{size:11}, callback:v=>'\u20AC'+Math.round(v).toLocaleString()}, grid:{color:gridColor}}
+      },
+      plugins:{
+        legend:{labels:{color:tickColor, boxWidth:14, padding:10, font:{size:11}}},
+        tooltip:{
+          callbacks:{
+            label: ctx => ctx.dataset.label + ': \u20AC' + Math.round(ctx.parsed.y).toLocaleString()
+          }
+        }
+      }
+    }
+  });
+}
 function updateOverride(field, value){
   const state = loadPlanState();
   state.overrides = state.overrides || {};
@@ -2800,6 +2909,48 @@ function renderPlan(){
       <button onclick="addBucket()" style="margin-top:12px;background:#10b981;border:none;color:white;padding:8px 14px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600">+ Add bucket</button>
     </div>
 
+    <!-- SECTION 3.5: Investment growth calculator (illustrative math) -->
+    <div class="section" style="margin-bottom:16px">
+      <div class="section-title">Investment growth calculator</div>
+      <p style="color:var(--text3,#94a3b8);font-size:12px;margin-bottom:14px"><strong>Illustrative compound-interest math \u2014 not a prediction.</strong> Type any monthly amount and assumed annual return. Presets are commonly-used illustrative ranges for educational examples, NOT specific to any index or fund. Past performance never guarantees future results.</p>
+
+      <div style="display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));margin-bottom:14px">
+        <label style="display:flex;flex-direction:column;gap:4px;font-size:11px;color:var(--text4);text-transform:uppercase;letter-spacing:.06em">
+          Initial amount (\u20AC)
+          <input type="number" id="calcInitial" min="0" step="100" value="${escapeAttr(String(state.calc?.initial ?? 0))}" oninput="updateCalc('initial',this.value)" style="background:var(--input-bg,#0f172a);border:1px solid var(--border,#334155);color:var(--text);padding:8px 10px;border-radius:8px;font-size:14px;font-family:'JetBrains Mono',monospace">
+        </label>
+        <label style="display:flex;flex-direction:column;gap:4px;font-size:11px;color:var(--text4);text-transform:uppercase;letter-spacing:.06em">
+          Monthly contribution (\u20AC)
+          <input type="number" id="calcMonthly" min="0" step="50" value="${escapeAttr(String(state.calc?.monthly ?? Math.max(50, Math.round(b.surplusFinal*0.5))))}" oninput="updateCalc('monthly',this.value)" style="background:var(--input-bg,#0f172a);border:1px solid var(--border,#334155);color:var(--text);padding:8px 10px;border-radius:8px;font-size:14px;font-family:'JetBrains Mono',monospace">
+        </label>
+        <label style="display:flex;flex-direction:column;gap:4px;font-size:11px;color:var(--text4);text-transform:uppercase;letter-spacing:.06em">
+          Years
+          <input type="number" id="calcYears" min="1" max="60" step="1" value="${escapeAttr(String(state.calc?.years ?? 20))}" oninput="updateCalc('years',this.value)" style="background:var(--input-bg,#0f172a);border:1px solid var(--border,#334155);color:var(--text);padding:8px 10px;border-radius:8px;font-size:14px;font-family:'JetBrains Mono',monospace">
+        </label>
+        <label style="display:flex;flex-direction:column;gap:4px;font-size:11px;color:var(--text4);text-transform:uppercase;letter-spacing:.06em">
+          Assumed annual return (%)
+          <input type="number" id="calcReturn" min="-10" max="30" step="0.1" value="${escapeAttr(String(state.calc?.annualReturn ?? 6))}" oninput="updateCalc('annualReturn',this.value)" style="background:var(--input-bg,#0f172a);border:1px solid var(--border,#334155);color:var(--text);padding:8px 10px;border-radius:8px;font-size:14px;font-family:'JetBrains Mono',monospace">
+        </label>
+        <label style="display:flex;flex-direction:column;gap:4px;font-size:11px;color:var(--text4);text-transform:uppercase;letter-spacing:.06em">
+          Assumed inflation (%)
+          <input type="number" id="calcInflation" min="0" max="15" step="0.1" value="${escapeAttr(String(state.calc?.inflation ?? 2.5))}" oninput="updateCalc('inflation',this.value)" style="background:var(--input-bg,#0f172a);border:1px solid var(--border,#334155);color:var(--text);padding:8px 10px;border-radius:8px;font-size:14px;font-family:'JetBrains Mono',monospace">
+        </label>
+      </div>
+
+      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px;align-items:center">
+        <span style="font-size:11px;color:var(--text4);text-transform:uppercase;letter-spacing:.06em;margin-right:6px">Return presets:</span>
+        <button onclick="setCalcReturn(3)" style="background:rgba(59,130,246,0.12);border:1px solid rgba(59,130,246,0.3);color:#3b82f6;padding:5px 10px;border-radius:8px;cursor:pointer;font-size:11px;font-weight:600">Very conservative (3%)</button>
+        <button onclick="setCalcReturn(4)" style="background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.3);color:#10b981;padding:5px 10px;border-radius:8px;cursor:pointer;font-size:11px;font-weight:600">Conservative (4%)</button>
+        <button onclick="setCalcReturn(6)" style="background:rgba(6,182,212,0.12);border:1px solid rgba(6,182,212,0.3);color:#06b6d4;padding:5px 10px;border-radius:8px;cursor:pointer;font-size:11px;font-weight:600">Moderate (6%)</button>
+        <button onclick="setCalcReturn(8)" style="background:rgba(139,92,246,0.12);border:1px solid rgba(139,92,246,0.3);color:#8b5cf6;padding:5px 10px;border-radius:8px;cursor:pointer;font-size:11px;font-weight:600">Aggressive (8%)</button>
+        <button onclick="setCalcReturn(10)" style="background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.3);color:#f59e0b;padding:5px 10px;border-radius:8px;cursor:pointer;font-size:11px;font-weight:600">Very aggressive (10%)</button>
+      </div>
+
+      <div id="calcResults"></div>
+      <div style="margin-top:14px;position:relative;height:280px"><canvas id="calcChart"></canvas></div>
+      <p style="color:var(--text4);font-size:11px;margin-top:10px;font-style:italic">All numbers are illustrative compound-interest projections from the assumptions YOU set. Real investments fluctuate \u2014 actual returns vary year to year, can be negative, and depend on instrument, fees, taxes, and timing. This calculator does not factor in fees, taxes, currency risk, or sequence-of-returns risk.</p>
+    </div>
+
     <!-- SECTION 4: Education / AI-written reference (in-app modals) -->
     <div class="section" style="margin-bottom:16px">
       <div class="section-title">Where to put the leftover \u2014 educational guides</div>
@@ -2845,6 +2996,8 @@ function renderPlan(){
       }
     });
   }
+  // Compute calculator results + draw chart now that the DOM is in place.
+  refreshCalculator();
 }
 
 applyTheme();
