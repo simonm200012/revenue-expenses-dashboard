@@ -75,14 +75,15 @@ h1{font-size:32px;font-weight:800;letter-spacing:-1.5px;background:linear-gradie
 .filter-overlay.open{opacity:1;pointer-events:auto}
 .filter-panel{position:fixed;top:0;right:-400px;width:380px;max-width:90vw;height:100%;background:var(--panel-bg);border-left:1px solid var(--border);z-index:1000;transition:right .35s cubic-bezier(.4,0,.2,1);display:flex;flex-direction:column;box-shadow:-4px 0 24px var(--shadow)}
 .filter-panel.open{right:0}
-/* Quick Add is wider (480px) than the default filter panel (380px), so the
-   base 'right:-400px' off-screen position leaves 80px visible. Override with
-   a position that fully hides any width up to ~600px on desktop, and use
-   the same -110% mobile pattern as .filter-panel for very narrow viewports. */
-#quickAddPanel{right:-600px}
-#quickAddPanel.open{right:0}
-html.is-mobile-device #quickAddPanel{right:-110vw}
-html.is-mobile-device #quickAddPanel.open{right:0}
+/* Quick Add slides via translateX instead of `right` so its 24px box-shadow
+   blur doesn't bleed onto the viewport edge as a gold/light tint. Moving
+   the element 110% of its own width to the right guarantees the shadow,
+   border, and fill are all fully past the viewport, regardless of width.
+   pointer-events:none on closed state prevents invisible clicks. */
+#quickAddPanel{right:0;transform:translateX(110%);transition:transform .35s cubic-bezier(.4,0,.2,1);pointer-events:none}
+#quickAddPanel.open{transform:translateX(0);pointer-events:auto}
+html.is-mobile-device #quickAddPanel{transform:translateX(110%)}
+html.is-mobile-device #quickAddPanel.open{transform:translateX(0)}
 .fp-header{display:flex;justify-content:space-between;align-items:center;padding:20px 24px;border-bottom:1px solid var(--border)}
 .fp-title{font-size:16px;font-weight:700;color:var(--text)}
 .fp-close{background:none;border:none;color:var(--text4);font-size:22px;cursor:pointer;padding:4px 8px;border-radius:6px;transition:all .2s}
