@@ -435,19 +435,19 @@ html.is-mobile-device .section .txn-table input.fp-input{width:120px !important;
 <body>
 <div class="filter-overlay" id="filterOverlay" onclick="closeFilters()"></div>
 <div class="filter-panel" id="filterPanel">
-  <div class="fp-header"><span class="fp-title">⚙ Filters</span><button class="fp-close" onclick="closeFilters()">×</button></div>
+  <div class="fp-header"><span class="fp-title">⚙ <span data-t="fp.title">Filters</span></span><button class="fp-close" onclick="closeFilters()">×</button></div>
   <div class="fp-body">
-    <div class="fp-group"><div class="fp-label">Date Range</div><div class="fp-row"><input class="fp-input" type="date" id="fpDateFrom"><input class="fp-input" type="date" id="fpDateTo"></div></div>
-    <div class="fp-group"><div class="fp-label">Type</div><div class="fp-chips" id="fpTypeChips"><span class="fp-chip active" data-val="" onclick="toggleChip(this)">All</span><span class="fp-chip" data-val="In" onclick="toggleChip(this)">Inflow</span><span class="fp-chip" data-val="Out" onclick="toggleChip(this)">Outflow</span></div></div>
-    <div class="fp-group"><div class="fp-label">Bank / Account</div><div class="fp-chips" id="fpBankChips"><span class="fp-chip active" data-val="" onclick="toggleChip(this)">All</span><span class="fp-chip" data-val="NLB" onclick="toggleChip(this)">NLB</span><span class="fp-chip" data-val="GORENJSKA BANKA" onclick="toggleChip(this)">Gorenjska</span><span class="fp-chip" data-val="Revolut" onclick="toggleChip(this)">Revolut</span><span class="fp-chip" data-val="Trading212" onclick="toggleChip(this)">Trading212</span></div></div>
-    <div class="fp-group"><div class="fp-label">Category</div><select class="fp-select" id="fpCategory"><option value="">All Categories</option></select></div>
-    <div class="fp-group"><div class="fp-label">Amount Range (€)</div><div class="fp-row"><input class="fp-input" type="number" id="fpAmtMin" placeholder="Min" step="1"><input class="fp-input" type="number" id="fpAmtMax" placeholder="Max" step="1"></div></div>
-    <div class="fp-group"><div class="fp-label">Reconciliation</div><div class="fp-chips" id="fpReconChips"><span class="fp-chip active" data-val="" onclick="toggleChip(this)">All</span><span class="fp-chip" data-val="reconciled" onclick="toggleChip(this)">Reconciled</span><span class="fp-chip" data-val="unreconciled" onclick="toggleChip(this)">Unreconciled</span></div></div>
-    <div class="fp-group"><div class="fp-label">Bank Statement</div><select class="fp-select" id="fpStatement"><option value="">All Statements</option></select></div>
-    <div class="fp-group"><div class="fp-label">Source Name</div><input class="fp-input" type="text" id="fpSource" placeholder="e.g. Mercator, Spotify, Netflix..."></div>
-    <div class="fp-group"><div class="fp-label">Search Text</div><input class="fp-input" type="text" id="fpSearch" placeholder="Source, category, detail..."></div>
+    <div class="fp-group"><div class="fp-label" data-t="fp.date_range">Date Range</div><div class="fp-row"><input class="fp-input" type="date" id="fpDateFrom"><input class="fp-input" type="date" id="fpDateTo"></div></div>
+    <div class="fp-group"><div class="fp-label" data-t="fp.type">Type</div><div class="fp-chips" id="fpTypeChips"><span class="fp-chip active" data-val="" onclick="toggleChip(this)" data-t="fp.all">All</span><span class="fp-chip" data-val="In" onclick="toggleChip(this)" data-t="fp.inflow">Inflow</span><span class="fp-chip" data-val="Out" onclick="toggleChip(this)" data-t="fp.outflow">Outflow</span></div></div>
+    <div class="fp-group"><div class="fp-label" data-t="fp.bank">Bank / Account</div><div class="fp-chips" id="fpBankChips"><span class="fp-chip active" data-val="" onclick="toggleChip(this)" data-t="fp.all">All</span><span class="fp-chip" data-val="NLB" onclick="toggleChip(this)">NLB</span><span class="fp-chip" data-val="GORENJSKA BANKA" onclick="toggleChip(this)">Gorenjska</span><span class="fp-chip" data-val="Revolut" onclick="toggleChip(this)">Revolut</span><span class="fp-chip" data-val="Trading212" onclick="toggleChip(this)">Trading212</span></div></div>
+    <div class="fp-group"><div class="fp-label" data-t="fp.category">Category</div><select class="fp-select" id="fpCategory"><option value="" data-t="fp.all_cats">All Categories</option></select></div>
+    <div class="fp-group"><div class="fp-label" data-t="fp.amount">Amount Range (€)</div><div class="fp-row"><input class="fp-input" type="number" id="fpAmtMin" placeholder="Min" data-t-ph="fp.min" step="1"><input class="fp-input" type="number" id="fpAmtMax" placeholder="Max" data-t-ph="fp.max" step="1"></div></div>
+    <div class="fp-group"><div class="fp-label" data-t="fp.reconciliation">Reconciliation</div><div class="fp-chips" id="fpReconChips"><span class="fp-chip active" data-val="" onclick="toggleChip(this)" data-t="fp.all">All</span><span class="fp-chip" data-val="reconciled" onclick="toggleChip(this)" data-t="fp.reconciled">Reconciled</span><span class="fp-chip" data-val="unreconciled" onclick="toggleChip(this)" data-t="fp.unreconciled">Unreconciled</span></div></div>
+    <div class="fp-group"><div class="fp-label" data-t="fp.statement">Bank Statement</div><select class="fp-select" id="fpStatement"><option value="" data-t="fp.all_stmts">All Statements</option></select></div>
+    <div class="fp-group"><div class="fp-label" data-t="fp.source_name">Source Name</div><input class="fp-input" type="text" id="fpSource" placeholder="e.g. Mercator, Spotify, Netflix..." data-t-ph="fp.source_ph"></div>
+    <div class="fp-group"><div class="fp-label" data-t="fp.search">Search Text</div><input class="fp-input" type="text" id="fpSearch" placeholder="Source, category, detail..." data-t-ph="fp.search_ph"></div>
   </div>
-  <div class="fp-footer"><button class="fp-btn fp-btn-secondary" onclick="resetFilters()">Reset</button><button class="fp-btn fp-btn-primary" onclick="applyFilters()">Apply Filters</button></div>
+  <div class="fp-footer"><button class="fp-btn fp-btn-secondary" onclick="resetFilters()" data-t="fp.reset">Reset</button><button class="fp-btn fp-btn-primary" onclick="applyFilters()" data-t="fp.apply">Apply Filters</button></div>
 </div>
 <div class="filter-overlay" id="merchantOverlay" onclick="closeMerchant()"></div>
 <div class="filter-panel" id="merchantPanel">
@@ -457,15 +457,44 @@ html.is-mobile-device .section .txn-table input.fp-input{width:120px !important;
   </div>
   <div class="fp-body" id="mdBody"></div>
 </div>
+<!-- Quick Add transaction modal: floating dialog for manual entry. Saves
+     to Supabase, then re-loads TXNS so the new row appears everywhere. -->
+<div class="filter-overlay" id="quickAddOverlay" onclick="closeQuickAdd()"></div>
+<div class="filter-panel" id="quickAddPanel" style="width:480px;max-width:95vw">
+  <div class="fp-header">
+    <span class="fp-title">➕ <span data-t="qa.title">Quick add transaction</span></span>
+    <button class="fp-close" onclick="closeQuickAdd()">×</button>
+  </div>
+  <div class="fp-body">
+    <div class="fp-group"><div class="fp-label" data-t="qa.date">Date</div><input class="fp-input" type="date" id="qaDate"></div>
+    <div class="fp-group"><div class="fp-label" data-t="qa.amount">Amount (€)</div><input class="fp-input" type="number" step="0.01" id="qaAmount" placeholder="0.00"></div>
+    <div class="fp-group"><div class="fp-label" data-t="qa.type">Type</div><div class="fp-chips" id="qaTypeChips">
+      <span class="fp-chip" data-val="Out" onclick="toggleChip(this)" data-t="fp.outflow">Outflow</span>
+      <span class="fp-chip" data-val="In" onclick="toggleChip(this)" data-t="fp.inflow">Inflow</span>
+      <span class="fp-chip" data-val="Inv" onclick="toggleChip(this)" data-t="fp.investment">Investment</span>
+    </div></div>
+    <div class="fp-group"><div class="fp-label" data-t="qa.source">Source / Merchant</div><input class="fp-input" type="text" id="qaSource" placeholder="e.g. Mercator, Salary ACME"></div>
+    <div class="fp-group"><div class="fp-label" data-t="qa.bank">Account / Bank</div><select class="fp-select" id="qaBank"></select></div>
+    <div class="fp-group"><div class="fp-label" data-t="qa.category">Category</div><input class="fp-input" type="text" id="qaCategory" placeholder="Groceries, Rent, Salary..." list="qaCategoryList"><datalist id="qaCategoryList"></datalist></div>
+    <div class="fp-group"><div class="fp-label" data-t="qa.detail">Detail (optional)</div><input class="fp-input" type="text" id="qaDetail" placeholder=""></div>
+    <div id="qaStatus" style="font-size:13px;min-height:20px;color:var(--text4);text-align:center"></div>
+  </div>
+  <div class="fp-footer">
+    <button class="fp-btn fp-btn-secondary" onclick="resetQuickAdd()" data-t="qa.reset">Reset</button>
+    <button class="fp-btn fp-btn-primary" onclick="saveQuickAdd()" data-t="qa.save">Save transaction</button>
+  </div>
+</div>
 <div id="app">
   <div class="header">
     <div><h1>Revenue & Expenses</h1><p class="subtitle">Loading from Supabase...</p></div>
     <div class="header-btns">
-      <button class="icon-btn nav-menu-btn" onclick="openNavMenu()" title="Sections">☰ <span class="lbl">Menu</span></button>
-      <button class="icon-btn" onclick="exportCSV()">⬇ <span class="lbl">Export CSV</span></button>
-      <button class="icon-btn" onclick="exportMonthPDF()">📄 <span class="lbl">Month PDF</span></button>
-      <button class="icon-btn" onclick="openFilters()">🔍 <span class="lbl">Filters</span></button>
+      <button class="icon-btn nav-menu-btn" onclick="openNavMenu()" title="Sections">☰ <span class="lbl" data-t="btn.menu">Menu</span></button>
+      <button class="icon-btn" onclick="openQuickAdd()" title="Quick add transaction">➕ <span class="lbl" data-t="btn.add">Add</span></button>
+      <button class="icon-btn" onclick="exportCSV()">⬇ <span class="lbl" data-t="btn.export_csv">Export CSV</span></button>
+      <button class="icon-btn" onclick="exportMonthPDF()">📄 <span class="lbl" data-t="btn.month_pdf">Month PDF</span></button>
+      <button class="icon-btn" onclick="openFilters()">🔍 <span class="lbl" data-t="btn.filters">Filters</span></button>
       <button class="icon-btn" id="themeBtn" onclick="toggleTheme()"><span id="themeIcon">\u2600\uFE0F</span><span class="lbl" id="themeText">Light</span></button>
+      <button class="icon-btn" id="langBtn" onclick="setLang(CURRENT_LANG==='en'?'sl':'en')" title="Toggle language"><span id="langFlag" style="font-size:18px;line-height:1">\uD83C\uDDF8\uD83C\uDDEE</span><span class="lbl" id="langText">SL</span></button>
     </div>
   </div>
   <!-- Mobile-only navigation pane: slides in from the left, lists every
@@ -482,7 +511,7 @@ html.is-mobile-device .section .txn-table input.fp-input{width:120px !important;
   <div class="controls">
     <div class="tabs-wrap" id="tabsWrap"><div class="tabs" id="tabsBar"></div></div>
     <select class="year-select" id="yearFilter" onchange="yearFilter=this.value;render();serializeStateToHash();">
-      <option value="All">All Years</option>
+      <option value="All" data-t="year.all">All Years</option>
       
     </select>
   </div>
@@ -923,12 +952,12 @@ const inBadge=yoy?yoyBadge(yoy.cur.inflow,yoy.prev.inflow,false):'';
 const outBadge=yoy?yoyBadge(yoy.cur.outflow,yoy.prev.outflow,true):'';
 const netBadge=yoy?yoyBadge(yoy.cur.net,yoy.prev.net,false):'';
 const yoyLabel=yoy?`<span style="font-size:10px;color:var(--text5);margin-left:4px">${yoy.label}</span>`:'';
-const invCard=(t.invested>0)?`<div class="kpi"><div class="kpi-label">Invested</div><div class="kpi-value" style="color:#8b5cf6">\u20AC${fmt(t.invested)}</div><div class="kpi-sub">Avg \u20AC${fmt(aInv)}/mo (L12M)</div></div>`:'';
+const invCard=(t.invested>0)?`<div class="kpi"><div class="kpi-label">${tr('kpi.invested')}</div><div class="kpi-value" style="color:#8b5cf6">\u20AC${fmt(t.invested)}</div><div class="kpi-sub">${tr('kpi.avg_per_mo',{v:fmt(aInv)})}</div></div>`:'';
 document.getElementById("kpis").innerHTML=`
-<div class="kpi"><div class="kpi-label">Total Income</div><div class="kpi-value" style="color:#10b981">\u20AC${fmt(t.inflow)}</div><div class="kpi-sub">Avg \u20AC${fmt(ai)}/mo (L12M)${inBadge?'<br>'+inBadge+yoyLabel:''}</div></div>
-<div class="kpi"><div class="kpi-label">Total Expenses</div><div class="kpi-value" style="color:#ef4444">\u20AC${fmt(t.outflow)}</div><div class="kpi-sub">Avg \u20AC${fmt(ao)}/mo (L12M)${outBadge?'<br>'+outBadge+yoyLabel:''}</div></div>
-<div class="kpi"><div class="kpi-label">Net Balance</div><div class="kpi-value" style="color:${t.net>=0?'#10b981':'#ef4444'}">\u20AC${fmt(Math.abs(t.net))}</div><div class="kpi-sub">${t.net>=0?'Surplus':'Deficit'}${netBadge?'<br>'+netBadge+yoyLabel:''}</div></div>
-${invCard}<div class="kpi"><div class="kpi-label">${hasActiveFilters()?'Filtered Txns':'Savings Rate'}</div><div class="kpi-value" style="color:${hasActiveFilters()?'#8b5cf6':t.rate>=0?'#06b6d4':'#ef4444'}">${hasActiveFilters()?ftxns.length:t.rate.toFixed(1)+'%'}</div><div class="kpi-sub">${hasActiveFilters()?'of '+TXNS.length+' total':'Income saved'}</div></div>`}
+<div class="kpi"><div class="kpi-label">${tr('kpi.income')}</div><div class="kpi-value" style="color:#10b981">\u20AC${fmt(t.inflow)}</div><div class="kpi-sub">${tr('kpi.avg_per_mo',{v:fmt(ai)})}${inBadge?'<br>'+inBadge+yoyLabel:''}</div></div>
+<div class="kpi"><div class="kpi-label">${tr('kpi.expenses')}</div><div class="kpi-value" style="color:#ef4444">\u20AC${fmt(t.outflow)}</div><div class="kpi-sub">${tr('kpi.avg_per_mo',{v:fmt(ao)})}${outBadge?'<br>'+outBadge+yoyLabel:''}</div></div>
+<div class="kpi"><div class="kpi-label">${tr('kpi.net')}</div><div class="kpi-value" style="color:${t.net>=0?'#10b981':'#ef4444'}">\u20AC${fmt(Math.abs(t.net))}</div><div class="kpi-sub">${t.net>=0?tr('kpi.surplus'):tr('kpi.deficit')}${netBadge?'<br>'+netBadge+yoyLabel:''}</div></div>
+${invCard}<div class="kpi"><div class="kpi-label">${hasActiveFilters()?tr('kpi.filtered_txns'):tr('kpi.savings_rate')}</div><div class="kpi-value" style="color:${hasActiveFilters()?'#8b5cf6':t.rate>=0?'#06b6d4':'#ef4444'}">${hasActiveFilters()?ftxns.length:t.rate.toFixed(1)+'%'}</div><div class="kpi-sub">${hasActiveFilters()?tr('kpi.of_total',{n:TXNS.length}):tr('kpi.income_saved')}</div></div>`}
 
 // Dynamic insights
 function renderInsights(){
@@ -985,9 +1014,9 @@ function getDynamicIncome(){if(!hasActiveFilters())return INCOME_TYPES;const txn
 function renderOverview(){const el=document.getElementById("content");const cats=getDynamicCats();const inc=getDynamicIncome();const hasPanelFilters=Object.values(gFilters).some(v=>v!=="");const data=(hasPanelFilters||yearFilter!=="All")?gfm():(yearFilter==="All"?YEARLY:gfm());const isMonthly=hasPanelFilters||yearFilter!=="All";
 el.innerHTML=`<div class="grid grid-2">
 <div class="section span-2"><div class="section-title">${isMonthly?'Monthly':'Yearly'} Income vs Expenses</div>${mc("c1",300)}</div>
-<div class="section"><div class="section-title">Top Expense Categories</div>${cats.length?bl(cats,"Category","Total",cats[0].Total):'<p style="color:var(--text4)">No outflows.</p>'}</div>
-<div class="section"><div class="section-title">Income Sources</div>${mc("c2",340)}</div>
-<div class="section span-2"><div class="section-title">Expense Ratio Breakdown</div><div id="treemapContainer"></div></div></div>`;
+<div class="section"><div class="section-title">${tr('sec.top_cats')}</div>${cats.length?bl(cats,"Category","Total",cats[0].Total):'<p style="color:var(--text4)">No outflows.</p>'}</div>
+<div class="section"><div class="section-title">${tr('sec.income_sources')}</div>${mc("c2",340)}</div>
+<div class="section span-2"><div class="section-title">${tr('sec.expense_ratio')}</div><div id="treemapContainer"></div></div></div>`;
 setTimeout(()=>renderTreemap("treemapContainer",cats,"Category","Total"),50);
 charts.c1=new Chart(document.getElementById("c1"),{type:"bar",data:{labels:data.map(d=>isMonthly?d.YM:d.Year),datasets:[{label:"Inflow",data:data.map(d=>d.Inflow),backgroundColor:"#10b981dd",borderRadius:4},{label:"Outflow",data:data.map(d=>d.Outflow),backgroundColor:"#ef4444dd",borderRadius:4},{label:"Net",data:data.map(d=>d.Net),type:"line",borderColor:"#06b6d4",borderWidth:2.5,pointBackgroundColor:theme==="dark"?"#0d0d1a":"#f8fafc",pointBorderColor:"#06b6d4",pointBorderWidth:2,pointRadius:isMonthly?0:4,fill:false}]},options:{responsive:true,maintainAspectRatio:false,scales:{x:{ticks:{maxTicksLimit:12,maxRotation:45}},y:{ticks:{callback:v=>fmt(v)}}},plugins:{tooltip:ttcb(1)}}});
 charts.c2=new Chart(document.getElementById("c2"),{type:"doughnut",data:{labels:inc.map(d=>d.Type),datasets:[{data:inc.map(d=>d.Total),backgroundColor:P,borderWidth:0}]},options:{responsive:true,maintainAspectRatio:false,cutout:"50%",plugins:{legend:{position:"right",labels:{boxWidth:12,padding:8,font:{size:11}}},tooltip:{callbacks:{label:ctx=>ctx.label+": "+fmtE(ctx.parsed)}}}}});}
@@ -1007,12 +1036,12 @@ cats.slice(0,15).forEach((cat,i)=>{
 });
 sparkHTML+='</div>';
 el.innerHTML=`<div class="grid grid-2">
-<div class="section span-2"><div class="section-title">Monthly Expenses</div>${mc("c3",280)}</div>
+<div class="section span-2"><div class="section-title">${tr('sec.monthly_exp')}</div>${mc("c3",280)}</div>
 <div class="section span-2"><div class="section-title">Spending Breakdown <span style="font-size:10px;color:var(--text5);text-transform:none;letter-spacing:0;font-weight:400">(top ${Math.min(20,cats.length)} categories)</span></div>${mc("c3b",Math.min(20,cats.length)*22+60)}</div>
 <div class="section"><div class="section-title">Category Trends <span style="font-size:10px;color:var(--text5);text-transform:none;letter-spacing:0;font-weight:400">(L${sparkMonths}M)</span></div>${sparkHTML}</div>
-<div class="section"><div class="section-title">Top Merchants</div>${sources.length?bl(sources,"Source","Total",sources[0].Total,'openMerchant'):'<p style="color:var(--text4)">No data.</p>'}</div>
-<div class="section span-2"><div class="section-title">Spending by Day of Week</div>${mc("c4",320)}</div>
-<div class="section span-2"><div class="section-title">Daily Spending Heatmap</div><div id="heatmapContainer"></div></div></div>`;
+<div class="section"><div class="section-title">${tr('sec.top_merchants')}</div>${sources.length?bl(sources,"Source","Total",sources[0].Total,'openMerchant'):'<p style="color:var(--text4)">No data.</p>'}</div>
+<div class="section span-2"><div class="section-title">${tr('sec.dow')}</div>${mc("c4",320)}</div>
+<div class="section span-2"><div class="section-title">${tr('sec.heatmap')}</div><div id="heatmapContainer"></div></div></div>`;
 setTimeout(()=>renderHeatmap('heatmapContainer'),50);
 // Draw sparklines after DOM is ready
 setTimeout(()=>{cats.slice(0,15).forEach((cat,i)=>{const mData=getCategoryMonthlyData(cat.Category,sparkMonths);drawSparkline("spark"+i,mData,P[i%P.length])})},50);
@@ -1024,28 +1053,28 @@ const ftxns=getFilteredTxns().filter(t=>t.t==="Out");const dowMap={};["Mon","Tue
 charts.c4=new Chart(document.getElementById("c4"),{type:"bar",data:{labels:dowData.map(d=>d.Day),datasets:[{label:"Total Spend",data:dowData.map(d=>d.Total),backgroundColor:"#8b5cf6dd",borderRadius:6}]},options:{responsive:true,maintainAspectRatio:false,scales:{y:{ticks:{callback:v=>fmt(v)}}},plugins:{tooltip:{callbacks:{label:ctx=>fmtE(ctx.parsed.y)+" ("+dowData[ctx.dataIndex].Count+" txns)"}}}}});}
 
 function renderIncome(){const data=gfm(),inc=getDynamicIncome(),el=document.getElementById("content");
-el.innerHTML=`<div class="grid grid-1"><div class="section"><div class="section-title">Monthly Income</div>${mc("c5",280)}</div><div class="section"><div class="section-title">Income Breakdown</div>${mc("c6",320)}</div></div>`;
+el.innerHTML=`<div class="grid grid-1"><div class="section"><div class="section-title">${tr('sec.monthly_inc')}</div>${mc("c5",280)}</div><div class="section"><div class="section-title">${tr('sec.income_breakdown')}</div>${mc("c6",320)}</div></div>`;
 charts.c5=new Chart(document.getElementById("c5"),{type:"line",data:{labels:data.map(d=>d.YM),datasets:[{label:"Inflow",data:data.map(d=>d.Inflow),borderColor:"#10b981",backgroundColor:"rgba(16,185,129,0.1)",fill:true,borderWidth:2,pointRadius:0,tension:.3}]},options:{responsive:true,maintainAspectRatio:false,scales:{x:{ticks:{maxTicksLimit:12,maxRotation:45}},y:{ticks:{callback:v=>fmt(v)}}},plugins:{tooltip:ttcb(0)}}});
 charts.c6=new Chart(document.getElementById("c6"),{type:"bar",data:{labels:inc.map(d=>d.Type),datasets:[{label:"Total",data:inc.map(d=>d.Total),backgroundColor:P,borderRadius:6}]},options:{indexAxis:"y",responsive:true,maintainAspectRatio:false,scales:{x:{ticks:{callback:v=>fmt(v)}}},plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>fmtE(ctx.parsed.x)}}}}});}
 
 function renderTrends(){const data=gfm();let cum=0;const cumD=data.map(d=>{cum+=d.Net;return Math.round(cum)});const el=document.getElementById("content");
-el.innerHTML=`<div class="grid grid-1"><div class="section"><div class="section-title">Monthly Net Balance</div>${mc("c7",280)}</div><div class="section"><div class="section-title">Cumulative Net Balance</div>${mc("c8",280)}</div><div class="section"><div class="section-title">Income vs Expenses \u2014 Monthly</div>${mc("c9",280)}</div></div>`;
+el.innerHTML=`<div class="grid grid-1"><div class="section"><div class="section-title">${tr('sec.monthly_net')}</div>${mc("c7",280)}</div><div class="section"><div class="section-title">${tr('sec.cum_net')}</div>${mc("c8",280)}</div><div class="section"><div class="section-title">Income vs Expenses \u2014 Monthly</div>${mc("c9",280)}</div></div>`;
 charts.c7=new Chart(document.getElementById("c7"),{type:"bar",data:{labels:data.map(d=>d.YM),datasets:[{label:"Net",data:data.map(d=>d.Net),backgroundColor:data.map(d=>d.Net>=0?"#10b981cc":"#ef4444cc"),borderRadius:3}]},options:{responsive:true,maintainAspectRatio:false,scales:{x:{ticks:{maxTicksLimit:12,maxRotation:45}},y:{ticks:{callback:v=>fmt(v)}}},plugins:{legend:{display:false},tooltip:ttcb(0)}}});
 charts.c8=new Chart(document.getElementById("c8"),{type:"line",data:{labels:data.map(d=>d.YM),datasets:[{label:"Cumulative",data:cumD,borderColor:"#06b6d4",backgroundColor:"rgba(6,182,212,0.1)",fill:true,borderWidth:2,pointRadius:0,tension:.3}]},options:{responsive:true,maintainAspectRatio:false,scales:{x:{ticks:{maxTicksLimit:12,maxRotation:45}},y:{ticks:{callback:v=>fmt(v)}}},plugins:{tooltip:ttcb(0)}}});
 charts.c9=new Chart(document.getElementById("c9"),{type:"line",data:{labels:data.map(d=>d.YM),datasets:[{label:"Inflow",data:data.map(d=>d.Inflow),borderColor:"#10b981",borderWidth:2,pointRadius:0,tension:.3,fill:false},{label:"Outflow",data:data.map(d=>d.Outflow),borderColor:"#ef4444",borderWidth:2,pointRadius:0,tension:.3,fill:false}]},options:{responsive:true,maintainAspectRatio:false,scales:{x:{ticks:{maxTicksLimit:12,maxRotation:45}},y:{ticks:{callback:v=>fmt(v)}}},plugins:{tooltip:ttcb(1)}}});}
 
 function renderTransactions(){const el=document.getElementById("content");
-el.innerHTML=`<div class="section"><div class="section-title">Transaction Search</div><div class="search-bar"><input class="search-input" id="txnSearch" placeholder="Quick search within filtered results..." oninput="txnPage=0;filterTxns()"></div><div class="table-wrap"><table class="txn-table"><thead><tr><th>Date</th><th>Source</th><th>Amount</th><th>Type</th><th>Category</th><th>Detail</th></tr></thead><tbody id="txnBody"></tbody></table></div><div class="table-footer"><span id="txnCount"></span><div><button class="page-btn" id="prevBtn" onclick="txnPage--;filterTxns()">\u2190 Prev</button> <button class="page-btn" id="nextBtn" onclick="txnPage++;filterTxns()">Next \u2192</button></div></div></div>`;filterTxns()}
+el.innerHTML=`<div class="section"><div class="section-title">${tr('sec.txn_search')}</div><div class="search-bar"><input class="search-input" id="txnSearch" placeholder="Quick search within filtered results..." oninput="txnPage=0;filterTxns()"></div><div class="table-wrap"><table class="txn-table"><thead><tr><th>Date</th><th>Source</th><th>Amount</th><th>Type</th><th>Category</th><th>Detail</th></tr></thead><tbody id="txnBody"></tbody></table></div><div class="table-footer"><span id="txnCount"></span><div><button class="page-btn" id="prevBtn" onclick="txnPage--;filterTxns()">\u2190 Prev</button> <button class="page-btn" id="nextBtn" onclick="txnPage++;filterTxns()">Next \u2192</button></div></div></div>`;filterTxns()}
 function filterTxns(){let filtered=getFilteredTxns();const q=(document.getElementById("txnSearch").value||"").toLowerCase();if(q)filtered=filtered.filter(t=>(t.s+t.c+t.r+t.b+t.d).toLowerCase().includes(q));const pp=50,total=filtered.length,pages=Math.ceil(total/pp);if(txnPage>=pages)txnPage=Math.max(0,pages-1);const sl=filtered.slice(txnPage*pp,(txnPage+1)*pp);const typeLabel=t=>t.t==='In'?'Inflow':(t.t==='Inv'?'Investment':'Outflow');const amtClass=t=>t.t==='In'?'in':(t.t==='Inv'?'inv':'out');const amtSign=t=>t.t==='In'?'+':(t.t==='Inv'?'\u25CF':'\u2212');const reconBadge=t=>t.f?`<span title="Found in ${escapeAttr(t.f)}" style="color:#10b981;font-size:11px;margin-left:6px">\u2713</span>`:`<span title="Not yet found in any bank statement" style="color:#f59e0b;font-size:11px;margin-left:6px">\u26A0</span>`;document.getElementById("txnBody").innerHTML=sl.map(t=>`<tr><td>${t.d}${reconBadge(t)}</td><td style="cursor:pointer;color:var(--text)" data-merchant="${escapeHtml(t.s||'')}" onclick="openMerchant(this.dataset.merchant)">${escapeHtml(t.s)}</td><td class="${amtClass(t)}">${amtSign(t)}\u20AC${t.v.toFixed(2)}</td><td>${typeLabel(t)}</td><td>${escapeHtml(t.c)}</td><td>${escapeHtml(t.r)}</td></tr>`).join("");const unreconShown=sl.filter(t=>!t.f).length;document.getElementById("txnCount").innerHTML=`${total} transactions \u00B7 Page ${txnPage+1}/${Math.max(pages,1)}${unreconShown>0?` \u00B7 <span style="color:#f59e0b">\u26A0 ${unreconShown} unreconciled on this page</span>`:''}`;document.getElementById("prevBtn").disabled=txnPage<=0;document.getElementById("nextBtn").disabled=txnPage>=pages-1}
 
 function renderCompare(){const months=MONTHLY.map(m=>m.YM);const el=document.getElementById("content");
 // Smart defaults: current month vs same month last year
 const now=new Date();const curYM=now.toISOString().slice(0,7);const prevYM=(now.getFullYear()-1)+curYM.slice(4);
 const defB=months.includes(curYM)?curYM:months[months.length-1];const defA=months.includes(prevYM)?prevYM:months[months.length-2];
-el.innerHTML=`<div class="section"><div class="section-title">Month-over-Month Comparison</div><div class="compare-row"><select class="compare-select" id="cmpA" onchange="updateCompare()"><option value="">Select Month A</option>${months.map(m=>`<option value="${m}"${m===defA?' selected':''}>${m}</option>`).join("")}</select><span style="color:var(--text4);font-weight:700">vs</span><select class="compare-select" id="cmpB" onchange="updateCompare()"><option value="">Select Month B</option>${months.map(m=>`<option value="${m}"${m===defB?' selected':''}>${m}</option>`).join("")}</select></div><div id="compareResult"></div></div>`;updateCompare()}
+el.innerHTML=`<div class="section"><div class="section-title">${tr('sec.mom_compare')}</div><div class="compare-row"><select class="compare-select" id="cmpA" onchange="updateCompare()"><option value="">Select Month A</option>${months.map(m=>`<option value="${m}"${m===defA?' selected':''}>${m}</option>`).join("")}</select><span style="color:var(--text4);font-weight:700">vs</span><select class="compare-select" id="cmpB" onchange="updateCompare()"><option value="">Select Month B</option>${months.map(m=>`<option value="${m}"${m===defB?' selected':''}>${m}</option>`).join("")}</select></div><div id="compareResult"></div></div>`;updateCompare()}
 function updateCompare(){const a=document.getElementById("cmpA").value,b=document.getElementById("cmpB").value;if(!a||!b){document.getElementById("compareResult").innerHTML='<p style="color:var(--text4)">Select two months.</p>';return}const ma=MONTHLY.find(m=>m.YM===a),mb=MONTHLY.find(m=>m.YM===b);if(!ma||!mb)return;const txA=TXNS.filter(t=>t.d.startsWith(a)&&t.t==='Out'),txB=TXNS.filter(t=>t.d.startsWith(b)&&t.t==='Out');const catA={},catB={};txA.forEach(t=>{catA[t.c]=(catA[t.c]||0)+t.v});txB.forEach(t=>{catB[t.c]=(catB[t.c]||0)+t.v});const allC=[...new Set([...Object.keys(catA),...Object.keys(catB)])].sort((x,y)=>((catB[y]||0)-(catB[x]||0)));
 function delta(va,vb){const d=vb-va;if(Math.abs(d)<0.5)return'<span class="delta" style="opacity:.5">\u2014</span>';return`<span class="delta ${d>0?'neg':'pos'}">${d>0?'+':''}${fmtE(d)}</span>`}
-document.getElementById("compareResult").innerHTML=`<div class="compare-grid"><div class="compare-card"><h4>${a}</h4><div class="compare-stat"><span style="color:var(--text3)">Income</span><span style="color:#10b981;font-family:'JetBrains Mono',monospace">${fmtE(ma.Inflow)}</span></div><div class="compare-stat"><span style="color:var(--text3)">Expenses</span><span style="color:#ef4444;font-family:'JetBrains Mono',monospace">${fmtE(ma.Outflow)}</span></div><div class="compare-stat"><span style="color:var(--text3)">Net</span><span style="color:${ma.Net>=0?'#10b981':'#ef4444'};font-family:'JetBrains Mono',monospace">${fmtE(ma.Net)}</span></div><div class="compare-stat"><span style="color:var(--text3)">Txns</span><span>${txA.length+TXNS.filter(t=>t.d.startsWith(a)&&t.t==='In').length}</span></div></div><div class="compare-card"><h4>${b}</h4><div class="compare-stat"><span style="color:var(--text3)">Income</span><span style="color:#10b981;font-family:'JetBrains Mono',monospace">${fmtE(mb.Inflow)} ${delta(ma.Inflow,mb.Inflow)}</span></div><div class="compare-stat"><span style="color:var(--text3)">Expenses</span><span style="color:#ef4444;font-family:'JetBrains Mono',monospace">${fmtE(mb.Outflow)} ${delta(ma.Outflow,mb.Outflow)}</span></div><div class="compare-stat"><span style="color:var(--text3)">Net</span><span style="color:${mb.Net>=0?'#10b981':'#ef4444'};font-family:'JetBrains Mono',monospace">${fmtE(mb.Net)}</span></div><div class="compare-stat"><span style="color:var(--text3)">Txns</span><span>${txB.length+TXNS.filter(t=>t.d.startsWith(b)&&t.t==='In').length}</span></div></div></div><div class="section" style="margin-top:16px"><div class="section-title">Category Breakdown</div>${mc("cmpChart",280)}</div>`;
+document.getElementById("compareResult").innerHTML=`<div class="compare-grid"><div class="compare-card"><h4>${a}</h4><div class="compare-stat"><span style="color:var(--text3)">Income</span><span style="color:#10b981;font-family:'JetBrains Mono',monospace">${fmtE(ma.Inflow)}</span></div><div class="compare-stat"><span style="color:var(--text3)">Expenses</span><span style="color:#ef4444;font-family:'JetBrains Mono',monospace">${fmtE(ma.Outflow)}</span></div><div class="compare-stat"><span style="color:var(--text3)">Net</span><span style="color:${ma.Net>=0?'#10b981':'#ef4444'};font-family:'JetBrains Mono',monospace">${fmtE(ma.Net)}</span></div><div class="compare-stat"><span style="color:var(--text3)">Txns</span><span>${txA.length+TXNS.filter(t=>t.d.startsWith(a)&&t.t==='In').length}</span></div></div><div class="compare-card"><h4>${b}</h4><div class="compare-stat"><span style="color:var(--text3)">Income</span><span style="color:#10b981;font-family:'JetBrains Mono',monospace">${fmtE(mb.Inflow)} ${delta(ma.Inflow,mb.Inflow)}</span></div><div class="compare-stat"><span style="color:var(--text3)">Expenses</span><span style="color:#ef4444;font-family:'JetBrains Mono',monospace">${fmtE(mb.Outflow)} ${delta(ma.Outflow,mb.Outflow)}</span></div><div class="compare-stat"><span style="color:var(--text3)">Net</span><span style="color:${mb.Net>=0?'#10b981':'#ef4444'};font-family:'JetBrains Mono',monospace">${fmtE(mb.Net)}</span></div><div class="compare-stat"><span style="color:var(--text3)">Txns</span><span>${txB.length+TXNS.filter(t=>t.d.startsWith(b)&&t.t==='In').length}</span></div></div></div><div class="section" style="margin-top:16px"><div class="section-title">${tr('sec.cat_breakdown')}</div>${mc("cmpChart",280)}</div>`;
 const topC=allC.slice(0,10);charts.cmpChart=new Chart(document.getElementById("cmpChart"),{type:"bar",data:{labels:topC,datasets:[{label:a,data:topC.map(c=>catA[c]||0),backgroundColor:"#3b82f6aa",borderRadius:4},{label:b,data:topC.map(c=>catB[c]||0),backgroundColor:"#f59e0baa",borderRadius:4}]},options:{responsive:true,maintainAspectRatio:false,scales:{y:{ticks:{callback:v=>fmt(v)}},x:{ticks:{maxRotation:45,font:{size:10}}}},plugins:{tooltip:ttcb(1)}}})}
 
 function renderProjection(){const el=document.getElementById("content");const m=gfm();const last6=m.slice(-6);const avgIn=Math.round(last6.reduce((s,d)=>s+d.Inflow,0)/Math.max(last6.length,1));const avgOut=Math.round(last6.reduce((s,d)=>s+d.Outflow,0)/Math.max(last6.length,1));const cumNow=m.reduce((s,d)=>s+d.Net,0);
@@ -1130,7 +1159,7 @@ if(nearTerm){
     </div>`;
   }).join('')}</div></div>`;
 }
-el.innerHTML=`${nearTermHTML}<div class="section"><div class="section-title">Cash Flow Forecast</div><div class="proj-controls"><div><span class="proj-label">Monthly Income (\u20AC)</span><br><input class="proj-input" id="projIn" type="number" value="${avgIn}" oninput="updateProjection()"></div><div><span class="proj-label">Monthly Expenses (\u20AC)</span><br><input class="proj-input" id="projOut" type="number" value="${avgOut}" oninput="updateProjection()"></div><div><span class="proj-label">Current Balance (\u20AC)</span><br><input class="proj-input" id="projBal" type="number" value="${Math.round(cumNow)}" oninput="updateProjection()"></div><div><span class="proj-label">Months</span><br><input class="proj-input" id="projMonths" type="number" value="24" min="1" max="120" oninput="updateProjection()"></div></div><div id="projCards"></div>${mc("projChart",300)}<div style="margin-top:16px">${mc("projStackChart",260)}</div></div>${recBreakdown}`;updateProjection();
+el.innerHTML=`${nearTermHTML}<div class="section"><div class="section-title">${tr('sec.cash_forecast')}</div><div class="proj-controls"><div><span class="proj-label">Monthly Income (\u20AC)</span><br><input class="proj-input" id="projIn" type="number" value="${avgIn}" oninput="updateProjection()"></div><div><span class="proj-label">Monthly Expenses (\u20AC)</span><br><input class="proj-input" id="projOut" type="number" value="${avgOut}" oninput="updateProjection()"></div><div><span class="proj-label">Current Balance (\u20AC)</span><br><input class="proj-input" id="projBal" type="number" value="${Math.round(cumNow)}" oninput="updateProjection()"></div><div><span class="proj-label">Months</span><br><input class="proj-input" id="projMonths" type="number" value="24" min="1" max="120" oninput="updateProjection()"></div></div><div id="projCards"></div>${mc("projChart",300)}<div style="margin-top:16px">${mc("projStackChart",260)}</div></div>${recBreakdown}`;updateProjection();
 // Stacked area: recurring vs variable
 if(recOut.length){
   const months=parseInt(document.getElementById("projMonths").value)||24;
@@ -1263,7 +1292,7 @@ function renderRecurring(){
     <div class="section"><div class="section-title">Active Subscriptions (${outActive.length})</div>${recCards(outActive,false,false)}</div>
     <div class="section" style="margin-top:16px"><div class="section-title" style="color:#f59e0b">\u26A0 Dormant / Possibly Cancelled (${outDormant.length})</div><p style="font-size:11px;color:var(--text4);margin-bottom:10px">Recurring expenses not seen recently. Check if you cancelled them \u2014 or if a payment failed.</p>${recCards(outDormant,false,true)}</div>
     <div class="section" style="margin-top:16px"><div class="section-title">Recurring Income (${inRec.length})</div>${recCards(inRec,true,false)}</div>
-    <div class="section" style="margin-top:16px"><div class="section-title">Recurring Expense Breakdown</div>${mc("recChart",300)}</div>`;
+    <div class="section" style="margin-top:16px"><div class="section-title">${tr('sec.rec_breakdown')}</div>${mc("recChart",300)}</div>`;
 
   // Chart: recurring by category
   const catMap={};outRec.forEach(r=>{catMap[r.category]=(catMap[r.category]||0)+r.annual});
@@ -1465,7 +1494,7 @@ function renderRules(){
   const allCats=[...new Set(TXNS.map(t=>t.c))].filter(Boolean).sort();
   el.innerHTML=`
     <div class="section">
-      <div class="section-title">Auto-categorization Rules</div>
+      <div class="section-title">${tr('sec.rules_title')}</div>
       <p style="font-size:12px;color:var(--text4);margin-bottom:14px">
         Rules run top-to-bottom on every load. First match wins.
       </p>
@@ -1724,7 +1753,7 @@ function renderNetWorth(){
     k.innerHTML='';
     const today=new Date().toISOString().slice(0,10);
     c.innerHTML=`<div class="section">
-      <div class="section-title">Set up your account baselines</div>
+      <div class="section-title">${tr('sec.nw_setup')}</div>
       <p style="color:var(--text3);margin-bottom:14px;line-height:1.6">Enter the balance you have <strong>today</strong> for each bank account. The dashboard will then track every transaction from today forward to keep your balance accurate. You can leave any account blank to skip it.</p>
       <table class="txn-table" id="nwSetup">
         <thead><tr><th>Bank</th><th>Baseline date</th><th>Current balance (\u20AC)</th></tr></thead>
@@ -1807,14 +1836,14 @@ function renderNetWorth(){
   c.innerHTML=`
     ${nwTrend?`<div class="section" style="margin-bottom:16px"><div class="section-title">Trend</div>${nwTrend}</div>`:''}
     <div class="section">
-      <div class="section-title">Bank balances</div>
+      <div class="section-title">${tr('sec.bank_balances')}</div>
       <div class="table-wrap"><table class="txn-table">
         <thead><tr><th>Bank</th><th>Baseline</th><th>+ Inflow since</th><th>\u2212 Out / Inv since</th><th>Current balance</th><th></th></tr></thead>
         <tbody>${bankRows||'<tr><td colspan="6" style="color:var(--text4);text-align:center;padding:20px">No banks detected.</td></tr>'}</tbody>
       </table></div>
     </div>
     <div class="section" style="margin-top:16px">
-      <div class="section-title">Investment accounts</div>
+      <div class="section-title">${tr('sec.inv_accounts')}</div>
       <p style="color:var(--text4);font-size:12px;margin-bottom:10px">Enter the current portfolio value for each broker to compute gain/loss vs your contributions. Detected from <code>Investment</code>-type transactions grouped by source.</p>
       ${invAccounts.length?`<div class="table-wrap"><table class="txn-table">
         <thead><tr><th>Account</th><th>Total contributed</th><th>Current value (\u20AC)</th><th>Gain/Loss</th><th>%</th></tr></thead>
@@ -1822,7 +1851,7 @@ function renderNetWorth(){
       </table></div>`:'<p style="color:var(--text4)">No investment-type transactions in your data yet.</p>'}
     </div>
     <div class="section" style="margin-top:16px">
-      <div class="section-title">Net worth over time</div>
+      <div class="section-title">${tr('sec.nw_over_time')}</div>
       <p style="color:var(--text4);font-size:12px;margin-bottom:10px">Auto-snapshots once per day when you open this tab. <strong>${NETWORTH.snapshots.length}</strong> snapshot${NETWORTH.snapshots.length===1?'':'s'} stored.</p>
       ${NETWORTH.snapshots.length>=2?'<div style="position:relative;height:340px"><canvas id="nwChart"></canvas></div>':'<p style="color:var(--text4);padding:20px;text-align:center">Open this tab on different days to build history. Today\'s snapshot was just recorded.</p>'}
     </div>`;
@@ -2071,7 +2100,7 @@ function renderInvestments(){
 
   c.innerHTML=`
     <div class="section" style="margin-bottom:16px">
-      <div class="section-title">Snapshot</div>
+      <div class="section-title">${tr('sec.snapshot')}</div>
       <div style="font-size:12px;color:var(--text4);line-height:1.7">
         <span style="color:#10b981">\u2197</span> Best performer: <strong style="color:var(--text)">${escapeHtml(winner.ticker.replace(/_US_EQ|_UK_EQ|_DE_EQ/g,''))}</strong> ${fmtSigned(winner.unrealizedPL)} (${winner.unrealizedPLPct>=0?'+':''}${winner.unrealizedPLPct.toFixed(2)}%)
         \u00B7
@@ -2085,7 +2114,7 @@ function renderInvestments(){
     </div>
     <div class="grid grid-2">
       <div class="section">
-        <div class="section-title">Portfolio Allocation</div>
+        <div class="section-title">${tr('sec.portfolio_alloc')}</div>
         <div style="position:relative;height:300px"><canvas id="invAllocChart"></canvas></div>
       </div>
       <div class="section">
@@ -2093,7 +2122,7 @@ function renderInvestments(){
         <div style="position:relative;height:300px"><canvas id="invPnlChart"></canvas></div>
       </div>
       <div class="section">
-        <div class="section-title">Top Holdings</div>
+        <div class="section-title">${tr('sec.top_holdings')}</div>
         ${topByValue.map(p=>{
           const t=p.ticker.replace(/_US_EQ|_UK_EQ|_DE_EQ/g,'');
           return `<div style="padding:10px 0;border-bottom:1px solid var(--border)">
@@ -2107,7 +2136,7 @@ function renderInvestments(){
         }).join('')}
       </div>
       <div class="section">
-        <div class="section-title">Currency & Cash</div>
+        <div class="section-title">${tr('sec.cur_cash')}</div>
         <div style="font-size:13px;line-height:1.8;color:var(--text2)">
           <div style="display:flex;justify-content:space-between"><span style="color:var(--text4)">Available cash</span><strong>\u20AC${fmt(cash.free||0)}</strong></div>
           <div style="display:flex;justify-content:space-between"><span style="color:var(--text4)">Invested cash</span><strong>\u20AC${fmt(cash.invested||0)}</strong></div>
@@ -3326,6 +3355,230 @@ async function sendChat(){
     input.focus();
   }
 }
+
+// ============================================================
+// i18n — English / Slovenian
+// Translates UI surface only (labels, buttons, section titles, KPIs,
+// filter pane, Quick Add). Numbers and dynamic data are untouched.
+// Strategy: every translatable string carries a `data-t="key"` attribute
+// in the static HTML, OR is rendered via t() inside JS templates.
+// Switching language updates [data-t] elements in place, then re-renders.
+// ============================================================
+const T_KEYS = {
+  en: {
+    // Tabs
+    'tab.overview':'Overview','tab.networth':'Net Worth','tab.spending':'Spending','tab.income':'Income','tab.trends':'Trends','tab.recurring':'Recurring','tab.transactions':'Transactions','tab.compare':'Compare','tab.projection':'Projection','tab.plan':'Plan','tab.investments':'Investments','tab.fuel':'Gas Prices','tab.rules':'Rules',
+    // Header buttons
+    'btn.menu':'Menu','btn.add':'Add','btn.export_csv':'Export CSV','btn.month_pdf':'Month PDF','btn.filters':'Filters','btn.light':'Light','btn.dark':'Dark',
+    // Year filter
+    'year.all':'All Years',
+    // KPIs
+    'kpi.income':'Total Income','kpi.expenses':'Total Expenses','kpi.net':'Net Balance','kpi.invested':'Invested','kpi.savings_rate':'Savings Rate','kpi.income_saved':'Income saved','kpi.surplus':'Surplus','kpi.deficit':'Deficit','kpi.filtered_txns':'Filtered Txns','kpi.of_total':'of {n} total','kpi.avg_per_mo':'Avg €{v}/mo (L12M)',
+    // Filter panel
+    'fp.title':'Filters','fp.date_range':'Date Range','fp.type':'Type','fp.bank':'Bank / Account','fp.category':'Category','fp.amount':'Amount Range (€)','fp.search':'Search Text','fp.reconciliation':'Reconciliation','fp.statement':'Bank Statement','fp.source_name':'Source Name','fp.all':'All','fp.all_cats':'All Categories','fp.all_stmts':'All Statements','fp.reconciled':'Reconciled','fp.unreconciled':'Unreconciled','fp.inflow':'Inflow','fp.outflow':'Outflow','fp.investment':'Investment','fp.min':'Min','fp.max':'Max','fp.search_ph':'Source, category, detail...','fp.source_ph':'e.g. Mercator, Spotify, Netflix...','fp.reset':'Reset','fp.apply':'Apply Filters',
+    // Active filter chips
+    'af.year':'Year','af.type':'Type','af.bank':'Bank','af.from':'From','af.to':'To','af.min':'Min','af.max':'Max','af.stmt':'Stmt','af.src':'Source','af.reconciled':'Reconciled','af.unreconciled':'Unreconciled',
+    // Quick Add modal
+    'qa.title':'Quick add transaction','qa.date':'Date','qa.amount':'Amount (€)','qa.type':'Type','qa.source':'Source / Merchant','qa.bank':'Account / Bank','qa.category':'Category','qa.detail':'Detail (optional)','qa.reset':'Reset','qa.save':'Save transaction','qa.saving':'Saving…','qa.saved':'✓ Saved','qa.error':'Save failed: {e}','qa.required':'Please fill in date, amount, type and source.','qa.bank_cash':'Cash',
+    // Section titles
+    'sec.key_insights':'Key Insights','sec.monthly_ie':'Monthly Income vs Expenses','sec.yearly_ie':'Yearly Income vs Expenses','sec.top_cats':'Top Expense Categories','sec.income_sources':'Income Sources','sec.expense_ratio':'Expense Ratio Breakdown','sec.monthly_exp':'Monthly Expenses','sec.spending_breakdown':'Spending Breakdown','sec.spending_breakdown_sub':'top {n} categories','sec.cat_trends':'Category Trends','sec.top_merchants':'Top Merchants','sec.dow':'Spending by Day of Week','sec.heatmap':'Daily Spending Heatmap','sec.monthly_inc':'Monthly Income','sec.income_breakdown':'Income Breakdown','sec.monthly_net':'Monthly Net Balance','sec.cum_net':'Cumulative Net Balance','sec.ie_monthly':'Income vs Expenses — Monthly','sec.txn_search':'Transaction Search','sec.mom_compare':'Month-over-Month Comparison','sec.cat_breakdown':'Category Breakdown','sec.near_term':'Near-Term Forecast (data-driven)','sec.cash_forecast':'Cash Flow Forecast','sec.cashflow_breakdown':'Cash Flow Breakdown (Recurring vs Variable)','sec.active_subs':'Active Subscriptions','sec.dormant_subs':'Dormant / inactive','sec.rec_income':'Recurring Income','sec.rec_breakdown':'Recurring Expense Breakdown','sec.bank_balances':'Bank balances','sec.inv_accounts':'Investment accounts','sec.nw_over_time':'Net worth over time','sec.nw_setup':'Set up your account baselines','sec.nw_trend':'Trend','sec.fuel_title':'Regulated Fuel Prices · Slovenia · €/liter','sec.fuel_history':'Weekly history · last 52 weeks','sec.no_positions':'No positions','sec.snapshot':'Snapshot','sec.portfolio_alloc':'Portfolio Allocation','sec.gain_loss':'Gain / Loss by Position (top 15)','sec.top_holdings':'Top Holdings','sec.cur_cash':'Currency & Cash','sec.all_positions':'All Positions','sec.rules_title':'Auto-categorization Rules',
+    // Transactions
+    'tx.date':'Date','tx.source':'Source','tx.amount':'Amount','tx.type':'Type','tx.category':'Category','tx.detail':'Detail','tx.prev':'← Prev','tx.next':'Next →','tx.search_ph':'Quick search within filtered results...','tx.txns_label':'transactions','tx.page':'Page','tx.unrec_on_page':'{n} unreconciled on this page','tx.no_outflows':'No outflows.','tx.no_data':'No data.','tx.inflow':'Inflow','tx.outflow':'Outflow','tx.investment':'Investment',
+    // Compare
+    'cmp.select_a':'Select Month A','cmp.select_b':'Select Month B','cmp.income':'Income','cmp.expenses':'Expenses','cmp.net':'Net','cmp.txns':'Txns',
+    // Projection
+    'prj.monthly_in':'Monthly Income (€)','prj.monthly_out':'Monthly Expenses (€)','prj.cur_bal':'Current Balance (€)','prj.months':'Months',
+    // Subtitle
+    'sub.live':'transactions (live)','sub.unrec':'unreconciled'
+  },
+  sl: {
+    // Tabs
+    'tab.overview':'Pregled','tab.networth':'Premoženje','tab.spending':'Stroški','tab.income':'Prihodki','tab.trends':'Trendi','tab.recurring':'Ponavljajoči','tab.transactions':'Transakcije','tab.compare':'Primerjava','tab.projection':'Napoved','tab.plan':'Načrt','tab.investments':'Naložbe','tab.fuel':'Cene goriv','tab.rules':'Pravila',
+    'btn.menu':'Meni','btn.add':'Dodaj','btn.export_csv':'Izvozi CSV','btn.month_pdf':'Mesečni PDF','btn.filters':'Filtri','btn.light':'Svetla','btn.dark':'Temna',
+    'year.all':'Vsa leta',
+    'kpi.income':'Skupni prihodki','kpi.expenses':'Skupni stroški','kpi.net':'Neto stanje','kpi.invested':'Naloženo','kpi.savings_rate':'Stopnja varčevanja','kpi.income_saved':'Prihranek prihodkov','kpi.surplus':'Presežek','kpi.deficit':'Primanjkljaj','kpi.filtered_txns':'Filtrirane','kpi.of_total':'od {n} skupaj','kpi.avg_per_mo':'Povp. €{v}/mes (Z12M)',
+    'fp.title':'Filtri','fp.date_range':'Časovno obdobje','fp.type':'Vrsta','fp.bank':'Banka / Račun','fp.category':'Kategorija','fp.amount':'Znesek (€)','fp.search':'Iskanje','fp.reconciliation':'Uskladitev','fp.statement':'Bančni izpisek','fp.source_name':'Ime vira','fp.all':'Vse','fp.all_cats':'Vse kategorije','fp.all_stmts':'Vsi izpiski','fp.reconciled':'Usklajeno','fp.unreconciled':'Neusklajeno','fp.inflow':'Priliv','fp.outflow':'Odliv','fp.investment':'Naložba','fp.min':'Min','fp.max':'Maks','fp.search_ph':'Vir, kategorija, opis...','fp.source_ph':'npr. Mercator, Spotify, Netflix...','fp.reset':'Ponastavi','fp.apply':'Uporabi filtre',
+    'af.year':'Leto','af.type':'Vrsta','af.bank':'Banka','af.from':'Od','af.to':'Do','af.min':'Min','af.max':'Maks','af.stmt':'Izp.','af.src':'Vir','af.reconciled':'Usklajeno','af.unreconciled':'Neusklajeno',
+    'qa.title':'Hitri vnos transakcije','qa.date':'Datum','qa.amount':'Znesek (€)','qa.type':'Vrsta','qa.source':'Vir / Trgovec','qa.bank':'Račun / Banka','qa.category':'Kategorija','qa.detail':'Opis (neobvezno)','qa.reset':'Ponastavi','qa.save':'Shrani transakcijo','qa.saving':'Shranjujem…','qa.saved':'✓ Shranjeno','qa.error':'Napaka: {e}','qa.required':'Izpolnite datum, znesek, vrsto in vir.','qa.bank_cash':'Gotovina',
+    'sec.key_insights':'Ključni vpogledi','sec.monthly_ie':'Mesečni prihodki vs odhodki','sec.yearly_ie':'Letni prihodki vs odhodki','sec.top_cats':'Glavne kategorije odhodkov','sec.income_sources':'Viri prihodkov','sec.expense_ratio':'Razčlenitev odhodkov','sec.monthly_exp':'Mesečni odhodki','sec.spending_breakdown':'Razčlenitev odhodkov','sec.spending_breakdown_sub':'top {n} kategorij','sec.cat_trends':'Trendi po kategorijah','sec.top_merchants':'Glavni trgovci','sec.dow':'Odhodki po dnevih v tednu','sec.heatmap':'Dnevna toplotna karta odhodkov','sec.monthly_inc':'Mesečni prihodki','sec.income_breakdown':'Razčlenitev prihodkov','sec.monthly_net':'Mesečno neto stanje','sec.cum_net':'Kumulativno neto stanje','sec.ie_monthly':'Prihodki vs odhodki — Mesečno','sec.txn_search':'Iskanje transakcij','sec.mom_compare':'Primerjava med mesecema','sec.cat_breakdown':'Razčlenitev po kategorijah','sec.near_term':'Kratkoročna napoved (na podlagi podatkov)','sec.cash_forecast':'Napoved denarnega toka','sec.cashflow_breakdown':'Razčlenitev denarnega toka (ponavljajoči vs spremenljivi)','sec.active_subs':'Aktivne naročnine','sec.dormant_subs':'Mirujoče / neaktivne','sec.rec_income':'Ponavljajoči prihodki','sec.rec_breakdown':'Razčlenitev ponavljajočih odhodkov','sec.bank_balances':'Bančna stanja','sec.inv_accounts':'Naložbeni računi','sec.nw_over_time':'Premoženje skozi čas','sec.nw_setup':'Nastavite začetna stanja računov','sec.nw_trend':'Trend','sec.fuel_title':'Regulirane cene goriv · Slovenija · €/liter','sec.fuel_history':'Tedenska zgodovina · zadnjih 52 tednov','sec.no_positions':'Ni pozicij','sec.snapshot':'Posnetek','sec.portfolio_alloc':'Razporeditev portfelja','sec.gain_loss':'Dobiček / izguba po poziciji (top 15)','sec.top_holdings':'Glavne pozicije','sec.cur_cash':'Valuta in gotovina','sec.all_positions':'Vse pozicije','sec.rules_title':'Pravila za samodejno razvrščanje',
+    'tx.date':'Datum','tx.source':'Vir','tx.amount':'Znesek','tx.type':'Vrsta','tx.category':'Kategorija','tx.detail':'Opis','tx.prev':'← Prejšnja','tx.next':'Naslednja →','tx.search_ph':'Hitro iskanje znotraj filtriranih rezultatov...','tx.txns_label':'transakcij','tx.page':'Stran','tx.unrec_on_page':'{n} neusklajenih na tej strani','tx.no_outflows':'Ni odlivov.','tx.no_data':'Ni podatkov.','tx.inflow':'Priliv','tx.outflow':'Odliv','tx.investment':'Naložba',
+    'cmp.select_a':'Izberite mesec A','cmp.select_b':'Izberite mesec B','cmp.income':'Prihodki','cmp.expenses':'Odhodki','cmp.net':'Neto','cmp.txns':'Trans.',
+    'prj.monthly_in':'Mesečni prihodki (€)','prj.monthly_out':'Mesečni odhodki (€)','prj.cur_bal':'Trenutno stanje (€)','prj.months':'Meseci',
+    'sub.live':'transakcij (v živo)','sub.unrec':'neusklajenih'
+  }
+};
+let CURRENT_LANG = localStorage.getItem('dash-lang') || 'en';
+if(!T_KEYS[CURRENT_LANG]) CURRENT_LANG = 'en';
+// `tr` (not `t`) to avoid shadowing — many existing render functions use
+// `t` as a local variable name for totals/transactions.
+function tr(key, vars){
+  let s = (T_KEYS[CURRENT_LANG] && T_KEYS[CURRENT_LANG][key]) || (T_KEYS.en && T_KEYS.en[key]) || key;
+  if(vars){ for(const k in vars) s = s.replace('{'+k+'}', vars[k]); }
+  return s;
+}
+function setLang(lang){
+  if(!T_KEYS[lang]) return;
+  CURRENT_LANG = lang;
+  try { localStorage.setItem('dash-lang', lang); } catch {}
+  applyStaticTranslations();
+  // Re-render TAB_LABELS-driven UI (tab bar + nav pane) so labels switch.
+  rebuildTabsAndNav();
+  // Toggle flag/short-code on the button itself.
+  const langTxt = document.getElementById('langText');
+  const langFlag = document.getElementById('langFlag');
+  if(langTxt) langTxt.textContent = CURRENT_LANG === 'en' ? 'SL' : 'EN';
+  if(langFlag) langFlag.textContent = CURRENT_LANG === 'en' ? '🇸🇮' : '🇬🇧';
+  // Re-render current tab content so JS-built section titles also switch.
+  try { if(typeof render === 'function') render(); } catch {}
+}
+// Walks every element with `data-t="key"` (and `data-t-attr="placeholder=key"`)
+// and replaces its content / attribute with the current-language string.
+function applyStaticTranslations(){
+  document.querySelectorAll('[data-t]').forEach(el=>{
+    const key = el.getAttribute('data-t');
+    if(!key) return;
+    el.textContent = tr(key);
+  });
+  document.querySelectorAll('[data-t-ph]').forEach(el=>{
+    const key = el.getAttribute('data-t-ph');
+    if(!key) return;
+    el.setAttribute('placeholder', tr(key));
+  });
+  document.querySelectorAll('[data-t-title]').forEach(el=>{
+    const key = el.getAttribute('data-t-title');
+    if(!key) return;
+    el.setAttribute('title', tr(key));
+  });
+  // Map tab labels to live i18n.
+  if(typeof TAB_LABELS === 'object'){
+    for(const k in TAB_LABELS){
+      const tk = 'tab.'+k;
+      const v = tr(tk);
+      if(v !== tk) TAB_LABELS[k] = v;
+    }
+  }
+}
+function rebuildTabsAndNav(){
+  const bar = document.getElementById('tabsBar');
+  if(bar){
+    bar.innerHTML = TABS.map(tab=>`<button class="tab-btn${tab===activeTab?' active':''}" data-tab="${tab}">${TAB_LABELS[tab]}</button>`).join('');
+    document.querySelectorAll('.tab-btn').forEach(b=>b.addEventListener('click',()=>{
+      document.querySelectorAll('.tab-btn').forEach(x=>x.classList.remove('active'));
+      b.classList.add('active');
+      activeTab=b.dataset.tab;
+      txnPage=0;
+      render();
+      serializeStateToHash();
+      try{b.scrollIntoView({behavior:'smooth',block:'nearest',inline:'center'});}catch(_){}
+    }));
+  }
+}
+
+// ============================================================
+// QUICK ADD — manual transaction entry, writes to Supabase
+// ============================================================
+function openQuickAdd(){
+  // Pre-fill date with today, populate Bank dropdown from current data
+  const today = new Date().toISOString().slice(0,10);
+  document.getElementById('qaDate').value = today;
+  document.getElementById('qaAmount').value = '';
+  document.getElementById('qaSource').value = '';
+  document.getElementById('qaCategory').value = '';
+  document.getElementById('qaDetail').value = '';
+  document.getElementById('qaStatus').textContent = '';
+  // Default to Outflow
+  setChipState('qaTypeChips','Out');
+  // Build bank options from existing transactions + a "Cash" sentinel
+  const banks = [...new Set(TXNS.map(x=>x.b).filter(Boolean))].sort();
+  const bankSel = document.getElementById('qaBank');
+  bankSel.innerHTML = '<option value="Cash">'+tr('qa.bank_cash')+'</option>' +
+    banks.map(b=>`<option value="${escapeHtml(b)}">${escapeHtml(b)}</option>`).join('');
+  // Build category datalist from existing data
+  const cats = [...new Set(TXNS.map(x=>x.c).filter(Boolean))].sort();
+  document.getElementById('qaCategoryList').innerHTML = cats.map(c=>`<option value="${escapeHtml(c)}">`).join('');
+  document.getElementById('quickAddPanel').classList.add('open');
+  document.getElementById('quickAddOverlay').classList.add('open');
+  setTimeout(()=>document.getElementById('qaAmount').focus(), 150);
+}
+function closeQuickAdd(){
+  document.getElementById('quickAddPanel').classList.remove('open');
+  document.getElementById('quickAddOverlay').classList.remove('open');
+}
+function resetQuickAdd(){
+  document.getElementById('qaDate').value = new Date().toISOString().slice(0,10);
+  document.getElementById('qaAmount').value = '';
+  document.getElementById('qaSource').value = '';
+  document.getElementById('qaCategory').value = '';
+  document.getElementById('qaDetail').value = '';
+  setChipState('qaTypeChips','Out');
+  document.getElementById('qaStatus').textContent = '';
+}
+async function saveQuickAdd(){
+  const date = document.getElementById('qaDate').value;
+  const amount = parseFloat(document.getElementById('qaAmount').value);
+  const typeShort = getChipVal('qaTypeChips') || 'Out';
+  const source = document.getElementById('qaSource').value.trim();
+  const bank = document.getElementById('qaBank').value || 'Cash';
+  const category = document.getElementById('qaCategory').value.trim() || 'Uncategorized';
+  const detail = document.getElementById('qaDetail').value.trim();
+  const status = document.getElementById('qaStatus');
+  if(!date || !amount || !typeShort || !source){
+    status.style.color = '#ef4444';
+    status.textContent = tr('qa.required');
+    return;
+  }
+  // Map internal type ('In'/'Out'/'Inv') → Supabase type ('Inflow'/'Outflow'/'Investment')
+  const typeFull = typeShort === 'In' ? 'Inflow' : (typeShort === 'Inv' ? 'Investment' : 'Outflow');
+  status.style.color = 'var(--text4)';
+  status.textContent = tr('qa.saving');
+  try {
+    const { data, error } = await _supabase.from('transactions').insert([{
+      date: date,
+      value: Math.abs(amount),
+      source: source,
+      bank: bank,
+      type: typeFull,
+      category: category,
+      final_category: category,
+      cost_revenue_type: detail || null,
+      found_in_statements: null
+    }]).select();
+    if(error) throw error;
+    status.style.color = '#10b981';
+    status.textContent = tr('qa.saved');
+    // Insert into local TXNS array directly so we don't need a full reload
+    const newRow = {
+      d: date,
+      v: Math.abs(amount),
+      s: source,
+      b: bank,
+      t: typeShort,
+      c: category,
+      r: detail || '',
+      f: ''
+    };
+    TXNS.unshift(newRow);
+    TXNS.sort((a,b)=>b.d.localeCompare(a.d));
+    ORIGINAL_TXNS.unshift({...newRow});
+    // Recompute everything that depends on TXNS
+    if(typeof applyCategoryRules === 'function') applyCategoryRules(TXNS);
+    if(typeof recomputeAggregates === 'function') recomputeAggregates();
+    setTimeout(()=>{ closeQuickAdd(); render(); }, 600);
+  } catch(err){
+    status.style.color = '#ef4444';
+    status.textContent = tr('qa.error', {e: err.message || String(err)});
+  }
+}
+
+// Apply translations once on first paint (after all elements exist).
+window.addEventListener('DOMContentLoaded', ()=>{
+  applyStaticTranslations();
+  const langTxt = document.getElementById('langText');
+  const langFlag = document.getElementById('langFlag');
+  if(langTxt) langTxt.textContent = CURRENT_LANG === 'en' ? 'SL' : 'EN';
+  if(langFlag) langFlag.textContent = CURRENT_LANG === 'en' ? '🇸🇮' : '🇬🇧';
+  if(CURRENT_LANG !== 'en') rebuildTabsAndNav();
+});
 </script>
 </body>
 </html>
