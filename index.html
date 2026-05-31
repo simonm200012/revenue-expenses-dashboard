@@ -1007,6 +1007,7 @@ cats.slice(0,15).forEach((cat,i)=>{
 sparkHTML+='</div>';
 el.innerHTML=`<div class="grid grid-2">
 <div class="section span-2"><div class="section-title">Monthly Expenses</div>${mc("c3",280)}</div>
+<div class="section span-2"><div class="section-title">Spending Breakdown <span style="font-size:10px;color:var(--text5);text-transform:none;letter-spacing:0;font-weight:400">(top ${Math.min(20,cats.length)} categories)</span></div>${mc("c3b",Math.min(20,cats.length)*22+60)}</div>
 <div class="section"><div class="section-title">Category Trends <span style="font-size:10px;color:var(--text5);text-transform:none;letter-spacing:0;font-weight:400">(L${sparkMonths}M)</span></div>${sparkHTML}</div>
 <div class="section"><div class="section-title">Top Merchants</div>${sources.length?bl(sources,"Source","Total",sources[0].Total,'openMerchant'):'<p style="color:var(--text4)">No data.</p>'}</div>
 <div class="section span-2"><div class="section-title">Spending by Day of Week</div>${mc("c4",320)}</div>
@@ -1015,6 +1016,9 @@ setTimeout(()=>renderHeatmap('heatmapContainer'),50);
 // Draw sparklines after DOM is ready
 setTimeout(()=>{cats.slice(0,15).forEach((cat,i)=>{const mData=getCategoryMonthlyData(cat.Category,sparkMonths);drawSparkline("spark"+i,mData,P[i%P.length])})},50);
 charts.c3=new Chart(document.getElementById("c3"),{type:"line",data:{labels:data.map(d=>d.YM),datasets:[{label:"Outflow",data:data.map(d=>d.Outflow),borderColor:"#ef4444",backgroundColor:"rgba(239,68,68,0.1)",fill:true,borderWidth:2,pointRadius:0,tension:.3}]},options:{responsive:true,maintainAspectRatio:false,scales:{x:{ticks:{maxTicksLimit:12,maxRotation:45}},y:{ticks:{callback:v=>fmt(v)}}},plugins:{tooltip:ttcb(0)}}});
+// Spending Breakdown — horizontal bar chart of top categories (mirrors Income Breakdown style).
+const topCats=cats.slice(0,20);
+charts.c3b=new Chart(document.getElementById("c3b"),{type:"bar",data:{labels:topCats.map(c=>c.Category),datasets:[{label:"Total",data:topCats.map(c=>c.Total),backgroundColor:P,borderRadius:6}]},options:{indexAxis:"y",responsive:true,maintainAspectRatio:false,scales:{x:{ticks:{callback:v=>fmt(v)}},y:{ticks:{autoSkip:false,font:{size:11}}}},plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>fmtE(ctx.parsed.x)}}}}});
 const ftxns=getFilteredTxns().filter(t=>t.t==="Out");const dowMap={};["Mon","Tue","Wed","Thu","Fri","Sat","Sun"].forEach(d=>dowMap[d]={total:0,count:0});ftxns.forEach(t=>{const d=new Date(t.d);const day=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][d.getDay()];if(dowMap[day]){dowMap[day].total+=t.v;dowMap[day].count++}});const dowData=["Mon","Tue","Wed","Thu","Fri","Sat","Sun"].map(d=>({Day:d,Total:Math.round(dowMap[d].total),Count:dowMap[d].count}));
 charts.c4=new Chart(document.getElementById("c4"),{type:"bar",data:{labels:dowData.map(d=>d.Day),datasets:[{label:"Total Spend",data:dowData.map(d=>d.Total),backgroundColor:"#8b5cf6dd",borderRadius:6}]},options:{responsive:true,maintainAspectRatio:false,scales:{y:{ticks:{callback:v=>fmt(v)}}},plugins:{tooltip:{callbacks:{label:ctx=>fmtE(ctx.parsed.y)+" ("+dowData[ctx.dataIndex].Count+" txns)"}}}}});}
 
