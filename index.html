@@ -742,6 +742,15 @@ function recomputeAggregates() {
 const P=["#10b981","#3b82f6","#f59e0b","#8b5cf6","#ec4899","#06b6d4","#f97316","#84cc16","#14b8a6","#6366f1","#f43f5e","#0ea5e9","#d946ef","#7c3aed","#ef4444"];
 const fmt=v=>v>=1000?(v/1000).toFixed(1)+"k":Math.round(v).toLocaleString();
 const fmtE=v=>"\u20AC"+Math.round(v).toLocaleString();
+// Compact \u20AC axis formatter: 30,016 \u2192 \u20AC30K, 1,200,000 \u2192 \u20AC1.2M. Uses uppercase
+// K/M for visual hierarchy and prepends \u20AC so units are unambiguous at a glance.
+const fmtAxis=v=>{
+  if(v==null||isNaN(v))return'';
+  const abs=Math.abs(v),sign=v<0?'\u2212':'';
+  if(abs>=1e6)return sign+'\u20AC'+(abs/1e6).toFixed(abs>=1e7?0:1).replace(/\.0$/,'')+'M';
+  if(abs>=1e3)return sign+'\u20AC'+(abs/1e3).toFixed(abs>=1e4?0:1).replace(/\.0$/,'')+'K';
+  return sign+'\u20AC'+Math.round(abs);
+};
 
 let activeTab="overview",yearFilter="All",charts={},txnPage=0;
 const TABS=["overview","networth","spending","income","trends","recurring","transactions","compare","projection","plan","investments","fuel","rules"];
@@ -897,7 +906,135 @@ function exportCSV(){const txns=getFilteredTxns();let csv="\uFEFFDate,Source,Amo
 let theme=localStorage.getItem("fin-theme")||"dark";
 function applyTheme(){document.documentElement.setAttribute("data-theme",theme);document.getElementById("themeIcon").textContent=theme==="dark"?"\u2600\uFE0F":"\uD83C\uDF19";document.getElementById("themeText").textContent=theme==="dark"?"Light":"Dark";updateChartColors()}
 function toggleTheme(){theme=theme==="dark"?"light":"dark";localStorage.setItem("fin-theme",theme);applyTheme();render()}
-function updateChartColors(){Chart.defaults.color="#64748b";Chart.defaults.borderColor=theme==="dark"?"rgba(255,255,255,0.04)":"rgba(0,0,0,0.06)";Chart.defaults.plugins.tooltip.backgroundColor=theme==="dark"?"#1a1a2e":"#fff";Chart.defaults.plugins.tooltip.titleColor=theme==="dark"?"#e2e8f0":"#1e293b";Chart.defaults.plugins.tooltip.bodyColor=theme==="dark"?"#cbd5e1":"#334155";Chart.defaults.plugins.tooltip.borderColor=theme==="dark"?"rgba(255,255,255,0.1)":"rgba(0,0,0,0.1)";Chart.defaults.plugins.tooltip.borderWidth=1;Chart.defaults.plugins.tooltip.cornerRadius=8;Chart.defaults.plugins.tooltip.padding=10}
+// Polished Chart.js theme — applied globally so every chart picks it up
+// without per-chart options. Covers font, gridlines, ticks, tooltip, legend,
+// and animation timing for a coherent look across all 13 tabs.
+function updateChartColors(){
+  const dark=theme==='dark';
+  const text=dark?'#94a3b8':'#475569';
+  const textMuted=dark?'#64748b':'#94a3b8';
+  const grid=dark?'rgba(148,163,184,0.06)':'rgba(15,23,42,0.06)';
+  const tipBg=dark?'rgba(15,23,42,0.96)':'rgba(255,255,255,0.98)';
+  const tipText=dark?'#e2e8f0':'#0f172a';
+  const tipMuted=dark?'#94a3b8':'#475569';
+  const tipBorder=dark?'rgba(148,163,184,0.12)':'rgba(15,23,42,0.08)';
+  // Typography — match the rest of the UI (DM Sans) and use JetBrains Mono in tooltips for numeric alignment.
+  Chart.defaults.font.family="'DM Sans','Segoe UI',sans-serif";
+  Chart.defaults.font.size=11;
+  Chart.defaults.font.weight='500';
+  Chart.defaults.color=text;
+  Chart.defaults.borderColor=grid;
+  // Gridlines & axis lines — quiet horizontal lines only; vertical lines removed.
+  if(Chart.defaults.scale&&Chart.defaults.scale.grid){
+    Chart.defaults.scale.grid.color=grid;
+    Chart.defaults.scale.grid.drawTicks=false;
+    Chart.defaults.scale.grid.tickLength=0;
+    Chart.defaults.scale.grid.lineWidth=1;
+  }
+  if(Chart.defaults.scales){
+    if(Chart.defaults.scales.linear&&Chart.defaults.scales.linear.ticks){
+      Chart.defaults.scales.linear.ticks.padding=10;
+      Chart.defaults.scales.linear.ticks.color=textMuted;
+    }
+    if(Chart.defaults.scales.category){
+      if(Chart.defaults.scales.category.grid)Chart.defaults.scales.category.grid.display=false;
+      if(Chart.defaults.scales.category.ticks){
+        Chart.defaults.scales.category.ticks.padding=8;
+        Chart.defaults.scales.category.ticks.color=textMuted;
+      }
+    }
+  }
+  // Tooltip — glassy pill with monospace numerics and tighter color dot.
+  const tip=Chart.defaults.plugins.tooltip;
+  tip.backgroundColor=tipBg;
+  tip.titleColor=tipText;
+  tip.bodyColor=tipMuted;
+  tip.titleFont={family:"'DM Sans',sans-serif",size:12,weight:'600'};
+  tip.bodyFont={family:"'JetBrains Mono',monospace",size:12,weight:'500'};
+  tip.borderColor=tipBorder;
+  tip.borderWidth=1;
+  tip.cornerRadius=10;
+  tip.padding={top:10,right:14,bottom:10,left:14};
+  tip.boxPadding=6;
+  tip.boxWidth=8;
+  tip.boxHeight=8;
+  tip.usePointStyle=true;
+  tip.displayColors=true;
+  tip.caretSize=0;
+  // Legend — point-style dots instead of rectangles, more generous spacing.
+  const lg=Chart.defaults.plugins.legend;
+  lg.labels.usePointStyle=true;
+  lg.labels.pointStyle='circle';
+  lg.labels.boxWidth=8;
+  lg.labels.boxHeight=8;
+  lg.labels.padding=14;
+  lg.labels.font={family:"'DM Sans',sans-serif",size:11,weight:'600'};
+  lg.labels.color=text;
+  // Element defaults — softer line tension, smaller hit targets.
+  if(Chart.defaults.elements){
+    if(Chart.defaults.elements.line){
+      Chart.defaults.elements.line.tension=0.35;
+      Chart.defaults.elements.line.borderWidth=2;
+      Chart.defaults.elements.line.borderCapStyle='round';
+    }
+    if(Chart.defaults.elements.point){
+      Chart.defaults.elements.point.hoverRadius=5;
+      Chart.defaults.elements.point.hoverBorderWidth=2;
+    }
+    if(Chart.defaults.elements.bar){
+      Chart.defaults.elements.bar.borderRadius=4;
+    }
+    if(Chart.defaults.elements.arc){
+      Chart.defaults.elements.arc.borderWidth=0;
+      Chart.defaults.elements.arc.spacing=2;
+    }
+  }
+  // Refresh all live charts so the new theme applies without a tab switch.
+  if(typeof charts==='object'){
+    Object.values(charts).forEach(c=>{ try{ c&&c.update&&c.update('none'); }catch(_){} });
+  }
+}
+
+// Chart.js plugin: auto-apply a vertical gradient fill to any line dataset
+// with `fill:true`. The gradient runs from 35% opacity at the top of the
+// chart area to 0% at the bottom, using the dataset's borderColor as the hue.
+// Replaces every hard-coded "rgba(R,G,B,0.1)" fill with depth and motion.
+const _gradFillPlugin={
+  id:'gradientFill',
+  beforeDatasetsDraw(chart){
+    const area=chart.chartArea; if(!area) return;
+    const ctx=chart.ctx;
+    chart.data.datasets.forEach((d)=>{
+      if(d.fill!==true||!d.borderColor) return;
+      // Parse hex / rgb borderColor to {r,g,b}.
+      const rgb=(()=>{
+        const c=d.borderColor;
+        if(typeof c!=='string') return null;
+        if(c.startsWith('#')){
+          let h=c.slice(1);
+          if(h.length===3) h=h.split('').map(x=>x+x).join('');
+          if(h.length<6) return null;
+          return {r:parseInt(h.slice(0,2),16),g:parseInt(h.slice(2,4),16),b:parseInt(h.slice(4,6),16)};
+        }
+        if(c.startsWith('rgb')){
+          const m=c.match(/\d+/g);
+          if(m&&m.length>=3) return {r:+m[0],g:+m[1],b:+m[2]};
+        }
+        return null;
+      })();
+      if(!rgb) return;
+      const key=`${rgb.r}-${rgb.g}-${rgb.b}-${area.top}-${area.bottom}`;
+      if(d._gradKey===key) return;
+      const g=ctx.createLinearGradient(0,area.top,0,area.bottom);
+      g.addColorStop(0,`rgba(${rgb.r},${rgb.g},${rgb.b},0.32)`);
+      g.addColorStop(0.55,`rgba(${rgb.r},${rgb.g},${rgb.b},0.10)`);
+      g.addColorStop(1,`rgba(${rgb.r},${rgb.g},${rgb.b},0)`);
+      d.backgroundColor=g;
+      d._gradKey=key;
+    });
+  }
+};
+if(typeof Chart!=='undefined'&&Chart.register) Chart.register(_gradFillPlugin);
 
 function dc(){Object.values(charts).forEach(c=>c.destroy());charts={}}
 function mc(id,h){return`<div style="position:relative;height:${h}px"><canvas id="${id}"></canvas></div>`}
@@ -1027,7 +1164,7 @@ el.innerHTML=`<div class="grid grid-2">
 <div class="section"><div class="section-title">${tr('sec.income_sources')}</div>${mc("c2",340)}</div>
 <div class="section span-2"><div class="section-title">${tr('sec.expense_ratio')}</div><div id="treemapContainer"></div></div></div>`;
 setTimeout(()=>renderTreemap("treemapContainer",cats,"Category","Total"),50);
-charts.c1=new Chart(document.getElementById("c1"),{type:"bar",data:{labels:data.map(d=>isMonthly?d.YM:d.Year),datasets:[{label:"Inflow",data:data.map(d=>d.Inflow),backgroundColor:"#10b981dd",borderRadius:4},{label:"Outflow",data:data.map(d=>d.Outflow),backgroundColor:"#ef4444dd",borderRadius:4},{label:"Net",data:data.map(d=>d.Net),type:"line",borderColor:"#06b6d4",borderWidth:2.5,pointBackgroundColor:theme==="dark"?"#0d0d1a":"#f8fafc",pointBorderColor:"#06b6d4",pointBorderWidth:2,pointRadius:isMonthly?0:4,fill:false}]},options:{responsive:true,maintainAspectRatio:false,scales:{x:{ticks:{maxTicksLimit:12,maxRotation:45}},y:{ticks:{callback:v=>fmt(v)}}},plugins:{tooltip:ttcb(1)}}});
+charts.c1=new Chart(document.getElementById("c1"),{type:"bar",data:{labels:data.map(d=>isMonthly?d.YM:d.Year),datasets:[{label:"Inflow",data:data.map(d=>d.Inflow),backgroundColor:"#10b981dd",borderRadius:4},{label:"Outflow",data:data.map(d=>d.Outflow),backgroundColor:"#ef4444dd",borderRadius:4},{label:"Net",data:data.map(d=>d.Net),type:"line",borderColor:"#06b6d4",borderWidth:2.5,pointBackgroundColor:theme==="dark"?"#0d0d1a":"#f8fafc",pointBorderColor:"#06b6d4",pointBorderWidth:2,pointRadius:isMonthly?0:4,fill:false}]},options:{responsive:true,maintainAspectRatio:false,scales:{x:{ticks:{maxTicksLimit:12,maxRotation:45}},y:{ticks:{callback:v=>fmtAxis(v)}}},plugins:{tooltip:ttcb(1)}}});
 charts.c2=new Chart(document.getElementById("c2"),{type:"doughnut",data:{labels:inc.map(d=>d.Type),datasets:[{data:inc.map(d=>d.Total),backgroundColor:P,borderWidth:0}]},options:{responsive:true,maintainAspectRatio:false,cutout:"50%",plugins:{legend:{position:"right",labels:{boxWidth:12,padding:8,font:{size:11}}},tooltip:{callbacks:{label:ctx=>ctx.label+": "+fmtE(ctx.parsed)}}}}});}
 
 function renderSpending(){const data=gfm(),sources=getDynamicSources(),cats=getDynamicCats(),el=document.getElementById("content");
@@ -1054,23 +1191,23 @@ el.innerHTML=`<div class="grid grid-2">
 setTimeout(()=>renderHeatmap('heatmapContainer'),50);
 // Draw sparklines after DOM is ready
 setTimeout(()=>{cats.slice(0,15).forEach((cat,i)=>{const mData=getCategoryMonthlyData(cat.Category,sparkMonths);drawSparkline("spark"+i,mData,P[i%P.length])})},50);
-charts.c3=new Chart(document.getElementById("c3"),{type:"line",data:{labels:data.map(d=>d.YM),datasets:[{label:"Outflow",data:data.map(d=>d.Outflow),borderColor:"#ef4444",backgroundColor:"rgba(239,68,68,0.1)",fill:true,borderWidth:2,pointRadius:0,tension:.3}]},options:{responsive:true,maintainAspectRatio:false,scales:{x:{ticks:{maxTicksLimit:12,maxRotation:45}},y:{ticks:{callback:v=>fmt(v)}}},plugins:{tooltip:ttcb(0)}}});
+charts.c3=new Chart(document.getElementById("c3"),{type:"line",data:{labels:data.map(d=>d.YM),datasets:[{label:"Outflow",data:data.map(d=>d.Outflow),borderColor:"#ef4444",backgroundColor:"rgba(239,68,68,0.1)",fill:true,borderWidth:2,pointRadius:0,tension:.3}]},options:{responsive:true,maintainAspectRatio:false,scales:{x:{ticks:{maxTicksLimit:12,maxRotation:45}},y:{ticks:{callback:v=>fmtAxis(v)}}},plugins:{tooltip:ttcb(0)}}});
 // Spending Breakdown — horizontal bar chart of top categories (mirrors Income Breakdown style).
 const topCats=cats.slice(0,20);
-charts.c3b=new Chart(document.getElementById("c3b"),{type:"bar",data:{labels:topCats.map(c=>c.Category),datasets:[{label:"Total",data:topCats.map(c=>c.Total),backgroundColor:P,borderRadius:6}]},options:{indexAxis:"y",responsive:true,maintainAspectRatio:false,scales:{x:{ticks:{callback:v=>fmt(v)}},y:{ticks:{autoSkip:false,font:{size:11}}}},plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>fmtE(ctx.parsed.x)}}}}});
+charts.c3b=new Chart(document.getElementById("c3b"),{type:"bar",data:{labels:topCats.map(c=>c.Category),datasets:[{label:"Total",data:topCats.map(c=>c.Total),backgroundColor:P,borderRadius:6}]},options:{indexAxis:"y",responsive:true,maintainAspectRatio:false,scales:{x:{ticks:{callback:v=>fmtAxis(v)}},y:{ticks:{autoSkip:false,font:{size:11}}}},plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>fmtE(ctx.parsed.x)}}}}});
 const ftxns=getFilteredTxns().filter(t=>t.t==="Out");const dowMap={};["Mon","Tue","Wed","Thu","Fri","Sat","Sun"].forEach(d=>dowMap[d]={total:0,count:0});ftxns.forEach(t=>{const d=new Date(t.d);const day=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][d.getDay()];if(dowMap[day]){dowMap[day].total+=t.v;dowMap[day].count++}});const dowData=["Mon","Tue","Wed","Thu","Fri","Sat","Sun"].map(d=>({Day:d,Total:Math.round(dowMap[d].total),Count:dowMap[d].count}));
-charts.c4=new Chart(document.getElementById("c4"),{type:"bar",data:{labels:dowData.map(d=>d.Day),datasets:[{label:"Total Spend",data:dowData.map(d=>d.Total),backgroundColor:"#8b5cf6dd",borderRadius:6}]},options:{responsive:true,maintainAspectRatio:false,scales:{y:{ticks:{callback:v=>fmt(v)}}},plugins:{tooltip:{callbacks:{label:ctx=>fmtE(ctx.parsed.y)+" ("+dowData[ctx.dataIndex].Count+" txns)"}}}}});}
+charts.c4=new Chart(document.getElementById("c4"),{type:"bar",data:{labels:dowData.map(d=>d.Day),datasets:[{label:"Total Spend",data:dowData.map(d=>d.Total),backgroundColor:"#8b5cf6dd",borderRadius:6}]},options:{responsive:true,maintainAspectRatio:false,scales:{y:{ticks:{callback:v=>fmtAxis(v)}}},plugins:{tooltip:{callbacks:{label:ctx=>fmtE(ctx.parsed.y)+" ("+dowData[ctx.dataIndex].Count+" txns)"}}}}});}
 
 function renderIncome(){const data=gfm(),inc=getDynamicIncome(),el=document.getElementById("content");
 el.innerHTML=`<div class="grid grid-1"><div class="section"><div class="section-title">${tr('sec.monthly_inc')}</div>${mc("c5",280)}</div><div class="section"><div class="section-title">${tr('sec.income_breakdown')}</div>${mc("c6",320)}</div></div>`;
-charts.c5=new Chart(document.getElementById("c5"),{type:"line",data:{labels:data.map(d=>d.YM),datasets:[{label:"Inflow",data:data.map(d=>d.Inflow),borderColor:"#10b981",backgroundColor:"rgba(16,185,129,0.1)",fill:true,borderWidth:2,pointRadius:0,tension:.3}]},options:{responsive:true,maintainAspectRatio:false,scales:{x:{ticks:{maxTicksLimit:12,maxRotation:45}},y:{ticks:{callback:v=>fmt(v)}}},plugins:{tooltip:ttcb(0)}}});
-charts.c6=new Chart(document.getElementById("c6"),{type:"bar",data:{labels:inc.map(d=>d.Type),datasets:[{label:"Total",data:inc.map(d=>d.Total),backgroundColor:P,borderRadius:6}]},options:{indexAxis:"y",responsive:true,maintainAspectRatio:false,scales:{x:{ticks:{callback:v=>fmt(v)}}},plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>fmtE(ctx.parsed.x)}}}}});}
+charts.c5=new Chart(document.getElementById("c5"),{type:"line",data:{labels:data.map(d=>d.YM),datasets:[{label:"Inflow",data:data.map(d=>d.Inflow),borderColor:"#10b981",backgroundColor:"rgba(16,185,129,0.1)",fill:true,borderWidth:2,pointRadius:0,tension:.3}]},options:{responsive:true,maintainAspectRatio:false,scales:{x:{ticks:{maxTicksLimit:12,maxRotation:45}},y:{ticks:{callback:v=>fmtAxis(v)}}},plugins:{tooltip:ttcb(0)}}});
+charts.c6=new Chart(document.getElementById("c6"),{type:"bar",data:{labels:inc.map(d=>d.Type),datasets:[{label:"Total",data:inc.map(d=>d.Total),backgroundColor:P,borderRadius:6}]},options:{indexAxis:"y",responsive:true,maintainAspectRatio:false,scales:{x:{ticks:{callback:v=>fmtAxis(v)}}},plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>fmtE(ctx.parsed.x)}}}}});}
 
 function renderTrends(){const data=gfm();let cum=0;const cumD=data.map(d=>{cum+=d.Net;return Math.round(cum)});const el=document.getElementById("content");
 el.innerHTML=`<div class="grid grid-1"><div class="section"><div class="section-title">${tr('sec.monthly_net')}</div>${mc("c7",280)}</div><div class="section"><div class="section-title">${tr('sec.cum_net')}</div>${mc("c8",280)}</div><div class="section"><div class="section-title">Income vs Expenses \u2014 Monthly</div>${mc("c9",280)}</div></div>`;
-charts.c7=new Chart(document.getElementById("c7"),{type:"bar",data:{labels:data.map(d=>d.YM),datasets:[{label:"Net",data:data.map(d=>d.Net),backgroundColor:data.map(d=>d.Net>=0?"#10b981cc":"#ef4444cc"),borderRadius:3}]},options:{responsive:true,maintainAspectRatio:false,scales:{x:{ticks:{maxTicksLimit:12,maxRotation:45}},y:{ticks:{callback:v=>fmt(v)}}},plugins:{legend:{display:false},tooltip:ttcb(0)}}});
-charts.c8=new Chart(document.getElementById("c8"),{type:"line",data:{labels:data.map(d=>d.YM),datasets:[{label:"Cumulative",data:cumD,borderColor:"#06b6d4",backgroundColor:"rgba(6,182,212,0.1)",fill:true,borderWidth:2,pointRadius:0,tension:.3}]},options:{responsive:true,maintainAspectRatio:false,scales:{x:{ticks:{maxTicksLimit:12,maxRotation:45}},y:{ticks:{callback:v=>fmt(v)}}},plugins:{tooltip:ttcb(0)}}});
-charts.c9=new Chart(document.getElementById("c9"),{type:"line",data:{labels:data.map(d=>d.YM),datasets:[{label:"Inflow",data:data.map(d=>d.Inflow),borderColor:"#10b981",borderWidth:2,pointRadius:0,tension:.3,fill:false},{label:"Outflow",data:data.map(d=>d.Outflow),borderColor:"#ef4444",borderWidth:2,pointRadius:0,tension:.3,fill:false}]},options:{responsive:true,maintainAspectRatio:false,scales:{x:{ticks:{maxTicksLimit:12,maxRotation:45}},y:{ticks:{callback:v=>fmt(v)}}},plugins:{tooltip:ttcb(1)}}});}
+charts.c7=new Chart(document.getElementById("c7"),{type:"bar",data:{labels:data.map(d=>d.YM),datasets:[{label:"Net",data:data.map(d=>d.Net),backgroundColor:data.map(d=>d.Net>=0?"#10b981cc":"#ef4444cc"),borderRadius:3}]},options:{responsive:true,maintainAspectRatio:false,scales:{x:{ticks:{maxTicksLimit:12,maxRotation:45}},y:{ticks:{callback:v=>fmtAxis(v)}}},plugins:{legend:{display:false},tooltip:ttcb(0)}}});
+charts.c8=new Chart(document.getElementById("c8"),{type:"line",data:{labels:data.map(d=>d.YM),datasets:[{label:"Cumulative",data:cumD,borderColor:"#06b6d4",backgroundColor:"rgba(6,182,212,0.1)",fill:true,borderWidth:2,pointRadius:0,tension:.3}]},options:{responsive:true,maintainAspectRatio:false,scales:{x:{ticks:{maxTicksLimit:12,maxRotation:45}},y:{ticks:{callback:v=>fmtAxis(v)}}},plugins:{tooltip:ttcb(0)}}});
+charts.c9=new Chart(document.getElementById("c9"),{type:"line",data:{labels:data.map(d=>d.YM),datasets:[{label:"Inflow",data:data.map(d=>d.Inflow),borderColor:"#10b981",borderWidth:2,pointRadius:0,tension:.3,fill:false},{label:"Outflow",data:data.map(d=>d.Outflow),borderColor:"#ef4444",borderWidth:2,pointRadius:0,tension:.3,fill:false}]},options:{responsive:true,maintainAspectRatio:false,scales:{x:{ticks:{maxTicksLimit:12,maxRotation:45}},y:{ticks:{callback:v=>fmtAxis(v)}}},plugins:{tooltip:ttcb(1)}}});}
 
 function renderTransactions(){const el=document.getElementById("content");
 el.innerHTML=`<div class="section"><div class="section-title">${tr('sec.txn_search')}</div><div class="search-bar"><input class="search-input" id="txnSearch" placeholder="Quick search within filtered results..." oninput="txnPage=0;filterTxns()"></div><div class="table-wrap"><table class="txn-table"><thead><tr><th>Date</th><th>Source</th><th>Amount</th><th>Type</th><th>Category</th><th>Detail</th></tr></thead><tbody id="txnBody"></tbody></table></div><div class="table-footer"><span id="txnCount"></span><div><button class="page-btn" id="prevBtn" onclick="txnPage--;filterTxns()">\u2190 Prev</button> <button class="page-btn" id="nextBtn" onclick="txnPage++;filterTxns()">Next \u2192</button></div></div></div>`;filterTxns()}
@@ -1084,7 +1221,7 @@ el.innerHTML=`<div class="section"><div class="section-title">${tr('sec.mom_comp
 function updateCompare(){const a=document.getElementById("cmpA").value,b=document.getElementById("cmpB").value;if(!a||!b){document.getElementById("compareResult").innerHTML='<p style="color:var(--text4)">Select two months.</p>';return}const ma=MONTHLY.find(m=>m.YM===a),mb=MONTHLY.find(m=>m.YM===b);if(!ma||!mb)return;const txA=TXNS.filter(t=>t.d.startsWith(a)&&t.t==='Out'),txB=TXNS.filter(t=>t.d.startsWith(b)&&t.t==='Out');const catA={},catB={};txA.forEach(t=>{catA[t.c]=(catA[t.c]||0)+t.v});txB.forEach(t=>{catB[t.c]=(catB[t.c]||0)+t.v});const allC=[...new Set([...Object.keys(catA),...Object.keys(catB)])].sort((x,y)=>((catB[y]||0)-(catB[x]||0)));
 function delta(va,vb){const d=vb-va;if(Math.abs(d)<0.5)return'<span class="delta" style="opacity:.5">\u2014</span>';return`<span class="delta ${d>0?'neg':'pos'}">${d>0?'+':''}${fmtE(d)}</span>`}
 document.getElementById("compareResult").innerHTML=`<div class="compare-grid"><div class="compare-card"><h4>${a}</h4><div class="compare-stat"><span style="color:var(--text3)">Income</span><span style="color:#10b981;font-family:'JetBrains Mono',monospace">${fmtE(ma.Inflow)}</span></div><div class="compare-stat"><span style="color:var(--text3)">Expenses</span><span style="color:#ef4444;font-family:'JetBrains Mono',monospace">${fmtE(ma.Outflow)}</span></div><div class="compare-stat"><span style="color:var(--text3)">Net</span><span style="color:${ma.Net>=0?'#10b981':'#ef4444'};font-family:'JetBrains Mono',monospace">${fmtE(ma.Net)}</span></div><div class="compare-stat"><span style="color:var(--text3)">Txns</span><span>${txA.length+TXNS.filter(t=>t.d.startsWith(a)&&t.t==='In').length}</span></div></div><div class="compare-card"><h4>${b}</h4><div class="compare-stat"><span style="color:var(--text3)">Income</span><span style="color:#10b981;font-family:'JetBrains Mono',monospace">${fmtE(mb.Inflow)} ${delta(ma.Inflow,mb.Inflow)}</span></div><div class="compare-stat"><span style="color:var(--text3)">Expenses</span><span style="color:#ef4444;font-family:'JetBrains Mono',monospace">${fmtE(mb.Outflow)} ${delta(ma.Outflow,mb.Outflow)}</span></div><div class="compare-stat"><span style="color:var(--text3)">Net</span><span style="color:${mb.Net>=0?'#10b981':'#ef4444'};font-family:'JetBrains Mono',monospace">${fmtE(mb.Net)}</span></div><div class="compare-stat"><span style="color:var(--text3)">Txns</span><span>${txB.length+TXNS.filter(t=>t.d.startsWith(b)&&t.t==='In').length}</span></div></div></div><div class="section" style="margin-top:16px"><div class="section-title">${tr('sec.cat_breakdown')}</div>${mc("cmpChart",280)}</div>`;
-const topC=allC.slice(0,10);charts.cmpChart=new Chart(document.getElementById("cmpChart"),{type:"bar",data:{labels:topC,datasets:[{label:a,data:topC.map(c=>catA[c]||0),backgroundColor:"#3b82f6aa",borderRadius:4},{label:b,data:topC.map(c=>catB[c]||0),backgroundColor:"#f59e0baa",borderRadius:4}]},options:{responsive:true,maintainAspectRatio:false,scales:{y:{ticks:{callback:v=>fmt(v)}},x:{ticks:{maxRotation:45,font:{size:10}}}},plugins:{tooltip:ttcb(1)}}})}
+const topC=allC.slice(0,10);charts.cmpChart=new Chart(document.getElementById("cmpChart"),{type:"bar",data:{labels:topC,datasets:[{label:a,data:topC.map(c=>catA[c]||0),backgroundColor:"#3b82f6aa",borderRadius:4},{label:b,data:topC.map(c=>catB[c]||0),backgroundColor:"#f59e0baa",borderRadius:4}]},options:{responsive:true,maintainAspectRatio:false,scales:{y:{ticks:{callback:v=>fmtAxis(v)}},x:{ticks:{maxRotation:45,font:{size:10}}}},plugins:{tooltip:ttcb(1)}}})}
 
 function renderProjection(){const el=document.getElementById("content");const m=gfm();const last6=m.slice(-6);const avgIn=Math.round(last6.reduce((s,d)=>s+d.Inflow,0)/Math.max(last6.length,1));const avgOut=Math.round(last6.reduce((s,d)=>s+d.Outflow,0)/Math.max(last6.length,1));const cumNow=m.reduce((s,d)=>s+d.Net,0);
 // Recurring-based breakdown
@@ -1179,12 +1316,12 @@ if(recOut.length){
     {label:"Variable Expenses",data:labels.map(()=>varOut),borderColor:"#f59e0b",backgroundColor:"rgba(245,158,11,0.15)",fill:true,borderWidth:1.5,pointRadius:0},
     {label:"Recurring Income",data:labels.map(()=>recMonthlyIn),borderColor:"#10b981",backgroundColor:"rgba(16,185,129,0.15)",fill:true,borderWidth:1.5,pointRadius:0},
     {label:"Variable Income",data:labels.map(()=>varIn),borderColor:"#06b6d4",backgroundColor:"rgba(6,182,212,0.15)",fill:true,borderWidth:1.5,pointRadius:0}
-  ]},options:{responsive:true,maintainAspectRatio:false,scales:{x:{ticks:{maxTicksLimit:12}},y:{ticks:{callback:v=>fmt(v)},stacked:false}},plugins:{tooltip:ttcb(1)}}});
+  ]},options:{responsive:true,maintainAspectRatio:false,scales:{x:{ticks:{maxTicksLimit:12}},y:{ticks:{callback:v=>fmtAxis(v)},stacked:false}},plugins:{tooltip:ttcb(1)}}});
 }}
 function updateProjection(){const inc=parseFloat(document.getElementById("projIn").value)||0,exp=parseFloat(document.getElementById("projOut").value)||0,bal=parseFloat(document.getElementById("projBal").value)||0,months=parseInt(document.getElementById("projMonths").value)||12;const net=inc-exp,projected=bal+net*months,rate=inc>0?((net/inc)*100):0;
 document.getElementById("projCards").innerHTML=`<div class="proj-cards"><div class="proj-card"><div class="proj-card-label">Monthly Savings</div><div class="proj-card-value" style="color:${net>=0?'#10b981':'#ef4444'}">\u20AC${fmt(Math.abs(net))}</div></div><div class="proj-card"><div class="proj-card-label">Projected in ${months}mo</div><div class="proj-card-value" style="color:${projected>=0?'#06b6d4':'#ef4444'}">\u20AC${fmt(Math.abs(projected))}</div></div><div class="proj-card"><div class="proj-card-label">Savings Rate</div><div class="proj-card-value" style="color:${rate>=0?'#8b5cf6':'#ef4444'}">${rate.toFixed(1)}%</div></div></div>`;
 if(charts.projChart)charts.projChart.destroy();const labels=[],data=[];const now=new Date();for(let i=0;i<=months;i++){const d=new Date(now.getFullYear(),now.getMonth()+i,1);labels.push(d.toISOString().slice(0,7));data.push(Math.round(bal+net*i))}
-charts.projChart=new Chart(document.getElementById("projChart"),{type:"line",data:{labels,datasets:[{label:"Projected Balance",data,borderColor:"#8b5cf6",backgroundColor:"rgba(139,92,246,0.1)",fill:true,borderWidth:2.5,pointRadius:0,tension:.3}]},options:{responsive:true,maintainAspectRatio:false,scales:{x:{ticks:{maxTicksLimit:12,maxRotation:45}},y:{ticks:{callback:v=>fmt(v)}}},plugins:{tooltip:{callbacks:{label:ctx=>fmtE(ctx.parsed.y)}}}}})}
+charts.projChart=new Chart(document.getElementById("projChart"),{type:"line",data:{labels,datasets:[{label:"Projected Balance",data,borderColor:"#8b5cf6",backgroundColor:"rgba(139,92,246,0.1)",fill:true,borderWidth:2.5,pointRadius:0,tension:.3}]},options:{responsive:true,maintainAspectRatio:false,scales:{x:{ticks:{maxTicksLimit:12,maxRotation:45}},y:{ticks:{callback:v=>fmtAxis(v)}}},plugins:{tooltip:{callbacks:{label:ctx=>fmtE(ctx.parsed.y)}}}}})}
 
 // ============================================================
 // RECURRING TRANSACTION DETECTION
@@ -1478,7 +1615,7 @@ function openMerchant(name){
   charts.mdChart=new Chart(document.getElementById('mdChart'),{
     type:'bar',
     data:{labels:months,datasets:[{data:series,backgroundColor:'#ef4444cc',borderRadius:3}]},
-    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>fmtE(ctx.parsed.y)}}},scales:{y:{ticks:{callback:v=>fmt(v)}}}}
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>fmtE(ctx.parsed.y)}}},scales:{y:{ticks:{callback:v=>fmtAxis(v)}}}}
   });
 }
 function closeMerchant(){
@@ -2215,7 +2352,7 @@ function renderInvestments(){
   charts.invPnlChart=new Chart(document.getElementById('invPnlChart'),{
     type:'bar',
     data:{labels:pnlChartData.map(p=>p.ticker.replace(/_US_EQ|_UK_EQ|_DE_EQ/g,'')),datasets:[{label:'Unrealized P/L',data:pnlChartData.map(p=>p.unrealizedPL),backgroundColor:pnlChartData.map(p=>p.unrealizedPL>=0?'#10b981cc':'#ef4444cc'),borderRadius:4}]},
-    options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,scales:{x:{ticks:{callback:v=>fmt(v),color:'#94a3b8'}}},plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>'\u20AC'+fmt(ctx.parsed.x)+' ('+pnlChartData[ctx.dataIndex].unrealizedPLPct.toFixed(2)+'%)'}}}}
+    options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,scales:{x:{ticks:{callback:v=>fmtAxis(v),color:'#94a3b8'}}},plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>'\u20AC'+fmt(ctx.parsed.x)+' ('+pnlChartData[ctx.dataIndex].unrealizedPLPct.toFixed(2)+'%)'}}}}
   });
 }
 
