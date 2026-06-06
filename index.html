@@ -139,8 +139,22 @@ html.is-mobile-device #quickAddPanel.open{transform:translateX(0)}
 .search-input:focus{border-color:#10b981}
 .txn-table{width:100%;border-collapse:collapse;font-size:12px}
 .txn-table th{text-align:left;padding:10px 12px;color:var(--text4);font-weight:700;text-transform:uppercase;letter-spacing:1px;font-size:10px;border-bottom:2px solid var(--border);position:sticky;top:0;background:var(--bg);z-index:1}
-.txn-table td{padding:8px 12px;border-bottom:1px solid var(--border);color:var(--text2)}
-.txn-table tr:nth-child(even){background:var(--table-stripe)}.txn-table tr:hover td{background:var(--table-hover)}
+.txn-table td{padding:8px 12px;border-bottom:1px solid var(--border);color:var(--text2);transition:background .12s ease,color .12s ease}
+.txn-table tbody tr{transition:background .12s ease}
+.txn-table tr:nth-child(even){background:var(--table-stripe)}
+.txn-table tbody tr:hover td{background:var(--table-hover);color:var(--text)}
+/* 3px emerald inset on the first cell of the hovered row — the active row is
+   unmistakable without changing layout or stripe pattern. */
+.txn-table tbody tr:hover td:first-child{box-shadow:inset 3px 0 0 #10b981}
+/* ===== EMPTY STATES — icon + title + microcopy replaces "<p>No data.</p>" */
+.empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:36px 20px;text-align:center;gap:6px;color:var(--text4)}
+.empty-state-icon{font-size:32px;opacity:.55;margin-bottom:6px;filter:grayscale(.2)}
+.empty-state-title{font-weight:700;font-size:13px;color:var(--text3);letter-spacing:.3px}
+.empty-state-sub{font-size:12px;color:var(--text4);max-width:300px;line-height:1.5}
+/* ===== CHART LOADING SHIMMER — one-shot 1.2s; auto-fades when complete */
+.chart-wrap{position:relative}
+.chart-shimmer{position:absolute;inset:8px;border-radius:8px;pointer-events:none;background:linear-gradient(90deg,transparent 0%,rgba(148,163,184,0.07) 50%,transparent 100%);background-size:200% 100%;animation:chart-shimmer-cycle 1.2s ease-out 1 forwards}
+@keyframes chart-shimmer-cycle{0%{background-position:-100% 0;opacity:1}60%{opacity:1}100%{background-position:100% 0;opacity:0}}
 .txn-table .in{color:#10b981;font-weight:600}.txn-table .out{color:#ef4444;font-weight:600}.txn-table .inv{color:#8b5cf6;font-weight:600}
 .table-wrap{max-height:500px;overflow:auto;border:1px solid var(--border);border-radius:10px}
 .table-footer{display:flex;justify-content:space-between;align-items:center;margin-top:12px;font-size:12px;color:var(--text4);flex-wrap:wrap;gap:8px}
@@ -1054,7 +1068,46 @@ const _gradFillPlugin={
 if(typeof Chart!=='undefined'&&Chart.register) Chart.register(_gradFillPlugin);
 
 function dc(){Object.values(charts).forEach(c=>c.destroy());charts={}}
-function mc(id,h){return`<div style="position:relative;height:${h}px"><canvas id="${id}"></canvas></div>`}
+function mc(id,h){return`<div class="chart-wrap" style="height:${h}px"><div class="chart-shimmer"></div><canvas id="${id}"></canvas></div>`}
+// es(icon, title, sub?) — polished empty-state block. Replaces the generic
+// "<p>No data.</p>" patterns scattered across renderers with a centered icon,
+// title, and optional one-line microcopy explaining what's missing.
+function es(icon,title,sub){return`<div class="empty-state"><div class="empty-state-icon">${icon}</div><div class="empty-state-title">${escapeHtml(title)}</div>${sub?`<div class="empty-state-sub">${escapeHtml(sub)}</div>`:''}</div>`;}
+// Counter animation for KPI values. Reads data-animate (target number) and
+// data-format ('euro' | 'pct' | 'count') on each .kpi-value element and counts
+// up from 0 with ease-out-cubic over 900ms. Runs ONCE per page load — tab
+// switches and filter changes re-render the KPIs but don't re-animate so the
+// motion stays purposeful, not noisy.
+let _kpisAnimatedOnce=false;
+function animateKpiNumbers(){
+  if(_kpisAnimatedOnce)return;
+  _kpisAnimatedOnce=true;
+  const els=document.querySelectorAll('.kpi-value[data-animate]');
+  if(!els.length)return;
+  const duration=900;
+  els.forEach(el=>{
+    const target=parseFloat(el.dataset.animate);
+    if(!isFinite(target))return;
+    const format=el.dataset.format||'euro';
+    const finalText=el.textContent;
+    const start=performance.now();
+    function step(now){
+      const t=Math.min(1,(now-start)/duration);
+      const eased=1-Math.pow(1-t,3);
+      const v=target*eased;
+      el.textContent=formatKpiCounter(v,format);
+      if(t<1)requestAnimationFrame(step);
+      else el.textContent=finalText;
+    }
+    requestAnimationFrame(step);
+  });
+}
+function formatKpiCounter(v,format){
+  if(format==='pct')return v.toFixed(1)+'%';
+  if(format==='count')return Math.round(v).toLocaleString();
+  // 'euro' default — match the dashboard's "k" abbreviation for thousands.
+  return '€'+(Math.abs(v)>=1000?(v/1000).toFixed(1)+'k':Math.round(v).toLocaleString());
+}
 function bl(items,lk,vk,mx,onClick){return'<div class="bar-list">'+items.map((it,i)=>{const raw=String(it[lk]||'');const ch=onClick?` style="cursor:pointer" data-merchant="${escapeHtml(raw)}" onclick="${onClick}(this.dataset.merchant)"`:'';return `<div class="bar-item"${ch}><div class="bar-header"><span class="bar-label">${escapeHtml(raw)}</span><span class="bar-value">${fmtE(it[vk])}</span></div><div class="bar-track"><div class="bar-fill" style="width:${(it[vk]/mx)*100}%;background:${ramp(i,items.length)}"></div></div></div>`}).join("")+"</div>"}
 function ttcb(ds){return{callbacks:{label:ctx=>ds?ctx.dataset.label+": "+fmtE(ctx.parsed.y):fmtE(ctx.parsed.y)}}}
 
@@ -1115,12 +1168,16 @@ const inBadge=yoy?yoyBadge(yoy.cur.inflow,yoy.prev.inflow,false):'';
 const outBadge=yoy?yoyBadge(yoy.cur.outflow,yoy.prev.outflow,true):'';
 const netBadge=yoy?yoyBadge(yoy.cur.net,yoy.prev.net,false):'';
 const yoyLabel=yoy?`<span style="font-size:10px;color:var(--text5);margin-left:4px">${yoy.label}</span>`:'';
-const invCard=(t.invested>0)?`<div class="kpi" data-accent="violet"><div class="kpi-label">${tr('kpi.invested')}</div><div class="kpi-value" style="color:#8b5cf6">\u20AC${fmt(t.invested)}</div><div class="kpi-sub">${tr('kpi.avg_per_mo',{v:fmt(aInv)})}</div></div>`:'';
+const invCard=(t.invested>0)?`<div class="kpi" data-accent="violet"><div class="kpi-label">${tr('kpi.invested')}</div><div class="kpi-value" data-animate="${t.invested}" data-format="euro" style="color:#8b5cf6">\u20AC${fmt(t.invested)}</div><div class="kpi-sub">${tr('kpi.avg_per_mo',{v:fmt(aInv)})}</div></div>`:'';
 document.getElementById("kpis").innerHTML=`
-<div class="kpi" data-accent="emerald"><div class="kpi-label">${tr('kpi.income')}</div><div class="kpi-value" style="color:#10b981">\u20AC${fmt(t.inflow)}</div><div class="kpi-sub">${tr('kpi.avg_per_mo',{v:fmt(ai)})}${inBadge?'<br>'+inBadge+yoyLabel:''}</div></div>
-<div class="kpi" data-accent="red"><div class="kpi-label">${tr('kpi.expenses')}</div><div class="kpi-value" style="color:#ef4444">\u20AC${fmt(t.outflow)}</div><div class="kpi-sub">${tr('kpi.avg_per_mo',{v:fmt(ao)})}${outBadge?'<br>'+outBadge+yoyLabel:''}</div></div>
-<div class="kpi" data-accent="${t.net>=0?'emerald':'red'}"><div class="kpi-label">${tr('kpi.net')}</div><div class="kpi-value" style="color:${t.net>=0?'#10b981':'#ef4444'}">\u20AC${fmt(Math.abs(t.net))}</div><div class="kpi-sub">${t.net>=0?tr('kpi.surplus'):tr('kpi.deficit')}${netBadge?'<br>'+netBadge+yoyLabel:''}</div></div>
-${invCard}<div class="kpi" data-accent="${hasActiveFilters()?'violet':'cyan'}"><div class="kpi-label">${hasActiveFilters()?tr('kpi.filtered_txns'):tr('kpi.savings_rate')}</div><div class="kpi-value" style="color:${hasActiveFilters()?'#8b5cf6':t.rate>=0?'#06b6d4':'#ef4444'}">${hasActiveFilters()?ftxns.length:t.rate.toFixed(1)+'%'}</div><div class="kpi-sub">${hasActiveFilters()?tr('kpi.of_total',{n:TXNS.length}):tr('kpi.income_saved')}</div></div>`}
+<div class="kpi" data-accent="emerald"><div class="kpi-label">${tr('kpi.income')}</div><div class="kpi-value" data-animate="${t.inflow}" data-format="euro" style="color:#10b981">\u20AC${fmt(t.inflow)}</div><div class="kpi-sub">${tr('kpi.avg_per_mo',{v:fmt(ai)})}${inBadge?'<br>'+inBadge+yoyLabel:''}</div></div>
+<div class="kpi" data-accent="red"><div class="kpi-label">${tr('kpi.expenses')}</div><div class="kpi-value" data-animate="${t.outflow}" data-format="euro" style="color:#ef4444">\u20AC${fmt(t.outflow)}</div><div class="kpi-sub">${tr('kpi.avg_per_mo',{v:fmt(ao)})}${outBadge?'<br>'+outBadge+yoyLabel:''}</div></div>
+<div class="kpi" data-accent="${t.net>=0?'emerald':'red'}"><div class="kpi-label">${tr('kpi.net')}</div><div class="kpi-value" data-animate="${Math.abs(t.net)}" data-format="euro" style="color:${t.net>=0?'#10b981':'#ef4444'}">\u20AC${fmt(Math.abs(t.net))}</div><div class="kpi-sub">${t.net>=0?tr('kpi.surplus'):tr('kpi.deficit')}${netBadge?'<br>'+netBadge+yoyLabel:''}</div></div>
+${invCard}<div class="kpi" data-accent="${hasActiveFilters()?'violet':'cyan'}"><div class="kpi-label">${hasActiveFilters()?tr('kpi.filtered_txns'):tr('kpi.savings_rate')}</div><div class="kpi-value" data-animate="${hasActiveFilters()?ftxns.length:t.rate}" data-format="${hasActiveFilters()?'count':'pct'}" style="color:${hasActiveFilters()?'#8b5cf6':t.rate>=0?'#06b6d4':'#ef4444'}">${hasActiveFilters()?ftxns.length:t.rate.toFixed(1)+'%'}</div><div class="kpi-sub">${hasActiveFilters()?tr('kpi.of_total',{n:TXNS.length}):tr('kpi.income_saved')}</div></div>`;
+// Kick the count-up animation on first render. Re-renders (tab switches,
+// filter changes) noop because _kpisAnimatedOnce stays true after the
+// initial run.
+requestAnimationFrame(animateKpiNumbers);}
 
 // Dynamic insights
 function renderInsights(){
@@ -1177,7 +1234,7 @@ function getDynamicIncome(){if(!hasActiveFilters())return INCOME_TYPES;const txn
 function renderOverview(){const el=document.getElementById("content");const cats=getDynamicCats();const inc=getDynamicIncome();const hasPanelFilters=Object.values(gFilters).some(v=>v!=="");const data=(hasPanelFilters||yearFilter!=="All")?gfm():(yearFilter==="All"?YEARLY:gfm());const isMonthly=hasPanelFilters||yearFilter!=="All";
 el.innerHTML=`<div class="grid grid-2">
 <div class="section span-2"><div class="section-title">${isMonthly?'Monthly':'Yearly'} Income vs Expenses</div>${mc("c1",300)}</div>
-<div class="section"><div class="section-title">${tr('sec.top_cats')}</div>${cats.length?bl(cats,"Category","Total",cats[0].Total):'<p style="color:var(--text4)">No outflows.</p>'}</div>
+<div class="section"><div class="section-title">${tr('sec.top_cats')}</div>${cats.length?bl(cats,"Category","Total",cats[0].Total):es('💸','No outflows','No outflow transactions match the current filters.')}</div>
 <div class="section"><div class="section-title">${tr('sec.income_sources')}</div>${mc("c2",340)}</div>
 <div class="section span-2"><div class="section-title">${tr('sec.expense_ratio')}</div><div id="treemapContainer"></div></div></div>`;
 setTimeout(()=>renderTreemap("treemapContainer",cats,"Category","Total"),50);
@@ -1202,7 +1259,7 @@ el.innerHTML=`<div class="grid grid-2">
 <div class="section span-2"><div class="section-title">${tr('sec.monthly_exp')}</div>${mc("c3",280)}</div>
 <div class="section span-2"><div class="section-title">Spending Breakdown <span style="font-size:10px;color:var(--text5);text-transform:none;letter-spacing:0;font-weight:400">(top ${Math.min(20,cats.length)} categories)</span></div>${mc("c3b",Math.min(20,cats.length)*22+60)}</div>
 <div class="section"><div class="section-title">Category Trends <span style="font-size:10px;color:var(--text5);text-transform:none;letter-spacing:0;font-weight:400">(L${sparkMonths}M)</span></div>${sparkHTML}</div>
-<div class="section"><div class="section-title">${tr('sec.top_merchants')}</div>${sources.length?bl(sources,"Source","Total",sources[0].Total,'openMerchant'):'<p style="color:var(--text4)">No data.</p>'}</div>
+<div class="section"><div class="section-title">${tr('sec.top_merchants')}</div>${sources.length?bl(sources,"Source","Total",sources[0].Total,'openMerchant'):es('🛒','No merchants','Nothing matches the current filters.')}</div>
 <div class="section span-2"><div class="section-title">${tr('sec.dow')}</div>${mc("c4",320)}</div>
 <div class="section span-2"><div class="section-title">${tr('sec.heatmap')}</div><div id="heatmapContainer"></div></div></div>`;
 setTimeout(()=>renderHeatmap('heatmapContainer'),50);
@@ -1501,7 +1558,7 @@ function getCategoryMonthlyData(category,monthCount){
 // ============================================================
 function renderTreemap(containerId,items,labelKey,valueKey){
   const total=items.reduce((s,it)=>s+it[valueKey],0);
-  if(!total){document.getElementById(containerId).innerHTML='<p style="color:var(--text4)">No data.</p>';return}
+  if(!total){document.getElementById(containerId).innerHTML=es('📊','No expense data','Adjust filters to see your category mix here.');return}
   // Squarified treemap layout (simplified: rows)
   const sorted=[...items].sort((a,b)=>b[valueKey]-a[valueKey]).slice(0,20);
   let html='<div class="treemap">';
@@ -2007,7 +2064,7 @@ function renderNetWorth(){
       ${invAccounts.length?`<div class="table-wrap"><table class="txn-table">
         <thead><tr><th>Account</th><th>Total contributed</th><th>Current value (\u20AC)</th><th>Gain/Loss</th><th>%</th></tr></thead>
         <tbody>${invRows}</tbody>
-      </table></div>`:'<p style="color:var(--text4)">No investment-type transactions in your data yet.</p>'}
+      </table></div>`:es('📈','No investment activity','Investment-type transactions will appear here when imported.')}
     </div>
     <div class="section" style="margin-top:16px">
       <div class="section-title">${tr('sec.nw_over_time')}</div>
@@ -2246,7 +2303,7 @@ function renderInvestments(){
   `;
 
   if(positions.length===0){
-    c.innerHTML='<div class="section"><div class="section-title">No positions</div><p style="color:var(--text4)">Your Trading 212 portfolio is currently empty.</p></div>';
+    c.innerHTML='<div class="section">'+es('📊','No open positions','Your Trading 212 portfolio is currently empty. Holdings will appear here once you open a position.')+'</div>';
     return;
   }
 
