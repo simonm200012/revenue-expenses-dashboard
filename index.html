@@ -766,11 +766,22 @@ function recomputeAggregates() {
 }
 
 const P=["#10b981","#3b82f6","#f59e0b","#8b5cf6","#ec4899","#06b6d4","#f97316","#84cc16","#14b8a6","#6366f1","#f43f5e","#0ea5e9","#d946ef","#7c3aed","#ef4444"];
-// Monochromatic intensity ramp for expense visualizations (treemap, top-cat
-// bar list, spending-breakdown horizontal bars). Top item gets the deepest
-// red; tail items fade to pale rose. Reads as one cohesive data viz instead
-// of a confetti palette. Saturation held constant; lightness scales 28→62%.
-function ramp(i,n,hue=0,sat=68){const l=28+(n>1?(i/(n-1)):0)*34;return`hsl(${hue},${sat}%,${l}%)`;}
+// Hybrid color ramp for ranked expense visualizations (treemap, top-cat
+// bar list, spending-breakdown bars). Top 5 spenders get distinct categorical
+// colors so users can say "the violet one is X" — those are the categories
+// that matter most. Anything past #5 (the long tail) fades into a quiet
+// slate-grey ramp so the chart still encodes rank via intensity, but the
+// tail doesn't compete with the named top spenders. Best of both worlds:
+// distinct identity at the top, hierarchy in the tail.
+const RAMP_TOP5=['#ef4444','#f59e0b','#8b5cf6','#06b6d4','#ec4899'];
+function ramp(i,n){
+  if(i<5&&i<n)return RAMP_TOP5[i];
+  const tailIdx=i-5,tailN=Math.max(1,n-5);
+  // Slate ramp: 38% lightness (rank 6) → 62% (last). Quiet greys that recede
+  // visually so the top-5 colored bars read as the 'main' categories.
+  const l=38+(tailN>1?(tailIdx/(tailN-1)):0)*24;
+  return`hsl(220,10%,${l}%)`;
+}
 const fmt=v=>v>=1000?(v/1000).toFixed(1)+"k":Math.round(v).toLocaleString();
 const fmtE=v=>"\u20AC"+Math.round(v).toLocaleString();
 // Compact \u20AC axis formatter: 30,016 \u2192 \u20AC30K, 1,200,000 \u2192 \u20AC1.2M. Uses uppercase
