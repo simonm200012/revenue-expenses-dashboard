@@ -1799,10 +1799,15 @@ async function _pdfRenderChart(config,width,height){
   chart.destroy();canvas.remove();
   return img;
 }
-function _pdfFmtSigned(v){const s=v>=0?'+':'−';return s+'€'+Math.round(Math.abs(v)).toLocaleString();}
+// jsPDF's built-in helvetica is WinAnsi-encoded — Unicode minus (U+2212)
+// and em-dash (U+2014) aren't in the glyph set, so they render as garbage
+// with extra inter-character spacing. Use ASCII hyphen-minus everywhere
+// inside PDF text. (UI text on the dashboard still uses the typographic
+// minus; this constraint applies only to the PDF export.)
+function _pdfFmtSigned(v){const s=v>=0?'+':'-';return s+'€'+Math.round(Math.abs(v)).toLocaleString();}
 function _pdfFmtDelta(v){
-  if(v==null||!isFinite(v))return'—';
-  const s=v>=0?'+':'−';
+  if(v==null||!isFinite(v))return'-';
+  const s=v>=0?'+':'-';
   return s+Math.abs(v).toFixed(0)+'%';
 }
 // Page footer — drawn after content of each page so page numbers reflect total.
@@ -1814,7 +1819,11 @@ function _pdfFooter(doc,ym){
     const H=doc.internal.pageSize.getHeight();
     doc.setDrawColor(220).line(40,H-30,W-40,H-30);
     doc.setFont('helvetica','normal').setFontSize(8).setTextColor(140);
-    doc.text(`Financial Report · ${ym}`,40,H-16);
+    // Use ASCII separators in the footer — the middle dot (U+00B7) renders OK
+    // in helvetica, but to keep the footer 100% WinAnsi-safe across font
+    // variants we use a vertical bar. Also adding explicit padding ensures
+    // the three sections never collide visually.
+    doc.text(`Financial Report  |  ${ym}`,40,H-16);
     doc.text(`Page ${p} of ${pageCount}`,W-40,H-16,{align:'right'});
     doc.text(`Generated ${new Date().toLocaleString('en-GB')}`,W/2,H-16,{align:'center'});
   }
@@ -1908,7 +1917,7 @@ async function exportMonthPDF(){
     type:'doughnut',
     data:{labels:topCats.map(([c])=>c),datasets:[{data:topCats.map(([,v])=>v),backgroundColor:HUES.slice(0,topCats.length),borderWidth:0}]},
     options:{cutout:'58%',plugins:{legend:{position:'right',labels:{boxWidth:10,padding:6,font:{size:9}}}}}
-  },560,240):null;
+  },480,200):null;
   const dailyChartImg=await _pdfRenderChart({
     type:'line',
     data:{labels:dayLabels,datasets:[
@@ -1916,12 +1925,12 @@ async function exportMonthPDF(){
       {label:'Daily income',data:dailyIn,borderColor:'#10b981',backgroundColor:'rgba(16,185,129,.10)',fill:true,tension:.3,pointRadius:0,borderWidth:1.5}
     ]},
     options:{plugins:{legend:{display:true,position:'top',labels:{boxWidth:10,font:{size:10}}}},scales:{y:{beginAtZero:true}}}
-  },560,200);
+  },480,170);
   const dowChartImg=await _pdfRenderChart({
     type:'bar',
     data:{labels:dowOrder,datasets:[{data:dowOrder.map(d=>dowMap[d]),backgroundColor:'#8b5cf6cc',borderRadius:4}]},
     options:{plugins:{legend:{display:false}},scales:{y:{beginAtZero:true}}}
-  },280,180);
+  },240,150);
   const compareImg=await _pdfRenderChart({
     type:'bar',
     data:{labels:['Income','Expenses'],datasets:[
@@ -1929,7 +1938,7 @@ async function exportMonthPDF(){
       {label:'This month',data:[totalIn,totalOut],backgroundColor:['#10b981','#ef4444']}
     ]},
     options:{plugins:{legend:{display:true,position:'top',labels:{boxWidth:10,font:{size:10}}}}}
-  },280,180);
+  },240,150);
 
   // ============ Build PDF ============
   const {jsPDF}=window.jspdf;
@@ -1947,7 +1956,7 @@ async function exportMonthPDF(){
   doc.setFont('helvetica','normal').setFontSize(11).setTextColor(212,161,63);
   doc.text(ym,M,60);
   doc.setTextColor(200).setFontSize(9);
-  doc.text(`${all.length} transactions  ·  ${out.length} expenses  ·  ${inT.length} income  ·  ${inv.length} investments`,M,76);
+  doc.text(`${all.length} transactions  |  ${out.length} expenses  |  ${inT.length} income  |  ${inv.length} investments`,M,76);
   doc.setTextColor(0);
   y=110;
 
@@ -1967,7 +1976,7 @@ async function exportMonthPDF(){
     doc.setFont('helvetica','bold').setFontSize(15).setTextColor(...k.color).text(k.value,x,y+24);
     if(k.delta!=null){
       doc.setFont('helvetica','normal').setFontSize(8).setTextColor(140);
-      doc.text(`MoM ${_pdfFmtDelta(k.delta)}${k.deltaYoy!=null?` · YoY ${_pdfFmtDelta(k.deltaYoy)}`:''}`,x,y+38);
+      doc.text(`MoM ${_pdfFmtDelta(k.delta)}${k.deltaYoy!=null?`  |  YoY ${_pdfFmtDelta(k.deltaYoy)}`:''}`,x,y+38);
     }
   });
   doc.setTextColor(0);
@@ -2052,7 +2061,7 @@ async function exportMonthPDF(){
 
   // Anomalies
   if(anomalies.length){
-    doc.autoTable({startY:y,head:[['Anomaly (>2σ vs source mean)','Date','Amount']],
+    doc.autoTable({startY:y,head:[['Anomaly (>2 stdev vs source mean)','Date','Amount']],
       body:anomalies.slice(0,12).map(t=>[t.s,t.d,'€'+Math.round(t.v).toLocaleString()]),
       theme:'grid',headStyles:{fillColor:[245,158,11]},margin:{left:M,right:M}
     });
@@ -2064,7 +2073,7 @@ async function exportMonthPDF(){
     if(y>H-100){doc.addPage();y=M;}
     doc.setFont('helvetica','bold').setFontSize(11).setTextColor(0).text('New merchants this month',M,y);y+=6;
     doc.setFont('helvetica','normal').setFontSize(9).setTextColor(60);
-    const text=newMerchants.join('  ·  ');
+    const text=newMerchants.join('   |   ');
     const lines=doc.splitTextToSize(text,W-2*M);
     doc.text(lines,M,y+10);y+=lines.length*12+18;
     doc.setTextColor(0);
@@ -2092,8 +2101,10 @@ async function exportMonthPDF(){
     t.t==='In'?'Inflow':(t.t==='Inv'?'Investment':'Outflow'),
     t.b||'',
     (t.c||'').slice(0,18),
-    (t.t==='In'?'+':(t.t==='Inv'?'●':'−'))+'€'+t.v.toFixed(2),
-    t.f?'✓':''
+    // ASCII signs only — see _pdfFmtSigned comment. Investments use 'inv' label
+    // instead of a bullet because U+25CF isn't in helvetica's WinAnsi glyph set.
+    (t.t==='In'?'+':(t.t==='Inv'?'inv ':'-'))+'€'+t.v.toFixed(2),
+    t.f?'Y':''
   ]);
   doc.autoTable({
     startY:y,
@@ -2106,8 +2117,9 @@ async function exportMonthPDF(){
       0:{cellWidth:55},
       2:{cellWidth:55},
       3:{cellWidth:60},
-      5:{cellWidth:70,halign:'right',fontStyle:'bold'},
-      6:{cellWidth:40,halign:'center'}
+      4:{cellWidth:120},
+      5:{cellWidth:75,halign:'right',fontStyle:'bold'},
+      6:{cellWidth:38,halign:'center'}
     },
     margin:{left:M,right:M},
     didDrawPage:()=>{}
