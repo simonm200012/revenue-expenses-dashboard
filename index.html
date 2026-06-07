@@ -107,6 +107,37 @@ html.is-mobile-device #quickAddPanel.open{transform:translateX(0)}
 .af-tag button{background:none;border:none;color:#10b981;cursor:pointer;font-size:14px;padding:0 2px;font-weight:700}
 
 .kpis{display:flex;gap:12px;margin-bottom:24px;flex-wrap:wrap}
+/* ===== OVERVIEW TAB — AI summary banner, YTD strip, Notable callouts =====
+   These three components live above the existing chart grid on Overview.
+   Driven by the renderOverview function which reuses the data shapes built
+   for the monthly PDF export. */
+.dash-ai-summary{background:var(--section-bg);border:1px solid var(--border);border-radius:12px;padding:14px 18px 14px 22px;margin-bottom:16px;position:relative;overflow:hidden}
+.dash-ai-summary::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:linear-gradient(180deg,#d4a13f,#f5d97f)}
+.dash-ai-summary-label{font-size:10px;text-transform:uppercase;letter-spacing:1.4px;color:var(--text4);font-weight:700;margin-bottom:6px;display:flex;align-items:center;gap:10px}
+.dash-ai-summary-label .month-tag{background:var(--input-bg);color:var(--text3);padding:2px 8px;border-radius:4px;font-weight:600;letter-spacing:.5px}
+.dash-ai-summary-text{font-size:13px;color:var(--text2);line-height:1.6}
+.dash-ai-summary-loading{color:var(--text4);font-style:italic}
+.dash-ytd-strip{background:var(--section-bg);border:1px solid var(--border);border-radius:12px;padding:14px 18px;margin-bottom:16px;display:grid;grid-template-columns:auto repeat(5,1fr);gap:18px;align-items:center}
+.dash-ytd-heading{font-size:10px;text-transform:uppercase;letter-spacing:1.3px;color:var(--text4);font-weight:700;line-height:1.3;border-right:1px solid var(--border);padding-right:18px;align-self:stretch;display:flex;flex-direction:column;justify-content:center}
+.dash-ytd-heading .year{font-size:16px;font-family:'JetBrains Mono',monospace;color:var(--text);display:block;margin-top:4px;letter-spacing:0}
+.dash-ytd-item .ytd-label{font-size:9px;text-transform:uppercase;letter-spacing:1px;color:var(--text4);font-weight:700;margin-bottom:4px}
+.dash-ytd-item .ytd-value{font-size:15px;font-weight:800;letter-spacing:-.3px;font-family:'JetBrains Mono',monospace;margin-bottom:4px}
+.dash-ytd-item canvas.ytd-spark{display:block;width:100%;height:18px}
+.dash-callouts{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px}
+.callout-card{padding:14px 16px;border-radius:12px;position:relative;color:#fff;min-height:84px;display:flex;flex-direction:column;justify-content:space-between;box-shadow:0 4px 14px rgba(0,0,0,.15)}
+.callout-card .cc-label{font-size:10px;text-transform:uppercase;letter-spacing:1.2px;font-weight:700;opacity:.92}
+.callout-card .cc-value{font-size:22px;font-weight:800;font-family:'JetBrains Mono',monospace;letter-spacing:-.5px;margin:4px 0}
+.callout-card .cc-sub{font-size:11px;opacity:.92}
+.callout-card[data-tone="up"]{background:linear-gradient(135deg,#ef4444,#b91c1c)}
+.callout-card[data-tone="down"]{background:linear-gradient(135deg,#10b981,#047857)}
+.callout-card[data-tone="new"]{background:linear-gradient(135deg,#8b5cf6,#6d28d9)}
+.callout-card[data-tone="muted"]{background:linear-gradient(135deg,#475569,#334155)}
+@media(max-width:768px),(pointer:coarse) and (max-width:1100px){
+  .dash-ytd-strip{grid-template-columns:repeat(2,1fr);gap:14px}
+  .dash-ytd-heading{grid-column:1/-1;border-right:none;border-bottom:1px solid var(--border);padding:0 0 10px 0;flex-direction:row;justify-content:flex-start;gap:10px;align-items:baseline}
+  .dash-ytd-heading .year{margin-top:0}
+  .dash-callouts{grid-template-columns:1fr;gap:10px}
+}
 .kpi{background:var(--section-bg);border:1px solid var(--border);border-radius:12px;padding:20px 24px;flex:1;min-width:150px;position:relative;overflow:hidden}
 /* Subtle 2px gradient accent at the top of each KPI card. The hue is driven
    by data-accent (emerald/red/cyan/violet) so each card has a quiet identity
@@ -1242,13 +1273,196 @@ function getDynamicCats(){if(!hasActiveFilters())return TOP_CATEGORIES;const txn
 function getDynamicSources(){if(!hasActiveFilters())return TOP_SOURCES;const txns=getFilteredTxns().filter(t=>t.t==="Out");const m={};txns.forEach(t=>{m[t.s]=(m[t.s]||0)+t.v});return Object.entries(m).sort((a,b)=>b[1]-a[1]).slice(0,15).map(([k,v])=>({Source:k,Total:Math.round(v)}))}
 function getDynamicIncome(){if(!hasActiveFilters())return INCOME_TYPES;const txns=getFilteredTxns().filter(t=>t.t==="In");const m={};txns.forEach(t=>{m[t.r]=(m[t.r]||0)+t.v});return Object.entries(m).sort((a,b)=>b[1]-a[1]).slice(0,10).map(([k,v])=>({Type:k,Total:Math.round(v)}))}
 
+// ============================================================
+// Dashboard Overview enhancers — reuse PDF aggregation logic for
+// the AI Executive Summary, YTD strip, and Notable Changes callouts.
+// ============================================================
+function _dashLatestMonth(){
+  if(!TXNS.length)return null;
+  return [...new Set(TXNS.map(t=>t.d.slice(0,7)))].sort().reverse()[0];
+}
+function _dashYTD(ym){
+  const year=ym.slice(0,4);
+  const ytd=TXNS.filter(t=>t.d.startsWith(year)&&t.d<=ym+'-31');
+  const ytdIn=ytd.filter(t=>t.t==='In').reduce((s,t)=>s+t.v,0);
+  const ytdOut=ytd.filter(t=>t.t==='Out').reduce((s,t)=>s+t.v,0);
+  const ytdInv=ytd.filter(t=>t.t==='Inv').reduce((s,t)=>s+t.v,0);
+  const ytdNet=ytdIn-ytdOut;
+  const ytdSav=ytdIn>0?(ytdNet/ytdIn*100):0;
+  const months=[];
+  for(let i=11;i>=0;i--){const d=new Date(ym+'-15');d.setMonth(d.getMonth()-i);months.push(d.toISOString().slice(0,7));}
+  const spIn=months.map(m=>TXNS.filter(t=>t.d.startsWith(m)&&t.t==='In').reduce((s,t)=>s+t.v,0));
+  const spOut=months.map(m=>TXNS.filter(t=>t.d.startsWith(m)&&t.t==='Out').reduce((s,t)=>s+t.v,0));
+  const spNet=spIn.map((v,i)=>v-spOut[i]);
+  const spInv=months.map(m=>TXNS.filter(t=>t.d.startsWith(m)&&t.t==='Inv').reduce((s,t)=>s+t.v,0));
+  const spSav=spIn.map((v,i)=>v>0?((v-spOut[i])/v*100):0);
+  return {ytdIn,ytdOut,ytdInv,ytdNet,ytdSav,sparkIn:spIn,sparkOut:spOut,sparkNet:spNet,sparkInv:spInv,sparkSav:spSav,year};
+}
+function _dashNotable(ym){
+  const out=TXNS.filter(t=>t.t==='Out'&&t.d.startsWith(ym));
+  const catMap={};out.forEach(t=>{catMap[t.c]=(catMap[t.c]||0)+t.v;});
+  const topCats=Object.entries(catMap).sort((a,b)=>b[1]-a[1]);
+  const sixBack=[];
+  for(let i=1;i<=6;i++){const d=new Date(ym+'-15');d.setMonth(d.getMonth()-i);sixBack.push(d.toISOString().slice(0,7));}
+  const histByCat={};
+  TXNS.forEach(t=>{
+    if(t.t!=='Out')return;
+    const m=t.d.slice(0,7);
+    if(sixBack.includes(m)){histByCat[t.c]=histByCat[t.c]||{};histByCat[t.c][m]=(histByCat[t.c][m]||0)+t.v;}
+  });
+  const deltas=topCats.map(([cat,cur])=>{
+    const h=Object.values(histByCat[cat]||{});h.sort((a,b)=>a-b);
+    const median=h.length?h[Math.floor(h.length/2)]:0;
+    return {cat,cur,median,delta:cur-median};
+  });
+  const catUp=deltas.filter(d=>d.delta>0&&d.median>0).sort((a,b)=>b.delta-a.delta)[0]||null;
+  const catDown=deltas.filter(d=>d.delta<0&&d.median>0).sort((a,b)=>a.delta-b.delta)[0]||null;
+  const priorMerch=new Set(TXNS.filter(t=>sixBack.includes(t.d.slice(0,7))).map(t=>t.s));
+  const newMerch=[...new Set(out.filter(t=>!priorMerch.has(t.s)).map(t=>t.s).filter(Boolean))];
+  return {catUp,catDown,newMerchCount:newMerch.length};
+}
+function _dashTinySparkline(canvasId,data,color){
+  const c=document.getElementById(canvasId);if(!c)return;
+  // High-DPI rendering — match drawBuffer to CSS size × pixel ratio so the
+  // line stays crisp on retina screens.
+  const dpr=window.devicePixelRatio||1;
+  const rect=c.getBoundingClientRect();
+  const w=Math.max(60,rect.width||120);
+  const h=18;
+  c.width=Math.round(w*dpr);c.height=Math.round(h*dpr);
+  c.style.width=w+'px';c.style.height=h+'px';
+  const ctx=c.getContext('2d');ctx.scale(dpr,dpr);ctx.clearRect(0,0,w,h);
+  if(!data||data.length<2)return;
+  const min=Math.min(...data,0),max=Math.max(...data,1);
+  const range=max-min||1;
+  const step=w/(data.length-1);
+  ctx.beginPath();
+  data.forEach((v,i)=>{
+    const x=i*step,y=h-((v-min)/range)*(h-3)-2;
+    if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);
+  });
+  ctx.strokeStyle=color;ctx.lineWidth=1.4;ctx.lineCap='round';ctx.lineJoin='round';ctx.stroke();
+  // End dot
+  const lx=(data.length-1)*step;
+  const ly=h-((data[data.length-1]-min)/range)*(h-3)-2;
+  ctx.beginPath();ctx.arc(lx,ly,2,0,Math.PI*2);ctx.fillStyle=color;ctx.fill();
+}
+function _dashAISummaryHTML(ym){
+  return `<div class="dash-ai-summary">
+    <div class="dash-ai-summary-label"><span>Executive Summary</span><span class="month-tag">${escapeHtml(ym)}</span></div>
+    <div class="dash-ai-summary-text" id="dashAISummaryText"><span class="dash-ai-summary-loading">Generating insight…</span></div>
+  </div>`;
+}
+function _dashYTDStripHTML(s){
+  const items=[
+    {label:'Income',value:'€'+fmt(s.ytdIn),color:'#10b981',sparkVar:'sparkIn',id:'ytdSpI'},
+    {label:'Expenses',value:'€'+fmt(s.ytdOut),color:'#ef4444',sparkVar:'sparkOut',id:'ytdSpO'},
+    {label:'Net',value:(s.ytdNet>=0?'+':'-')+'€'+fmt(Math.abs(s.ytdNet)),color:s.ytdNet>=0?'#10b981':'#ef4444',sparkVar:'sparkNet',id:'ytdSpN'},
+    {label:'Invested',value:'€'+fmt(s.ytdInv),color:'#8b5cf6',sparkVar:'sparkInv',id:'ytdSpV'},
+    {label:'Savings rate',value:s.ytdSav.toFixed(1)+'%',color:'#06b6d4',sparkVar:'sparkSav',id:'ytdSpS'}
+  ];
+  return `<div class="dash-ytd-strip">
+    <div class="dash-ytd-heading">Year-to-date <span class="year">${s.year}</span></div>
+    ${items.map(it=>`<div class="dash-ytd-item">
+      <div class="ytd-label">${it.label}</div>
+      <div class="ytd-value" style="color:${it.color}">${it.value}</div>
+      <canvas class="ytd-spark" id="${it.id}"></canvas>
+    </div>`).join('')}
+  </div>`;
+}
+function _dashCalloutsHTML(n){
+  const fmtAmt=v=>'€'+Math.round(Math.abs(v)).toLocaleString();
+  const cells=[];
+  if(n.catUp){
+    cells.push(`<div class="callout-card" data-tone="up"><div class="cc-label">▲ ${escapeHtml(n.catUp.cat)} UP</div><div class="cc-value">+${fmtAmt(n.catUp.delta)}</div><div class="cc-sub">vs 6-mo median of ${fmtAmt(n.catUp.median)}</div></div>`);
+  } else {
+    cells.push(`<div class="callout-card" data-tone="muted"><div class="cc-label">Category up</div><div class="cc-value">—</div><div class="cc-sub">no significant increase</div></div>`);
+  }
+  if(n.catDown){
+    cells.push(`<div class="callout-card" data-tone="down"><div class="cc-label">▼ ${escapeHtml(n.catDown.cat)} DOWN</div><div class="cc-value">-${fmtAmt(n.catDown.delta)}</div><div class="cc-sub">vs 6-mo median of ${fmtAmt(n.catDown.median)}</div></div>`);
+  } else {
+    cells.push(`<div class="callout-card" data-tone="muted"><div class="cc-label">Category down</div><div class="cc-value">—</div><div class="cc-sub">no significant decrease</div></div>`);
+  }
+  cells.push(`<div class="callout-card" data-tone="new"><div class="cc-label">★ New merchants</div><div class="cc-value">${n.newMerchCount}</div><div class="cc-sub">first seen in 6+ months</div></div>`);
+  return `<div class="dash-callouts">${cells.join('')}</div>`;
+}
+// AI summary cache — keyed by (month + txn count) so re-renders never re-bill.
+const DASH_AI_CACHE_KEY='dash-ai-cache-v1';
+function _dashLoadAICache(){try{return JSON.parse(localStorage.getItem(DASH_AI_CACHE_KEY)||'{}');}catch{return {};}}
+function _dashSaveAICache(c){try{localStorage.setItem(DASH_AI_CACHE_KEY,JSON.stringify(c));}catch{}}
+async function _dashHydrateAISummary(ym){
+  const el=document.getElementById('dashAISummaryText');if(!el)return;
+  const monthTxns=TXNS.filter(t=>t.d.startsWith(ym));
+  const cacheKey=`${ym}-${monthTxns.length}`;
+  const cache=_dashLoadAICache();
+  if(cache[cacheKey]){el.textContent=cache[cacheKey];return;}
+  // Build totals for the prompt
+  const out=monthTxns.filter(t=>t.t==='Out');
+  const inT=monthTxns.filter(t=>t.t==='In');
+  const totalOut=out.reduce((s,t)=>s+t.v,0);
+  const totalIn=inT.reduce((s,t)=>s+t.v,0);
+  const net=totalIn-totalOut;
+  const savRate=totalIn>0?(net/totalIn*100):0;
+  const prevMonth=(()=>{const d=new Date(ym+'-15');d.setMonth(d.getMonth()-1);return d.toISOString().slice(0,7);})();
+  const prevAll=TXNS.filter(t=>t.d.startsWith(prevMonth));
+  const prevIn=prevAll.filter(t=>t.t==='In').reduce((s,t)=>s+t.v,0);
+  const prevOut=prevAll.filter(t=>t.t==='Out').reduce((s,t)=>s+t.v,0);
+  const catMap={};out.forEach(t=>{catMap[t.c]=(catMap[t.c]||0)+t.v;});
+  const tc=Object.entries(catMap).sort((a,b)=>b[1]-a[1])[0];
+  const topCat=tc?tc[0]:'-';
+  const topCatAmt=tc?tc[1]:0;
+  // Try AI if a key is configured
+  if(typeof callAIText==='function'&&typeof CHAT==='object'&&(CHAT.geminiKey||CHAT.apiKey)){
+    try{
+      const prompt=`Write a 2-3 sentence financial summary for ${ym} in plain English. Be specific with figures (use the EUR symbol), focus on the most notable changes, no preachiness, no markdown.
+
+Month: ${ym}
+Income: EUR${totalIn.toFixed(0)} (prior month EUR${prevIn.toFixed(0)})
+Expenses: EUR${totalOut.toFixed(0)} (prior month EUR${prevOut.toFixed(0)})
+Net: ${net>=0?'+':''}EUR${net.toFixed(0)}
+Savings rate: ${savRate.toFixed(1)}%
+Top category: ${topCat} at EUR${topCatAmt.toFixed(0)} (${totalOut>0?(topCatAmt/totalOut*100).toFixed(0):'0'}% of expenses)`;
+      const r=await callAIText({prompt,maxTokens:220});
+      if(r&&r.text){
+        const text=r.text.trim().replace(/EUR/g,'€');
+        cache[cacheKey]=text;_dashSaveAICache(cache);
+        const elNow=document.getElementById('dashAISummaryText');
+        if(elNow)elNow.textContent=text;
+        return;
+      }
+    }catch(e){/* swallow, fall through to deterministic */}
+  }
+  // Deterministic fallback
+  const dir=totalOut>prevOut?'up from':(totalOut<prevOut?'down from':'level with');
+  const text=`Spent €${Math.round(totalOut).toLocaleString()} this month${prevOut>0?` (${dir} €${Math.round(prevOut).toLocaleString()} last month)`:''}. Top category was ${topCat} at €${Math.round(topCatAmt).toLocaleString()} (${totalOut>0?Math.round(topCatAmt/totalOut*100):0}% of expenses). Net was ${net>=0?'+':'-'}€${Math.round(Math.abs(net)).toLocaleString()} for a ${savRate.toFixed(1)}% savings rate.`;
+  cache[cacheKey]=text;_dashSaveAICache(cache);
+  const elFinal=document.getElementById('dashAISummaryText');
+  if(elFinal)elFinal.textContent=text;
+}
+
 function renderOverview(){const el=document.getElementById("content");const cats=getDynamicCats();const inc=getDynamicIncome();const hasPanelFilters=Object.values(gFilters).some(v=>v!=="");const data=(hasPanelFilters||yearFilter!=="All")?gfm():(yearFilter==="All"?YEARLY:gfm());const isMonthly=hasPanelFilters||yearFilter!=="All";
-el.innerHTML=`<div class="grid grid-2">
+// Compute the new top-of-page panels (only when we actually have data).
+const latestMonth=_dashLatestMonth();
+const ytdStats=latestMonth?_dashYTD(latestMonth):null;
+const notable=latestMonth?_dashNotable(latestMonth):null;
+const overviewExtras=latestMonth?`${_dashAISummaryHTML(latestMonth)}${_dashYTDStripHTML(ytdStats)}${_dashCalloutsHTML(notable)}`:'';
+el.innerHTML=`${overviewExtras}<div class="grid grid-2">
 <div class="section span-2"><div class="section-title">${isMonthly?'Monthly':'Yearly'} Income vs Expenses</div>${mc("c1",300)}</div>
 <div class="section"><div class="section-title">${tr('sec.top_cats')}</div>${cats.length?bl(cats,"Category","Total",cats[0].Total):es('💸','No outflows','No outflow transactions match the current filters.')}</div>
 <div class="section"><div class="section-title">${tr('sec.income_sources')}</div>${mc("c2",340)}</div>
 <div class="section span-2"><div class="section-title">${tr('sec.expense_ratio')}</div><div id="treemapContainer"></div></div></div>`;
 setTimeout(()=>renderTreemap("treemapContainer",cats,"Category","Total"),50);
+// Hydrate the YTD sparklines + AI summary after the DOM has settled.
+if(latestMonth&&ytdStats){
+  setTimeout(()=>{
+    _dashTinySparkline('ytdSpI',ytdStats.sparkIn,'#10b981');
+    _dashTinySparkline('ytdSpO',ytdStats.sparkOut,'#ef4444');
+    _dashTinySparkline('ytdSpN',ytdStats.sparkNet,ytdStats.ytdNet>=0?'#10b981':'#ef4444');
+    _dashTinySparkline('ytdSpV',ytdStats.sparkInv,'#8b5cf6');
+    _dashTinySparkline('ytdSpS',ytdStats.sparkSav,'#06b6d4');
+  },60);
+  _dashHydrateAISummary(latestMonth);
+}
 charts.c1=new Chart(document.getElementById("c1"),{type:"bar",data:{labels:data.map(d=>isMonthly?d.YM:d.Year),datasets:[{label:"Inflow",data:data.map(d=>d.Inflow),backgroundColor:"#10b981dd",borderRadius:4},{label:"Outflow",data:data.map(d=>d.Outflow),backgroundColor:"#ef4444dd",borderRadius:4},{label:"Net",data:data.map(d=>d.Net),type:"line",borderColor:"#06b6d4",borderWidth:2.5,pointBackgroundColor:theme==="dark"?"#0d0d1a":"#f8fafc",pointBorderColor:"#06b6d4",pointBorderWidth:2,pointRadius:isMonthly?0:4,fill:false}]},options:{responsive:true,maintainAspectRatio:false,scales:{x:{ticks:{maxTicksLimit:12,maxRotation:45}},y:{ticks:{callback:v=>fmtAxis(v)}}},plugins:{tooltip:ttcb(1)}}});
 charts.c2=new Chart(document.getElementById("c2"),{type:"doughnut",data:{labels:inc.map(d=>d.Type),datasets:[{data:inc.map(d=>d.Total),backgroundColor:P,borderWidth:0}]},options:{responsive:true,maintainAspectRatio:false,cutout:"50%",plugins:{legend:{position:"right",labels:{boxWidth:12,padding:8,font:{size:11}}},tooltip:{callbacks:{label:ctx=>ctx.label+": "+fmtE(ctx.parsed)}}}}});}
 
@@ -1268,6 +1482,7 @@ cats.slice(0,15).forEach((cat,i)=>{
 sparkHTML+='</div>';
 el.innerHTML=`<div class="grid grid-2">
 <div class="section span-2"><div class="section-title">${tr('sec.monthly_exp')}</div>${mc("c3",280)}</div>
+<div class="section span-2"><div class="section-title">Cumulative Spend <span style="font-size:10px;color:var(--text5);text-transform:none;letter-spacing:0;font-weight:400">(this month vs prior)</span></div>${mc("c3c",260)}</div>
 <div class="section span-2"><div class="section-title">Spending Breakdown <span style="font-size:10px;color:var(--text5);text-transform:none;letter-spacing:0;font-weight:400">(top ${Math.min(20,cats.length)} categories)</span></div>${mc("c3b",Math.min(20,cats.length)*22+60)}</div>
 <div class="section"><div class="section-title">Category Trends <span style="font-size:10px;color:var(--text5);text-transform:none;letter-spacing:0;font-weight:400">(L${sparkMonths}M)</span></div>${sparkHTML}</div>
 <div class="section"><div class="section-title">${tr('sec.top_merchants')}</div>${sources.length?bl(sources,"Source","Total",sources[0].Total,'openMerchant'):es('🛒','No merchants','Nothing matches the current filters.')}</div>
@@ -1277,6 +1492,37 @@ setTimeout(()=>renderHeatmap('heatmapContainer'),50);
 // Draw sparklines after DOM is ready
 setTimeout(()=>{cats.slice(0,15).forEach((cat,i)=>{const mData=getCategoryMonthlyData(cat.Category,sparkMonths);drawSparkline("spark"+i,mData,P[i%P.length])})},50);
 charts.c3=new Chart(document.getElementById("c3"),{type:"line",data:{labels:data.map(d=>d.YM),datasets:[{label:"Outflow",data:data.map(d=>d.Outflow),borderColor:"#ef4444",backgroundColor:"rgba(239,68,68,0.1)",fill:true,borderWidth:2,pointRadius:0,tension:.3}]},options:{responsive:true,maintainAspectRatio:false,scales:{x:{ticks:{maxTicksLimit:12,maxRotation:45}},y:{ticks:{callback:v=>fmtAxis(v)}}},plugins:{tooltip:ttcb(0)}}});
+// Cumulative Spend Curve — this month's running total (solid red) overlaid with
+// the prior month's running total (dotted grey ghost). Shows pace differences.
+(()=>{
+  const latest=_dashLatestMonth();
+  if(!latest){return;}
+  const ymThis=latest;
+  const ymPrev=(()=>{const d=new Date(ymThis+'-15');d.setMonth(d.getMonth()-1);return d.toISOString().slice(0,7);})();
+  const dim=new Date(parseInt(ymThis.slice(0,4)),parseInt(ymThis.slice(5,7)),0).getDate();
+  const pdim=new Date(parseInt(ymPrev.slice(0,4)),parseInt(ymPrev.slice(5,7)),0).getDate();
+  const dailyT=Array.from({length:dim},()=>0);
+  const dailyP=Array.from({length:pdim},()=>0);
+  TXNS.forEach(t=>{
+    if(t.t!=='Out')return;
+    const d=parseInt(t.d.slice(8,10))-1;
+    if(t.d.startsWith(ymThis)&&d>=0&&d<dim)dailyT[d]+=t.v;
+    else if(t.d.startsWith(ymPrev)&&d>=0&&d<pdim)dailyP[d]+=t.v;
+  });
+  const cumT=[];let a=0;for(let d=0;d<dim;d++){a+=dailyT[d];cumT.push(Math.round(a));}
+  const cumP=[];a=0;for(let d=0;d<pdim;d++){a+=dailyP[d];cumP.push(Math.round(a));}
+  // Align prior to length dim (pad with last value so the dotted line flatlines once it runs out)
+  const cumPAligned=Array.from({length:dim},(_,i)=>cumP[i]!=null?cumP[i]:(cumP[cumP.length-1]||0));
+  const labels=Array.from({length:dim},(_,i)=>String(i+1));
+  charts.c3c=new Chart(document.getElementById("c3c"),{
+    type:'line',
+    data:{labels,datasets:[
+      {label:`${ymThis}`,data:cumT,borderColor:'#ef4444',backgroundColor:'rgba(239,68,68,.12)',fill:true,tension:.15,pointRadius:0,borderWidth:2.5},
+      {label:`${ymPrev} (prior)`,data:cumPAligned,borderColor:'#94a3b8',borderDash:[5,4],borderWidth:1.5,fill:false,tension:.15,pointRadius:0}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,scales:{x:{ticks:{maxTicksLimit:15}},y:{ticks:{callback:v=>fmtAxis(v)},beginAtZero:true}},plugins:{legend:{display:true,position:'top'},tooltip:{callbacks:{label:ctx=>ctx.dataset.label+': '+fmtE(ctx.parsed.y)}}}}
+  });
+})();
 // Spending Breakdown — horizontal bar chart of top categories (mirrors Income Breakdown style).
 const topCats=cats.slice(0,20);
 charts.c3b=new Chart(document.getElementById("c3b"),{type:"bar",data:{labels:topCats.map(c=>c.Category),datasets:[{label:"Total",data:topCats.map(c=>c.Total),backgroundColor:topCats.map((_,i)=>ramp(i,topCats.length)),borderRadius:6}]},options:{indexAxis:"y",responsive:true,maintainAspectRatio:false,scales:{x:{ticks:{callback:v=>fmtAxis(v)}},y:{ticks:{autoSkip:false,font:{size:11}}}},plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>fmtE(ctx.parsed.x)}}}}});
