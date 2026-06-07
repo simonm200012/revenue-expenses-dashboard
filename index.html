@@ -1783,6 +1783,43 @@ function reapplyRules(){
 // ============================================================
 // MONTHLY PDF REPORT
 // ============================================================
+// Render a Chart.js config to an offscreen canvas and return its PNG data URL.
+// Used by exportMonthPDF to generate every chart image embedded in the report.
+async function _pdfRenderChart(config,width,height){
+  const canvas=document.createElement('canvas');
+  canvas.width=width;canvas.height=height;
+  canvas.style.position='fixed';canvas.style.top='-9999px';
+  document.body.appendChild(canvas);
+  const chart=new Chart(canvas,{
+    ...config,
+    options:{...(config.options||{}),animation:false,responsive:false,maintainAspectRatio:false}
+  });
+  await new Promise(r=>setTimeout(r,220));
+  const img=canvas.toDataURL('image/png');
+  chart.destroy();canvas.remove();
+  return img;
+}
+function _pdfFmtSigned(v){const s=v>=0?'+':'−';return s+'€'+Math.round(Math.abs(v)).toLocaleString();}
+function _pdfFmtDelta(v){
+  if(v==null||!isFinite(v))return'—';
+  const s=v>=0?'+':'−';
+  return s+Math.abs(v).toFixed(0)+'%';
+}
+// Page footer — drawn after content of each page so page numbers reflect total.
+function _pdfFooter(doc,ym){
+  const pageCount=doc.internal.getNumberOfPages();
+  for(let p=1;p<=pageCount;p++){
+    doc.setPage(p);
+    const W=doc.internal.pageSize.getWidth();
+    const H=doc.internal.pageSize.getHeight();
+    doc.setDrawColor(220).line(40,H-30,W-40,H-30);
+    doc.setFont('helvetica','normal').setFontSize(8).setTextColor(140);
+    doc.text(`Financial Report · ${ym}`,40,H-16);
+    doc.text(`Page ${p} of ${pageCount}`,W-40,H-16,{align:'right'});
+    doc.text(`Generated ${new Date().toLocaleString('en-GB')}`,W/2,H-16,{align:'center'});
+  }
+  doc.setTextColor(0);
+}
 async function exportMonthPDF(){
   const months=[...new Set(TXNS.map(t=>t.d.slice(0,7)))].sort().reverse();
   if(!months.length){alert('No data');return}
@@ -1790,76 +1827,293 @@ async function exportMonthPDF(){
   if(!ym||!/^\d{4}-\d{2}$/.test(ym))return;
   const all=TXNS.filter(t=>t.d.startsWith(ym));
   if(!all.length){alert('No transactions for '+ym);return}
+
+  // ============ Aggregations ============
   const out=all.filter(t=>t.t==='Out');
   const inT=all.filter(t=>t.t==='In');
+  const inv=all.filter(t=>t.t==='Inv');
   const totalOut=out.reduce((s,t)=>s+t.v,0);
   const totalIn=inT.reduce((s,t)=>s+t.v,0);
+  const totalInv=inv.reduce((s,t)=>s+t.v,0);
+  const net=totalIn-totalOut;
+  const savRate=totalIn>0?((totalIn-totalOut)/totalIn*100):0;
 
+  // Prior month + same-month-last-year for comparison
+  const prevMonth=(()=>{const d=new Date(ym+'-15');d.setMonth(d.getMonth()-1);return d.toISOString().slice(0,7);})();
+  const yoyMonth=(parseInt(ym.slice(0,4))-1)+'-'+ym.slice(5,7);
+  const prevAll=TXNS.filter(t=>t.d.startsWith(prevMonth));
+  const yoyAll=TXNS.filter(t=>t.d.startsWith(yoyMonth));
+  const prevIn=prevAll.filter(t=>t.t==='In').reduce((s,t)=>s+t.v,0);
+  const prevOut=prevAll.filter(t=>t.t==='Out').reduce((s,t)=>s+t.v,0);
+  const yoyIn=yoyAll.filter(t=>t.t==='In').reduce((s,t)=>s+t.v,0);
+  const yoyOut=yoyAll.filter(t=>t.t==='Out').reduce((s,t)=>s+t.v,0);
+  const dPrevIn=prevIn>0?(totalIn-prevIn)/prevIn*100:null;
+  const dPrevOut=prevOut>0?(totalOut-prevOut)/prevOut*100:null;
+  const dYoyIn=yoyIn>0?(totalIn-yoyIn)/yoyIn*100:null;
+  const dYoyOut=yoyOut>0?(totalOut-yoyOut)/yoyOut*100:null;
+
+  // Category breakdown
   const catMap={};out.forEach(t=>{catMap[t.c]=(catMap[t.c]||0)+t.v});
-  const topCats=Object.entries(catMap).sort((a,b)=>b[1]-a[1]).slice(0,8);
-
+  const topCats=Object.entries(catMap).sort((a,b)=>b[1]-a[1]).slice(0,12);
+  // Merchant breakdown
   const srcMap={};out.forEach(t=>{srcMap[t.s]=(srcMap[t.s]||0)+t.v});
-  const topMerchants=Object.entries(srcMap).sort((a,b)=>b[1]-a[1]).slice(0,8);
-
-  const rec=detectRecurring().filter(r=>r.lastDate&&r.lastDate.startsWith(ym));
-
-  const histBySrc={};
-  TXNS.forEach(t=>{if(t.t!=='Out')return;if(!histBySrc[t.s])histBySrc[t.s]=[];histBySrc[t.s].push(t.v)});
+  const topMerchants=Object.entries(srcMap).sort((a,b)=>b[1]-a[1]).slice(0,10);
+  // Income sources (use detail r if present, else source s)
+  const incMap={};inT.forEach(t=>{const k=(t.r||t.s||'Other');incMap[k]=(incMap[k]||0)+t.v});
+  const incomeSrc=Object.entries(incMap).sort((a,b)=>b[1]-a[1]);
+  // Bank breakdown (combines outflow + inflow per bank, with explicit splits)
+  const bankMap={};all.forEach(t=>{if(!t.b)return;if(!bankMap[t.b])bankMap[t.b]={in:0,out:0,inv:0};
+    if(t.t==='In')bankMap[t.b].in+=t.v;else if(t.t==='Inv')bankMap[t.b].inv+=t.v;else bankMap[t.b].out+=t.v;
+  });
+  const banks=Object.entries(bankMap).sort((a,b)=>(b[1].out+b[1].in)-(a[1].out+a[1].in));
+  // Daily totals (for spending trend line)
+  const days=Object.keys({}.constructor).constructor;
+  const daysInMonth=new Date(parseInt(ym.slice(0,4)),parseInt(ym.slice(5,7)),0).getDate();
+  const dailyOut=Array.from({length:daysInMonth},(_,i)=>0);
+  const dailyIn=Array.from({length:daysInMonth},(_,i)=>0);
+  out.forEach(t=>{const d=parseInt(t.d.slice(8,10))-1;if(d>=0&&d<daysInMonth)dailyOut[d]+=t.v;});
+  inT.forEach(t=>{const d=parseInt(t.d.slice(8,10))-1;if(d>=0&&d<daysInMonth)dailyIn[d]+=t.v;});
+  const dayLabels=Array.from({length:daysInMonth},(_,i)=>String(i+1));
+  // Day-of-week distribution
+  const dowOrder=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  const dowMap={};dowOrder.forEach(d=>dowMap[d]=0);
+  out.forEach(t=>{const idx=(new Date(t.d).getDay()+6)%7;dowMap[dowOrder[idx]]+=t.v;});
+  // New merchants this month (not seen in prior 6 months)
+  const priorWindow=[];for(let i=1;i<=6;i++){const d=new Date(ym+'-15');d.setMonth(d.getMonth()-i);priorWindow.push(d.toISOString().slice(0,7));}
+  const priorMerchants=new Set(TXNS.filter(t=>priorWindow.includes(t.d.slice(0,7))).map(t=>t.s));
+  const newMerchants=[...new Set(out.filter(t=>!priorMerchants.has(t.s)).map(t=>t.s).filter(Boolean))].slice(0,15);
+  // Recurring activity this month
+  const recList=(typeof detectRecurring==='function'?detectRecurring():[]).filter(r=>r.lastDate&&r.lastDate.startsWith(ym));
+  // Anomalies (already in original)
+  const histBySrc={};TXNS.forEach(t=>{if(t.t!=='Out')return;if(!histBySrc[t.s])histBySrc[t.s]=[];histBySrc[t.s].push(t.v)});
   const anomalies=out.filter(t=>{
-    const h=histBySrc[t.s];
-    if(!h||h.length<4)return false;
+    const h=histBySrc[t.s];if(!h||h.length<4)return false;
     const mean=h.reduce((a,b)=>a+b,0)/h.length;
     const sd=Math.sqrt(h.reduce((s,v)=>s+(v-mean)**2,0)/h.length);
     return sd>0&&t.v>mean+2*sd&&t.v>25;
-  }).sort((a,b)=>b.v-a.v).slice(0,8);
+  }).sort((a,b)=>b.v-a.v);
+  // Reconciliation status
+  const recon=all.filter(t=>t.f).length;
+  const unrecon=all.length-recon;
+  const reconPct=all.length?Math.round(recon/all.length*100):0;
+  // Day statistics
+  const dailyTotals=dailyOut.map((v,i)=>({day:i+1,v}));
+  const biggestDay=dailyTotals.reduce((m,d)=>d.v>m.v?d:m,{day:0,v:0});
+  const activeDays=dailyTotals.filter(d=>d.v>0).length;
+  const avgDaily=activeDays?totalOut/activeDays:0;
 
-  const chartCanvas=document.createElement('canvas');
-  chartCanvas.width=600;chartCanvas.height=280;
-  document.body.appendChild(chartCanvas);
-  chartCanvas.style.position='fixed';chartCanvas.style.top='-9999px';
-  const tmpChart=new Chart(chartCanvas,{
+  // ============ Pre-render every chart we need ============
+  const HUES=['#ef4444','#f59e0b','#8b5cf6','#06b6d4','#ec4899','#84cc16','#3b82f6','#f97316','#14b8a6','#a855f7','#0ea5e9','#d946ef'];
+  const catChartImg=topCats.length?await _pdfRenderChart({
+    type:'doughnut',
+    data:{labels:topCats.map(([c])=>c),datasets:[{data:topCats.map(([,v])=>v),backgroundColor:HUES.slice(0,topCats.length),borderWidth:0}]},
+    options:{cutout:'58%',plugins:{legend:{position:'right',labels:{boxWidth:10,padding:6,font:{size:9}}}}}
+  },560,240):null;
+  const dailyChartImg=await _pdfRenderChart({
+    type:'line',
+    data:{labels:dayLabels,datasets:[
+      {label:'Daily expenses',data:dailyOut,borderColor:'#ef4444',backgroundColor:'rgba(239,68,68,.18)',fill:true,tension:.3,pointRadius:0,borderWidth:2},
+      {label:'Daily income',data:dailyIn,borderColor:'#10b981',backgroundColor:'rgba(16,185,129,.10)',fill:true,tension:.3,pointRadius:0,borderWidth:1.5}
+    ]},
+    options:{plugins:{legend:{display:true,position:'top',labels:{boxWidth:10,font:{size:10}}}},scales:{y:{beginAtZero:true}}}
+  },560,200);
+  const dowChartImg=await _pdfRenderChart({
     type:'bar',
-    data:{labels:['Income','Expenses','Net'],datasets:[{data:[totalIn,totalOut,totalIn-totalOut],backgroundColor:['#10b981','#ef4444','#06b6d4']}]},
-    options:{animation:false,responsive:false,plugins:{legend:{display:false}}}
-  });
-  await new Promise(r=>setTimeout(r,200));
-  const chartImg=chartCanvas.toDataURL('image/png');
-  tmpChart.destroy();chartCanvas.remove();
+    data:{labels:dowOrder,datasets:[{data:dowOrder.map(d=>dowMap[d]),backgroundColor:'#8b5cf6cc',borderRadius:4}]},
+    options:{plugins:{legend:{display:false}},scales:{y:{beginAtZero:true}}}
+  },280,180);
+  const compareImg=await _pdfRenderChart({
+    type:'bar',
+    data:{labels:['Income','Expenses'],datasets:[
+      {label:'Prior month',data:[prevIn,prevOut],backgroundColor:'#cbd5e1'},
+      {label:'This month',data:[totalIn,totalOut],backgroundColor:['#10b981','#ef4444']}
+    ]},
+    options:{plugins:{legend:{display:true,position:'top',labels:{boxWidth:10,font:{size:10}}}}}
+  },280,180);
 
+  // ============ Build PDF ============
   const {jsPDF}=window.jspdf;
   const doc=new jsPDF({unit:'pt',format:'a4'});
   const W=doc.internal.pageSize.getWidth();
-  let y=40;
-  doc.setFont('helvetica','bold');doc.setFontSize(20);
-  doc.text(`Financial Report — ${ym}`,40,y);y+=22;
-  doc.setFont('helvetica','normal');doc.setFontSize(10);doc.setTextColor(120);
-  doc.text(`${all.length} transactions · Generated ${new Date().toLocaleDateString('en-GB')}`,40,y);y+=22;
-  doc.setTextColor(0);doc.setFontSize(11);
+  const H=doc.internal.pageSize.getHeight();
+  const M=40;
+  let y=44;
+
+  // ---- Page 1: Executive summary ----
+  // Header
+  doc.setFillColor(5,12,28).rect(0,0,W,90,'F');
+  doc.setTextColor(255).setFont('helvetica','bold').setFontSize(22);
+  doc.text(`Financial Report`,M,40);
+  doc.setFont('helvetica','normal').setFontSize(11).setTextColor(212,161,63);
+  doc.text(ym,M,60);
+  doc.setTextColor(200).setFontSize(9);
+  doc.text(`${all.length} transactions  ·  ${out.length} expenses  ·  ${inT.length} income  ·  ${inv.length} investments`,M,76);
+  doc.setTextColor(0);
+  y=110;
+
+  // KPI strip with deltas
+  doc.setFont('helvetica','bold').setFontSize(11);
+  const colW=(W-2*M)/4;
   const kpis=[
-    ['Income','€'+Math.round(totalIn).toLocaleString()],
-    ['Expenses','€'+Math.round(totalOut).toLocaleString()],
-    ['Net','€'+Math.round(totalIn-totalOut).toLocaleString()],
-    ['Savings rate',totalIn>0?((totalIn-totalOut)/totalIn*100).toFixed(1)+'%':'—']
+    {label:'Income',value:'€'+Math.round(totalIn).toLocaleString(),color:[16,185,129],delta:dPrevIn,deltaYoy:dYoyIn},
+    {label:'Expenses',value:'€'+Math.round(totalOut).toLocaleString(),color:[239,68,68],delta:dPrevOut,deltaYoy:dYoyOut},
+    {label:'Net',value:_pdfFmtSigned(net),color:net>=0?[16,185,129]:[239,68,68]},
+    {label:'Savings rate',value:savRate.toFixed(1)+'%',color:savRate>=0?[6,182,212]:[239,68,68]}
   ];
-  const colW=(W-80)/4;
-  kpis.forEach(([l,v],i)=>{
-    const x=40+i*colW;
-    doc.setFontSize(9);doc.setTextColor(120);doc.text(l.toUpperCase(),x,y);
-    doc.setFontSize(14);doc.setTextColor(0);doc.text(v,x,y+16);
+  kpis.forEach((k,i)=>{
+    const x=M+i*colW;
+    doc.setDrawColor(...k.color).setLineWidth(2).line(x,y-4,x+colW-12,y-4);
+    doc.setFont('helvetica','normal').setFontSize(8).setTextColor(110).text(k.label.toUpperCase(),x,y+6);
+    doc.setFont('helvetica','bold').setFontSize(15).setTextColor(...k.color).text(k.value,x,y+24);
+    if(k.delta!=null){
+      doc.setFont('helvetica','normal').setFontSize(8).setTextColor(140);
+      doc.text(`MoM ${_pdfFmtDelta(k.delta)}${k.deltaYoy!=null?` · YoY ${_pdfFmtDelta(k.deltaYoy)}`:''}`,x,y+38);
+    }
   });
-  y+=36;
-  doc.addImage(chartImg,'PNG',40,y,W-80,160);y+=176;
-  doc.autoTable({startY:y,head:[['Top categories','Amount']],body:topCats.map(([c,v])=>[c,'€'+Math.round(v).toLocaleString()]),theme:'grid',headStyles:{fillColor:[16,185,129]},margin:{left:40,right:40}});
+  doc.setTextColor(0);
+  y+=52;
+
+  // Quick stats row
+  doc.setFont('helvetica','normal').setFontSize(10).setTextColor(80);
+  const stats=[
+    `Biggest spending day: ${ym}-${String(biggestDay.day).padStart(2,'0')} (${'€'+Math.round(biggestDay.v).toLocaleString()})`,
+    `Avg daily spend (active days): €${Math.round(avgDaily).toLocaleString()}`,
+    `Active days: ${activeDays}/${daysInMonth}`,
+    `Reconciled: ${recon} / ${all.length} (${reconPct}%)`
+  ];
+  stats.forEach((s,i)=>doc.text('• '+s,M,y+i*13));
+  y+=stats.length*13+10;
+  doc.setTextColor(0);
+
+  // Expense distribution donut
+  if(catChartImg){
+    doc.setFont('helvetica','bold').setFontSize(12).text('Expense distribution',M,y);y+=8;
+    doc.addImage(catChartImg,'PNG',M,y,W-2*M,170);y+=180;
+  }
+
+  // ---- Page 2: Patterns ----
+  doc.addPage();
+  y=M;
+  doc.setFont('helvetica','bold').setFontSize(15).text('Patterns & comparison',M,y);y+=22;
+
+  // Daily trend chart
+  doc.setFont('helvetica','bold').setFontSize(11).text('Daily flow throughout the month',M,y);y+=8;
+  doc.addImage(dailyChartImg,'PNG',M,y,W-2*M,150);y+=164;
+
+  // Side-by-side: DoW and Compare
+  doc.setFont('helvetica','bold').setFontSize(11).text('Spending by day of week',M,y);
+  doc.text('vs Prior month',M+(W-2*M)/2+10,y);y+=8;
+  doc.addImage(dowChartImg,'PNG',M,y,(W-2*M)/2-10,140);
+  doc.addImage(compareImg,'PNG',M+(W-2*M)/2+10,y,(W-2*M)/2-10,140);y+=152;
+
+  // Top categories + top merchants side by side
+  doc.autoTable({startY:y,head:[['Top categories','Amount','% of expenses']],
+    body:topCats.map(([c,v])=>[c,'€'+Math.round(v).toLocaleString(),(v/totalOut*100).toFixed(1)+'%']),
+    theme:'grid',headStyles:{fillColor:[16,185,129],fontSize:9},styles:{fontSize:9,cellPadding:4},
+    margin:{left:M,right:W/2+5},tableWidth:(W-2*M)/2-5
+  });
+  doc.autoTable({startY:y,head:[['Top merchants','Amount','# txns']],
+    body:topMerchants.map(([s,v])=>[s,'€'+Math.round(v).toLocaleString(),out.filter(t=>t.s===s).length]),
+    theme:'grid',headStyles:{fillColor:[59,130,246],fontSize:9},styles:{fontSize:9,cellPadding:4},
+    margin:{left:W/2+5,right:M},tableWidth:(W-2*M)/2-5
+  });
   y=doc.lastAutoTable.finalY+14;
-  doc.autoTable({startY:y,head:[['Top merchants','Amount']],body:topMerchants.map(([s,v])=>[s,'€'+Math.round(v).toLocaleString()]),theme:'grid',headStyles:{fillColor:[59,130,246]},margin:{left:40,right:40}});
-  y=doc.lastAutoTable.finalY+14;
+
+  // ---- Page 3: Income / Banks / Activity ----
+  doc.addPage();y=M;
+  doc.setFont('helvetica','bold').setFontSize(15).text('Income, accounts & activity',M,y);y+=22;
+
+  // Income breakdown
+  if(incomeSrc.length){
+    doc.autoTable({startY:y,head:[['Income source','Amount','% of income']],
+      body:incomeSrc.map(([s,v])=>[s,'€'+Math.round(v).toLocaleString(),totalIn?(v/totalIn*100).toFixed(1)+'%':'—']),
+      theme:'grid',headStyles:{fillColor:[16,185,129]},margin:{left:M,right:M}
+    });
+    y=doc.lastAutoTable.finalY+12;
+  }
+
+  // Bank / account breakdown
+  if(banks.length){
+    doc.autoTable({startY:y,head:[['Bank / Account','Income','Expenses','Invested','Net']],
+      body:banks.map(([b,v])=>[b,'€'+Math.round(v.in).toLocaleString(),'€'+Math.round(v.out).toLocaleString(),'€'+Math.round(v.inv).toLocaleString(),_pdfFmtSigned(v.in-v.out-v.inv)]),
+      theme:'grid',headStyles:{fillColor:[14,165,233]},margin:{left:M,right:M}
+    });
+    y=doc.lastAutoTable.finalY+12;
+  }
+
+  // Recurring this month
+  if(recList.length){
+    doc.autoTable({startY:y,head:[['Recurring this month','Amount','Type','Last seen']],
+      body:recList.slice(0,18).map(r=>[r.source,'€'+r.amount.toFixed(2),r.type==='In'?'Income':'Expense',r.lastDate||'—']),
+      theme:'grid',headStyles:{fillColor:[139,92,246]},margin:{left:M,right:M}
+    });
+    y=doc.lastAutoTable.finalY+12;
+  }
+
+  // Anomalies
   if(anomalies.length){
-    doc.autoTable({startY:y,head:[['Anomalies','Date','Amount']],body:anomalies.map(t=>[t.s,t.d,'€'+Math.round(t.v).toLocaleString()]),theme:'grid',headStyles:{fillColor:[245,158,11]},margin:{left:40,right:40}});
-    y=doc.lastAutoTable.finalY+14;
+    doc.autoTable({startY:y,head:[['Anomaly (>2σ vs source mean)','Date','Amount']],
+      body:anomalies.slice(0,12).map(t=>[t.s,t.d,'€'+Math.round(t.v).toLocaleString()]),
+      theme:'grid',headStyles:{fillColor:[245,158,11]},margin:{left:M,right:M}
+    });
+    y=doc.lastAutoTable.finalY+12;
   }
-  if(rec.length){
-    doc.autoTable({startY:y,head:[['Recurring this month','Amount','Type']],body:rec.slice(0,10).map(r=>[r.source,'€'+r.amount.toFixed(2),r.type==='In'?'Income':'Expense']),theme:'grid',headStyles:{fillColor:[139,92,246]},margin:{left:40,right:40}});
+
+  // New merchants this month
+  if(newMerchants.length){
+    if(y>H-100){doc.addPage();y=M;}
+    doc.setFont('helvetica','bold').setFontSize(11).setTextColor(0).text('New merchants this month',M,y);y+=6;
+    doc.setFont('helvetica','normal').setFontSize(9).setTextColor(60);
+    const text=newMerchants.join('  ·  ');
+    const lines=doc.splitTextToSize(text,W-2*M);
+    doc.text(lines,M,y+10);y+=lines.length*12+18;
+    doc.setTextColor(0);
   }
+
+  // Investments this month
+  if(inv.length){
+    if(y>H-120){doc.addPage();y=M;}
+    doc.autoTable({startY:y,head:[['Investment activity','Date','Bank','Amount']],
+      body:inv.slice(0,12).map(t=>[t.s,t.d,t.b||'—','€'+Math.round(t.v).toLocaleString()]),
+      theme:'grid',headStyles:{fillColor:[139,92,246]},margin:{left:M,right:M}
+    });
+    y=doc.lastAutoTable.finalY+12;
+  }
+
+  // ---- Page 4+: Full transaction appendix ----
+  doc.addPage();y=M;
+  doc.setFont('helvetica','bold').setFontSize(15).text('All transactions',M,y);
+  doc.setFont('helvetica','normal').setFontSize(9).setTextColor(120);
+  doc.text(`${all.length} rows, sorted newest first`,M,y+16);y+=30;
+  doc.setTextColor(0);
+  const txRows=[...all].sort((a,b)=>b.d.localeCompare(a.d)).map(t=>[
+    t.d,
+    (t.s||'').slice(0,32),
+    t.t==='In'?'Inflow':(t.t==='Inv'?'Investment':'Outflow'),
+    t.b||'',
+    (t.c||'').slice(0,18),
+    (t.t==='In'?'+':(t.t==='Inv'?'●':'−'))+'€'+t.v.toFixed(2),
+    t.f?'✓':''
+  ]);
+  doc.autoTable({
+    startY:y,
+    head:[['Date','Source','Type','Bank','Category','Amount','Recon']],
+    body:txRows,
+    theme:'striped',
+    headStyles:{fillColor:[5,12,28],fontSize:9,textColor:255},
+    styles:{fontSize:8,cellPadding:3},
+    columnStyles:{
+      0:{cellWidth:55},
+      2:{cellWidth:55},
+      3:{cellWidth:60},
+      5:{cellWidth:70,halign:'right',fontStyle:'bold'},
+      6:{cellWidth:40,halign:'center'}
+    },
+    margin:{left:M,right:M},
+    didDrawPage:()=>{}
+  });
+
+  _pdfFooter(doc,ym);
   doc.save(`finance_report_${ym}.pdf`);
 }
 
