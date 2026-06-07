@@ -2,7 +2,7 @@
 // Caches the app shell so it loads instantly and works offline.
 // Data (Supabase queries, fuel-prices.json, Anthropic API) always goes to the network.
 
-const VERSION = 'v4';
+const VERSION = 'v5';
 const SHELL_CACHE = 'shell-' + VERSION;
 const SHELL_ASSETS = [
   './',
@@ -54,6 +54,26 @@ self.addEventListener('fetch', event => {
         caches.open(SHELL_CACHE).then(c => c.put(req, copy));
         return res;
       }).catch(() => caches.match(req))
+    );
+    return;
+  }
+
+  // Network-first for the HTML shell (index.html and the bare path that
+  // serves it) — keeps online users on the latest code on every reload,
+  // instead of one-reload-stale via stale-while-revalidate. Falls back
+  // to the cached copy when offline so the dashboard still opens.
+  if (req.mode === 'navigate' ||
+      url.pathname === '/' ||
+      url.pathname.endsWith('/') ||
+      url.pathname.endsWith('/index.html')) {
+    event.respondWith(
+      fetch(req).then(res => {
+        if (res && res.ok) {
+          const copy = res.clone();
+          caches.open(SHELL_CACHE).then(c => c.put(req, copy));
+        }
+        return res;
+      }).catch(() => caches.match(req).then(c => c || caches.match('./')))
     );
     return;
   }
