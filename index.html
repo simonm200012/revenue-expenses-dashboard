@@ -1829,6 +1829,76 @@ function _pdfFooter(doc,ym){
   }
   doc.setTextColor(0);
 }
+// Tiny sparkline drawn directly in jsPDF (no canvas) — used in the YTD strip
+// so each KPI gets a 12-month trajectory mini-line under its value.
+function _pdfSparkline(doc,x,y,w,h,data,color){
+  if(!data||data.length<2)return;
+  const min=Math.min(...data,0),max=Math.max(...data,1);
+  const range=max-min||1;
+  const step=w/(data.length-1);
+  doc.setDrawColor(color[0],color[1],color[2]).setLineWidth(1.1);
+  let prevX,prevY;
+  data.forEach((v,i)=>{
+    const cx=x+i*step,cy=y+h-((v-min)/range)*h;
+    if(i>0)doc.line(prevX,prevY,cx,cy);
+    prevX=cx;prevY=cy;
+  });
+  doc.setFillColor(color[0],color[1],color[2]);
+  doc.circle(prevX,prevY,1.4,'F');
+}
+// Calendar heatmap — Mon-start grid sized to the month. Light grey → deep red
+// intensity ramp keyed to per-day spend. Day numbers inside each cell, amount
+// labels when the cell is tall enough.
+function _pdfHeatmap(doc,x,y,w,h,daily,ym){
+  const days=daily.length;
+  const firstDay=new Date(ym+'-01');
+  const offset=(firstDay.getDay()+6)%7;
+  const max=Math.max(...daily,1);
+  const cellW=w/7;
+  const headerH=12;
+  const rows=Math.ceil((days+offset)/7);
+  const cellH=(h-headerH)/Math.max(rows,1);
+  doc.setFont('helvetica','normal').setFontSize(7).setTextColor(120);
+  ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].forEach((d,i)=>{
+    doc.text(d,x+i*cellW+cellW/2,y+8,{align:'center'});
+  });
+  for(let d=0;d<days;d++){
+    const idx=offset+d;
+    const col=idx%7;
+    const row=Math.floor(idx/7);
+    const cx=x+col*cellW;
+    const cy=y+headerH+row*cellH;
+    const val=daily[d];
+    const intensity=val/max;
+    const r=Math.round(248-intensity*(248-220));
+    const g=Math.round(248-intensity*(248-38));
+    const b=Math.round(248-intensity*(248-38));
+    doc.setFillColor(r,g,b);
+    doc.rect(cx+1,cy+1,cellW-2,cellH-2,'F');
+    doc.setFontSize(7).setTextColor(intensity>0.5?255:100);
+    doc.text(String(d+1),cx+cellW-3,cy+8,{align:'right'});
+    if(val>0&&cellH>20){
+      doc.setFontSize(6.5).setFont('helvetica','bold').setTextColor(intensity>0.5?255:30);
+      doc.text('€'+Math.round(val),cx+3,cy+cellH-3);
+      doc.setFont('helvetica','normal');
+    }
+  }
+  doc.setTextColor(0);
+}
+// Callout box: solid color background, icon + title at top, large value mid,
+// small subtitle bottom. Used for the three Notable-changes boxes on page 1.
+function _pdfCallout(doc,x,y,w,h,icon,title,value,subtitle,color){
+  doc.setFillColor(color[0],color[1],color[2]);
+  doc.roundedRect(x,y,w,h,4,4,'F');
+  doc.setFont('helvetica','bold').setFontSize(8).setTextColor(255);
+  doc.text((icon?icon+'  ':'')+title.toUpperCase(),x+10,y+14);
+  doc.setFontSize(14).setTextColor(255);
+  doc.text(value,x+10,y+33);
+  doc.setFontSize(7.5).setFont('helvetica','normal').setTextColor(255);
+  const lines=doc.splitTextToSize(subtitle,w-20);
+  doc.text(lines[0]||'',x+10,y+h-8);
+  doc.setTextColor(0);
+}
 async function exportMonthPDF(){
   const months=[...new Set(TXNS.map(t=>t.d.slice(0,7)))].sort().reverse();
   if(!months.length){alert('No data');return}
@@ -1911,6 +1981,55 @@ async function exportMonthPDF(){
   const activeDays=dailyTotals.filter(d=>d.v>0).length;
   const avgDaily=activeDays?totalOut/activeDays:0;
 
+  // ============ Year-to-date stats + 12-month sparkline series ============
+  const yearOfMonth=ym.slice(0,4);
+  const ytdTxns=TXNS.filter(t=>t.d.startsWith(yearOfMonth)&&t.d<=ym+'-31');
+  const ytdIn=ytdTxns.filter(t=>t.t==='In').reduce((s,t)=>s+t.v,0);
+  const ytdOut=ytdTxns.filter(t=>t.t==='Out').reduce((s,t)=>s+t.v,0);
+  const ytdInv=ytdTxns.filter(t=>t.t==='Inv').reduce((s,t)=>s+t.v,0);
+  const ytdNet=ytdIn-ytdOut;
+  const ytdSav=ytdIn>0?(ytdNet/ytdIn*100):0;
+  // 12 months ending at this month for sparklines
+  const sparkMonths=[];
+  for(let i=11;i>=0;i--){const d=new Date(ym+'-15');d.setMonth(d.getMonth()-i);sparkMonths.push(d.toISOString().slice(0,7));}
+  const sparkIn=sparkMonths.map(m=>TXNS.filter(t=>t.d.startsWith(m)&&t.t==='In').reduce((s,t)=>s+t.v,0));
+  const sparkOut=sparkMonths.map(m=>TXNS.filter(t=>t.d.startsWith(m)&&t.t==='Out').reduce((s,t)=>s+t.v,0));
+  const sparkNet=sparkIn.map((v,i)=>v-sparkOut[i]);
+  const sparkInv=sparkMonths.map(m=>TXNS.filter(t=>t.d.startsWith(m)&&t.t==='Inv').reduce((s,t)=>s+t.v,0));
+  const sparkSav=sparkIn.map((v,i)=>v>0?((v-sparkOut[i])/v*100):0);
+
+  // ============ Notable changes (vs 6-month median) ============
+  const sixMonthsBack=[];
+  for(let i=1;i<=6;i++){const d=new Date(ym+'-15');d.setMonth(d.getMonth()-i);sixMonthsBack.push(d.toISOString().slice(0,7));}
+  const histByCatMo={};
+  TXNS.forEach(t=>{
+    if(t.t!=='Out')return;
+    const m=t.d.slice(0,7);
+    if(sixMonthsBack.includes(m)){
+      histByCatMo[t.c]=histByCatMo[t.c]||{};
+      histByCatMo[t.c][m]=(histByCatMo[t.c][m]||0)+t.v;
+    }
+  });
+  const catDeltas=topCats.map(([cat,current])=>{
+    const hist=Object.values(histByCatMo[cat]||{});
+    hist.sort((a,b)=>a-b);
+    const median=hist.length?hist[Math.floor(hist.length/2)]:0;
+    return {cat,current,median,delta:current-median};
+  });
+  const catUp=catDeltas.filter(d=>d.delta>0&&d.median>0).sort((a,b)=>b.delta-a.delta)[0];
+  const catDown=catDeltas.filter(d=>d.delta<0&&d.median>0).sort((a,b)=>a.delta-b.delta)[0];
+
+  // ============ Cumulative spend curve data ============
+  const cumThis=[];let _acc=0;
+  for(let d=0;d<daysInMonth;d++){_acc+=dailyOut[d];cumThis.push(_acc);}
+  const prevDays=new Date(parseInt(prevMonth.slice(0,4)),parseInt(prevMonth.slice(5,7)),0).getDate();
+  const prevDaily=Array.from({length:prevDays},()=>0);
+  prevAll.forEach(t=>{if(t.t!=='Out')return;const d=parseInt(t.d.slice(8,10))-1;if(d>=0&&d<prevDays)prevDaily[d]+=t.v;});
+  const cumPrev=[];_acc=0;
+  for(let d=0;d<prevDays;d++){_acc+=prevDaily[d];cumPrev.push(_acc);}
+  // Align prior month curve to same length as current (pad/truncate)
+  const cumPrevAligned=Array.from({length:daysInMonth},(_,i)=>cumPrev[i]!=null?cumPrev[i]:(cumPrev[cumPrev.length-1]||0));
+
   // ============ Pre-render every chart we need ============
   const HUES=['#ef4444','#f59e0b','#8b5cf6','#06b6d4','#ec4899','#84cc16','#3b82f6','#f97316','#14b8a6','#a855f7','#0ea5e9','#d946ef'];
   const catChartImg=topCats.length?await _pdfRenderChart({
@@ -1923,6 +2042,16 @@ async function exportMonthPDF(){
     data:{labels:dayLabels,datasets:[
       {label:'Daily expenses',data:dailyOut,borderColor:'#ef4444',backgroundColor:'rgba(239,68,68,.18)',fill:true,tension:.3,pointRadius:0,borderWidth:2},
       {label:'Daily income',data:dailyIn,borderColor:'#10b981',backgroundColor:'rgba(16,185,129,.10)',fill:true,tension:.3,pointRadius:0,borderWidth:1.5}
+    ]},
+    options:{plugins:{legend:{display:true,position:'top',labels:{boxWidth:10,font:{size:10}}}},scales:{y:{beginAtZero:true}}}
+  },480,170);
+  // Cumulative spend curve — this month (solid red fill) vs prior month
+  // (dotted grey ghost). Shows pace of spending across the month at a glance.
+  const cumChartImg=await _pdfRenderChart({
+    type:'line',
+    data:{labels:dayLabels,datasets:[
+      {label:`${ym} cumulative`,data:cumThis,borderColor:'#ef4444',backgroundColor:'rgba(239,68,68,.12)',fill:true,tension:.15,pointRadius:0,borderWidth:2},
+      {label:`${prevMonth} (prior)`,data:cumPrevAligned,borderColor:'#94a3b8',borderDash:[5,4],borderWidth:1.4,fill:false,tension:.15,pointRadius:0}
     ]},
     options:{plugins:{legend:{display:true,position:'top',labels:{boxWidth:10,font:{size:10}}}},scales:{y:{beginAtZero:true}}}
   },480,170);
@@ -1940,6 +2069,40 @@ async function exportMonthPDF(){
     options:{plugins:{legend:{display:true,position:'top',labels:{boxWidth:10,font:{size:10}}}}}
   },240,150);
 
+  // ============ AI executive summary (Haiku / Gemini, with fallback) ============
+  // One-shot LLM call producing 2-3 sentences of plain-English commentary.
+  // If no AI key is configured, falls back to a deterministic template.
+  let aiSummary='';
+  try{
+    if(typeof callAIText==='function'&&typeof CHAT==='object'&&(CHAT.geminiKey||CHAT.apiKey)){
+      const topCatName=topCats[0]?topCats[0][0]:'misc';
+      const topCatAmt=topCats[0]?topCats[0][1]:0;
+      const topMerchName=topMerchants[0]?topMerchants[0][0]:'-';
+      const aiPrompt=`Write a 2-3 sentence financial summary for ${ym} in plain English. Be specific with figures (use the EUR symbol), focus on the most notable changes, no preachiness, no markdown.
+
+Month: ${ym}
+Income: EUR${totalIn.toFixed(0)} (prior month EUR${prevIn.toFixed(0)})
+Expenses: EUR${totalOut.toFixed(0)} (prior month EUR${prevOut.toFixed(0)})
+Net: ${net>=0?'+':''}EUR${net.toFixed(0)}
+Savings rate: ${savRate.toFixed(1)}%
+Top category: ${topCatName} at EUR${topCatAmt.toFixed(0)} (${totalOut>0?(topCatAmt/totalOut*100).toFixed(0):'0'}% of expenses)
+Top merchant: ${topMerchName}
+New merchants this month: ${newMerchants.length}`;
+      const r=await callAIText({prompt:aiPrompt,maxTokens:220});
+      if(r&&r.text){
+        // Replace any "EUR" placeholder with literal € since the AI may echo it back.
+        aiSummary=r.text.trim().replace(/EUR/g,'€');
+      }
+    }
+  }catch(e){/* swallow — fall back below */}
+  if(!aiSummary){
+    const topCatName=topCats[0]?topCats[0][0]:'misc';
+    const topCatAmt=topCats[0]?topCats[0][1]:0;
+    const topCatPct=totalOut>0?Math.round(topCatAmt/totalOut*100):0;
+    const dir=totalOut>prevOut?'up from':(totalOut<prevOut?'down from':'level with');
+    aiSummary=`Spent €${Math.round(totalOut).toLocaleString()} this month${prevOut>0?` (${dir} €${Math.round(prevOut).toLocaleString()} last month)`:''}. Top category was ${topCatName} at €${Math.round(topCatAmt).toLocaleString()} (${topCatPct}% of expenses). Net was ${net>=0?'+':'-'}€${Math.round(Math.abs(net)).toLocaleString()} for a ${savRate.toFixed(1)}% savings rate.`;
+  }
+
   // ============ Build PDF ============
   const {jsPDF}=window.jspdf;
   const doc=new jsPDF({unit:'pt',format:'a4'});
@@ -1949,7 +2112,7 @@ async function exportMonthPDF(){
   let y=44;
 
   // ---- Page 1: Executive summary ----
-  // Header
+  // Header band
   doc.setFillColor(5,12,28).rect(0,0,W,90,'F');
   doc.setTextColor(255).setFont('helvetica','bold').setFontSize(22);
   doc.text(`Financial Report`,M,40);
@@ -1958,9 +2121,21 @@ async function exportMonthPDF(){
   doc.setTextColor(200).setFontSize(9);
   doc.text(`${all.length} transactions  |  ${out.length} expenses  |  ${inT.length} income  |  ${inv.length} investments`,M,76);
   doc.setTextColor(0);
-  y=110;
+  y=102;
 
-  // KPI strip with deltas
+  // ===== AI Executive Summary box =====
+  const summLines=doc.splitTextToSize(aiSummary,W-2*M-20);
+  const summH=20+summLines.length*12;
+  doc.setFillColor(248,250,252).roundedRect(M,y,W-2*M,summH,3,3,'F');
+  doc.setFillColor(212,161,63).rect(M,y,3,summH,'F'); // gold left accent
+  doc.setFont('helvetica','bold').setFontSize(8).setTextColor(140);
+  doc.text('EXECUTIVE SUMMARY',M+10,y+12);
+  doc.setFont('helvetica','normal').setFontSize(10).setTextColor(40);
+  doc.text(summLines,M+10,y+24);
+  doc.setTextColor(0);
+  y+=summH+12;
+
+  // ===== KPI strip with deltas =====
   doc.setFont('helvetica','bold').setFontSize(11);
   const colW=(W-2*M)/4;
   const kpis=[
@@ -1971,9 +2146,9 @@ async function exportMonthPDF(){
   ];
   kpis.forEach((k,i)=>{
     const x=M+i*colW;
-    doc.setDrawColor(...k.color).setLineWidth(2).line(x,y-4,x+colW-12,y-4);
+    doc.setDrawColor(k.color[0],k.color[1],k.color[2]).setLineWidth(2).line(x,y-4,x+colW-12,y-4);
     doc.setFont('helvetica','normal').setFontSize(8).setTextColor(110).text(k.label.toUpperCase(),x,y+6);
-    doc.setFont('helvetica','bold').setFontSize(15).setTextColor(...k.color).text(k.value,x,y+24);
+    doc.setFont('helvetica','bold').setFontSize(15).setTextColor(k.color[0],k.color[1],k.color[2]).text(k.value,x,y+24);
     if(k.delta!=null){
       doc.setFont('helvetica','normal').setFontSize(8).setTextColor(140);
       doc.text(`MoM ${_pdfFmtDelta(k.delta)}${k.deltaYoy!=null?`  |  YoY ${_pdfFmtDelta(k.deltaYoy)}`:''}`,x,y+38);
@@ -1982,22 +2157,59 @@ async function exportMonthPDF(){
   doc.setTextColor(0);
   y+=52;
 
-  // Quick stats row
-  doc.setFont('helvetica','normal').setFontSize(10).setTextColor(80);
+  // ===== Year-to-date strip with mini sparklines =====
+  doc.setFont('helvetica','bold').setFontSize(8).setTextColor(80).text(`YEAR-TO-DATE  (${yearOfMonth})`,M,y);
+  doc.setDrawColor(220).setLineWidth(0.5).line(M+120,y-2,W-M,y-2);
+  y+=8;
+  const ytdColW=(W-2*M)/5;
+  const ytdItems=[
+    {label:'INCOME',value:'€'+Math.round(ytdIn).toLocaleString(),color:[16,185,129],spark:sparkIn},
+    {label:'EXPENSES',value:'€'+Math.round(ytdOut).toLocaleString(),color:[239,68,68],spark:sparkOut},
+    {label:'NET',value:_pdfFmtSigned(ytdNet),color:ytdNet>=0?[16,185,129]:[239,68,68],spark:sparkNet},
+    {label:'INVESTED',value:'€'+Math.round(ytdInv).toLocaleString(),color:[139,92,246],spark:sparkInv},
+    {label:'SAVINGS RATE',value:ytdSav.toFixed(1)+'%',color:[6,182,212],spark:sparkSav}
+  ];
+  ytdItems.forEach((it,i)=>{
+    const x=M+i*ytdColW;
+    doc.setFont('helvetica','normal').setFontSize(7).setTextColor(120).text(it.label,x,y+8);
+    doc.setFont('helvetica','bold').setFontSize(11).setTextColor(it.color[0],it.color[1],it.color[2]).text(it.value,x,y+22);
+    _pdfSparkline(doc,x,y+26,ytdColW-18,12,it.spark,it.color);
+  });
+  doc.setTextColor(0);
+  y+=48;
+
+  // ===== Notable changes callouts (3 boxes) =====
+  const callW=(W-2*M-16)/3;
+  const callH=58;
+  if(catUp){
+    _pdfCallout(doc,M,y,callW,callH,'',catUp.cat.slice(0,18)+' UP',`+€${Math.round(catUp.delta).toLocaleString()}`,`vs 6-mo median of €${Math.round(catUp.median).toLocaleString()}`,[239,68,68]);
+  }else{
+    _pdfCallout(doc,M,y,callW,callH,'','CATEGORY UP','-','no significant increase',[148,163,184]);
+  }
+  if(catDown){
+    _pdfCallout(doc,M+callW+8,y,callW,callH,'',catDown.cat.slice(0,18)+' DOWN',`-€${Math.round(Math.abs(catDown.delta)).toLocaleString()}`,`vs 6-mo median of €${Math.round(catDown.median).toLocaleString()}`,[16,185,129]);
+  }else{
+    _pdfCallout(doc,M+callW+8,y,callW,callH,'','CATEGORY DOWN','-','no significant decrease',[148,163,184]);
+  }
+  _pdfCallout(doc,M+2*callW+16,y,callW,callH,'','NEW MERCHANTS',String(newMerchants.length),'first seen in 6+ months',[139,92,246]);
+  y+=callH+12;
+
+  // ===== Quick stats row =====
+  doc.setFont('helvetica','normal').setFontSize(9).setTextColor(80);
   const stats=[
     `Biggest spending day: ${ym}-${String(biggestDay.day).padStart(2,'0')} (${'€'+Math.round(biggestDay.v).toLocaleString()})`,
     `Avg daily spend (active days): €${Math.round(avgDaily).toLocaleString()}`,
     `Active days: ${activeDays}/${daysInMonth}`,
     `Reconciled: ${recon} / ${all.length} (${reconPct}%)`
   ];
-  stats.forEach((s,i)=>doc.text('• '+s,M,y+i*13));
-  y+=stats.length*13+10;
+  stats.forEach((s,i)=>doc.text('• '+s,M+(i%2)*((W-2*M)/2),y+Math.floor(i/2)*12));
+  y+=30;
   doc.setTextColor(0);
 
-  // Expense distribution donut
+  // ===== Expense distribution donut =====
   if(catChartImg){
-    doc.setFont('helvetica','bold').setFontSize(12).text('Expense distribution',M,y);y+=8;
-    doc.addImage(catChartImg,'PNG',M,y,W-2*M,170);y+=180;
+    doc.setFont('helvetica','bold').setFontSize(11).text('Expense distribution',M,y);y+=6;
+    doc.addImage(catChartImg,'PNG',M,y,W-2*M,140);y+=150;
   }
 
   // ---- Page 2: Patterns ----
@@ -2005,15 +2217,26 @@ async function exportMonthPDF(){
   y=M;
   doc.setFont('helvetica','bold').setFontSize(15).text('Patterns & comparison',M,y);y+=22;
 
-  // Daily trend chart
-  doc.setFont('helvetica','bold').setFontSize(11).text('Daily flow throughout the month',M,y);y+=8;
-  doc.addImage(dailyChartImg,'PNG',M,y,W-2*M,150);y+=164;
+  // Daily flow line chart
+  doc.setFont('helvetica','bold').setFontSize(11).text('Daily flow throughout the month',M,y);y+=6;
+  doc.addImage(dailyChartImg,'PNG',M,y,W-2*M,150);y+=158;
+
+  // Cumulative spend curve (this month vs prior month ghost)
+  doc.setFont('helvetica','bold').setFontSize(11).text('Cumulative spend vs prior month',M,y);y+=6;
+  doc.addImage(cumChartImg,'PNG',M,y,W-2*M,150);y+=158;
 
   // Side-by-side: DoW and Compare
   doc.setFont('helvetica','bold').setFontSize(11).text('Spending by day of week',M,y);
-  doc.text('vs Prior month',M+(W-2*M)/2+10,y);y+=8;
+  doc.text('vs Prior month',M+(W-2*M)/2+10,y);y+=6;
   doc.addImage(dowChartImg,'PNG',M,y,(W-2*M)/2-10,140);
-  doc.addImage(compareImg,'PNG',M+(W-2*M)/2+10,y,(W-2*M)/2-10,140);y+=152;
+  doc.addImage(compareImg,'PNG',M+(W-2*M)/2+10,y,(W-2*M)/2-10,140);y+=148;
+
+  // ---- Page 3: Heatmap + tables ----
+  doc.addPage();y=M;
+  doc.setFont('helvetica','bold').setFontSize(15).text('Daily calendar & top spenders',M,y);y+=22;
+  // Calendar heatmap (drawn directly, no canvas)
+  doc.setFont('helvetica','bold').setFontSize(11).text('Daily spending intensity',M,y);y+=8;
+  _pdfHeatmap(doc,M,y,W-2*M,200,dailyOut,ym);y+=210;
 
   // Top categories + top merchants side by side
   doc.autoTable({startY:y,head:[['Top categories','Amount','% of expenses']],
