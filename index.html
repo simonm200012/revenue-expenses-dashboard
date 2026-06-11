@@ -179,6 +179,9 @@ html.is-mobile-device #quickAddPanel.open{transform:translateX(0)}
 .budget-limit-input{width:84px;background:var(--input-bg);border:1px solid var(--border2);border-radius:6px;color:var(--text);padding:5px 8px;font-size:12px;font-family:'JetBrains Mono',monospace}
 .budget-proj{font-size:10px;font-weight:700;padding:2px 7px;border-radius:9px;background:rgba(239,68,68,.14);color:var(--acc-red);white-space:nowrap}
 /* ===== MONEY FLOW TAB (hand-drawn SVG sankey) ===== */
+.view-toggle{display:inline-flex;border:1px solid var(--border2);border-radius:8px;overflow:hidden;vertical-align:middle}
+.view-toggle button{background:transparent;border:none;color:var(--text4);font-family:inherit;font-size:11px;font-weight:700;padding:5px 14px;cursor:pointer;letter-spacing:.4px;text-transform:uppercase}
+.view-toggle button.active{background:rgba(16,185,129,.18);color:var(--acc-green)}
 .flow-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
 .flow-svg{min-width:760px;width:100%;height:auto;display:block}
 .flow-ribbon{opacity:.32;transition:opacity .15s;cursor:pointer}
@@ -2151,7 +2154,11 @@ function renderBudgets(){
 // total spine, which flows out to expense categories, investments, and
 // savings. Respects the year filter + filter pane (standard render path).
 // No chart library — pure SVG with bezier ribbons, themed via CSS vars.
+// A Graph/Table toggle (persisted) switches between the sankey and a
+// two-column breakdown using the same nodes and colors.
 // ============================================================
+let FLOW_VIEW=localStorage.getItem('flow-view')||'graph';
+function setFlowView(v){FLOW_VIEW=v;try{localStorage.setItem('flow-view',v);}catch{}render();}
 function renderFlow(){
   const el=document.getElementById('content');
   const txns=getFilteredTxns();
@@ -2219,10 +2226,21 @@ function renderFlow(){
   svg+=`<rect x="${midX}" y="${topPad}" width="${nodeW}" height="${T*scale}" rx="3" fill="var(--text4)"><title>Total: ${fmtE(T)}</title></rect>`;
   svg+=`<text class="flow-sub" x="${midX+nodeW/2}" y="${topPad-10}" text-anchor="middle">Total ${fmtE(T)}</text>`;
   const periodLabel=yearFilter!=='All'?yearFilter:(hasActiveFilters()?'filtered':'all time');
+  // Table view: the same nodes and colors as the sankey, as two ranked
+  // bar columns — sources on the left, allocation on the right.
+  const flowTableCol=(title,nodes)=>{
+    const max=Math.max(...nodes.map(n=>n.v),1);
+    return `<div class="section"><div class="section-title">${title}</div><div class="bar-list">${nodes.map(n=>
+      `<div class="bar-item"><div class="bar-header"><span class="bar-label"><span style="display:inline-block;width:9px;height:9px;border-radius:3px;background:${n.color};margin-right:7px"></span>${escapeHtml(n.name)}</span><span class="bar-value">${fmtE(n.v)} · ${pctOf(n.v)}%</span></div><div class="bar-track"><div class="bar-fill" style="width:${(n.v/max*100)}%;background:${n.color}"></div></div></div>`
+    ).join('')}</div></div>`;
+  };
+  const body=FLOW_VIEW==='table'
+    ?`<div class="grid grid-2">${flowTableCol('Where it came from · '+fmtE(T),leftNodes)}${flowTableCol('Where it went · '+fmtE(T),rightNodes)}</div>`
+    :`<div class="flow-wrap"><svg class="flow-svg" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">${svg}</svg></div>
+    <p style="font-size:11px;color:var(--text5);margin-top:10px">Income sources on the left flow into the total; expenses, investments and savings flow out on the right. Hover any ribbon for details. Use the year selector or filters to change the period.</p>`;
   el.innerHTML=`<div class="section">
-    <div class="section-title">Money Flow <span style="font-size:10px;color:var(--text5);text-transform:none;letter-spacing:0;font-weight:400">(${escapeHtml(periodLabel)} · where every euro goes)</span></div>
-    <div class="flow-wrap"><svg class="flow-svg" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">${svg}</svg></div>
-    <p style="font-size:11px;color:var(--text5);margin-top:10px">Income sources on the left flow into the total; expenses, investments and savings flow out on the right. Hover any ribbon for details. Use the year selector or filters to change the period.</p>
+    <div class="section-title" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px"><span>Money Flow <span style="font-size:10px;color:var(--text5);text-transform:none;letter-spacing:0;font-weight:400">(${escapeHtml(periodLabel)} · where every euro goes)</span></span><span class="view-toggle"><button class="${FLOW_VIEW!=='table'?'active':''}" onclick="setFlowView('graph')">Graph</button><button class="${FLOW_VIEW==='table'?'active':''}" onclick="setFlowView('table')">Table</button></span></div>
+    ${body}
   </div>`;
 }
 
