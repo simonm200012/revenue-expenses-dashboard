@@ -1595,7 +1595,32 @@ charts.c9=new Chart(document.getElementById("c9"),{type:"line",data:{labels:data
 
 function renderTransactions(){const el=document.getElementById("content");
 el.innerHTML=`<div class="section"><div class="section-title">${tr('sec.txn_search')}</div><div class="search-bar"><input class="search-input" id="txnSearch" placeholder="Quick search within filtered results..." oninput="txnPage=0;filterTxns()"></div><div class="table-wrap"><table class="txn-table"><thead><tr><th>Date</th><th>Source</th><th>Amount</th><th>Type</th><th>Category</th><th>Detail</th></tr></thead><tbody id="txnBody"></tbody></table></div><div class="table-footer"><span id="txnCount"></span><div><button class="page-btn" id="prevBtn" onclick="txnPage--;filterTxns()">\u2190 Prev</button> <button class="page-btn" id="nextBtn" onclick="txnPage++;filterTxns()">Next \u2192</button></div></div></div>`;filterTxns()}
-function filterTxns(){let filtered=getFilteredTxns();const q=(document.getElementById("txnSearch").value||"").toLowerCase();if(q)filtered=filtered.filter(t=>(t.s+t.c+t.r+t.b+t.d).toLowerCase().includes(q));const pp=50,total=filtered.length,pages=Math.ceil(total/pp);if(txnPage>=pages)txnPage=Math.max(0,pages-1);const sl=filtered.slice(txnPage*pp,(txnPage+1)*pp);const typeLabel=t=>t.t==='In'?'Inflow':(t.t==='Inv'?'Investment':'Outflow');const amtClass=t=>t.t==='In'?'in':(t.t==='Inv'?'inv':'out');const amtSign=t=>t.t==='In'?'+':(t.t==='Inv'?'\u25CF':'\u2212');const reconBadge=t=>t.f?`<span title="Found in ${escapeAttr(t.f)}" style="color:var(--acc-green);font-size:11px;margin-left:6px">\u2713</span>`:`<span title="Not yet found in any bank statement" style="color:var(--acc-amber);font-size:11px;margin-left:6px">\u26A0</span>`;document.getElementById("txnBody").innerHTML=sl.map(t=>`<tr><td>${t.d}${reconBadge(t)}</td><td style="cursor:pointer;color:var(--text)" data-merchant="${escapeHtml(t.s||'')}" onclick="openMerchant(this.dataset.merchant)">${escapeHtml(t.s)}</td><td class="${amtClass(t)}">${amtSign(t)}\u20AC${t.v.toFixed(2)}</td><td>${typeLabel(t)}</td><td>${escapeHtml(t.c)}</td><td>${escapeHtml(t.r)}</td></tr>`).join("");const unreconShown=sl.filter(t=>!t.f).length;document.getElementById("txnCount").innerHTML=`${total} transactions \u00B7 Page ${txnPage+1}/${Math.max(pages,1)}${unreconShown>0?` \u00B7 <span style="color:var(--acc-amber)">\u26A0 ${unreconShown} unreconciled on this page</span>`:''}`;document.getElementById("prevBtn").disabled=txnPage<=0;document.getElementById("nextBtn").disabled=txnPage>=pages-1}
+// Per-merchant spending stats for anomaly badges — same detection the
+// monthly PDF uses (>2 standard deviations above the merchant's mean,
+// minimum 4 historical charges, ignore amounts under €25). Memoized on
+// transaction count; rules don't alter source/value so count is enough.
+let _srcStatsCache={n:-1,map:{}};
+function _srcStats(){
+  if(_srcStatsCache.n===TXNS.length)return _srcStatsCache.map;
+  const hist={};
+  TXNS.forEach(t=>{if(t.t!=='Out'||!t.s)return;(hist[t.s]=hist[t.s]||[]).push(t.v);});
+  const map={};
+  for(const s in hist){
+    const h=hist[s];if(h.length<4)continue;
+    const mean=h.reduce((a,b)=>a+b,0)/h.length;
+    const sd=Math.sqrt(h.reduce((acc,v)=>acc+(v-mean)**2,0)/h.length);
+    if(sd>0)map[s]={mean,sd};
+  }
+  _srcStatsCache={n:TXNS.length,map};
+  return map;
+}
+function anomalyBadge(t){
+  if(t.t!=='Out'||t.v<=25)return'';
+  const st=_srcStats()[t.s];
+  if(!st||t.v<=st.mean+2*st.sd)return'';
+  return `<span title="Unusually high for this merchant — typical charge is ~€${Math.round(st.mean)}" style="color:var(--acc-amber);margin-left:5px;font-size:11px;cursor:help">⚠</span>`;
+}
+function filterTxns(){let filtered=getFilteredTxns();const q=(document.getElementById("txnSearch").value||"").toLowerCase();if(q)filtered=filtered.filter(t=>(t.s+t.c+t.r+t.b+t.d).toLowerCase().includes(q));const pp=50,total=filtered.length,pages=Math.ceil(total/pp);if(txnPage>=pages)txnPage=Math.max(0,pages-1);const sl=filtered.slice(txnPage*pp,(txnPage+1)*pp);const typeLabel=t=>t.t==='In'?'Inflow':(t.t==='Inv'?'Investment':'Outflow');const amtClass=t=>t.t==='In'?'in':(t.t==='Inv'?'inv':'out');const amtSign=t=>t.t==='In'?'+':(t.t==='Inv'?'\u25CF':'\u2212');const reconBadge=t=>t.f?`<span title="Found in ${escapeAttr(t.f)}" style="color:var(--acc-green);font-size:11px;margin-left:6px">\u2713</span>`:`<span title="Not yet found in any bank statement" style="color:var(--acc-amber);font-size:11px;margin-left:6px">\u26A0</span>`;document.getElementById("txnBody").innerHTML=sl.map(t=>`<tr><td>${t.d}${reconBadge(t)}</td><td style="cursor:pointer;color:var(--text)" data-merchant="${escapeHtml(t.s||'')}" onclick="openMerchant(this.dataset.merchant)">${escapeHtml(t.s)}</td><td class="${amtClass(t)}">${amtSign(t)}\u20AC${t.v.toFixed(2)}${anomalyBadge(t)}</td><td>${typeLabel(t)}</td><td>${escapeHtml(t.c)}</td><td>${escapeHtml(t.r)}</td></tr>`).join("");const unreconShown=sl.filter(t=>!t.f).length;document.getElementById("txnCount").innerHTML=`${total} transactions \u00B7 Page ${txnPage+1}/${Math.max(pages,1)}${unreconShown>0?` \u00B7 <span style="color:var(--acc-amber)">\u26A0 ${unreconShown} unreconciled on this page</span>`:''}`;document.getElementById("prevBtn").disabled=txnPage<=0;document.getElementById("nextBtn").disabled=txnPage>=pages-1}
 
 function renderCompare(){const months=MONTHLY.map(m=>m.YM);const el=document.getElementById("content");
 // Smart defaults: current month vs same month last year
@@ -1604,7 +1629,19 @@ const defB=months.includes(curYM)?curYM:months[months.length-1];const defA=month
 el.innerHTML=`<div class="section"><div class="section-title">${tr('sec.mom_compare')}</div><div class="compare-row"><select class="compare-select" id="cmpA" onchange="updateCompare()"><option value="">Select Month A</option>${months.map(m=>`<option value="${m}"${m===defA?' selected':''}>${m}</option>`).join("")}</select><span style="color:var(--text4);font-weight:700">vs</span><select class="compare-select" id="cmpB" onchange="updateCompare()"><option value="">Select Month B</option>${months.map(m=>`<option value="${m}"${m===defB?' selected':''}>${m}</option>`).join("")}</select></div><div id="compareResult"></div></div>`;updateCompare()}
 function updateCompare(){const a=document.getElementById("cmpA").value,b=document.getElementById("cmpB").value;if(!a||!b){document.getElementById("compareResult").innerHTML='<p style="color:var(--text4)">Select two months.</p>';return}const ma=MONTHLY.find(m=>m.YM===a),mb=MONTHLY.find(m=>m.YM===b);if(!ma||!mb)return;const txA=TXNS.filter(t=>t.d.startsWith(a)&&t.t==='Out'),txB=TXNS.filter(t=>t.d.startsWith(b)&&t.t==='Out');const catA={},catB={};txA.forEach(t=>{catA[t.c]=(catA[t.c]||0)+t.v});txB.forEach(t=>{catB[t.c]=(catB[t.c]||0)+t.v});const allC=[...new Set([...Object.keys(catA),...Object.keys(catB)])].sort((x,y)=>((catB[y]||0)-(catB[x]||0)));
 function delta(va,vb){const d=vb-va;if(Math.abs(d)<0.5)return'<span class="delta" style="opacity:.5">\u2014</span>';return`<span class="delta ${d>0?'neg':'pos'}">${d>0?'+':''}${fmtE(d)}</span>`}
-document.getElementById("compareResult").innerHTML=`<div class="compare-grid"><div class="compare-card"><h4>${a}</h4><div class="compare-stat"><span style="color:var(--text3)">Income</span><span style="color:var(--acc-green);font-family:'JetBrains Mono',monospace">${fmtE(ma.Inflow)}</span></div><div class="compare-stat"><span style="color:var(--text3)">Expenses</span><span style="color:var(--acc-red);font-family:'JetBrains Mono',monospace">${fmtE(ma.Outflow)}</span></div><div class="compare-stat"><span style="color:var(--text3)">Net</span><span style="color:${ma.Net>=0?'var(--acc-green)':'var(--acc-red)'};font-family:'JetBrains Mono',monospace">${fmtE(ma.Net)}</span></div><div class="compare-stat"><span style="color:var(--text3)">Txns</span><span>${txA.length+TXNS.filter(t=>t.d.startsWith(a)&&t.t==='In').length}</span></div></div><div class="compare-card"><h4>${b}</h4><div class="compare-stat"><span style="color:var(--text3)">Income</span><span style="color:var(--acc-green);font-family:'JetBrains Mono',monospace">${fmtE(mb.Inflow)} ${delta(ma.Inflow,mb.Inflow)}</span></div><div class="compare-stat"><span style="color:var(--text3)">Expenses</span><span style="color:var(--acc-red);font-family:'JetBrains Mono',monospace">${fmtE(mb.Outflow)} ${delta(ma.Outflow,mb.Outflow)}</span></div><div class="compare-stat"><span style="color:var(--text3)">Net</span><span style="color:${mb.Net>=0?'var(--acc-green)':'var(--acc-red)'};font-family:'JetBrains Mono',monospace">${fmtE(mb.Net)}</span></div><div class="compare-stat"><span style="color:var(--text3)">Txns</span><span>${txB.length+TXNS.filter(t=>t.d.startsWith(b)&&t.t==='In').length}</span></div></div></div><div class="section" style="margin-top:16px"><div class="section-title">${tr('sec.cat_breakdown')}</div>${mc("cmpChart",280)}</div>`;
+document.getElementById("compareResult").innerHTML=`<div class="compare-grid"><div class="compare-card"><h4>${a}</h4><div class="compare-stat"><span style="color:var(--text3)">Income</span><span style="color:var(--acc-green);font-family:'JetBrains Mono',monospace">${fmtE(ma.Inflow)}</span></div><div class="compare-stat"><span style="color:var(--text3)">Expenses</span><span style="color:var(--acc-red);font-family:'JetBrains Mono',monospace">${fmtE(ma.Outflow)}</span></div><div class="compare-stat"><span style="color:var(--text3)">Net</span><span style="color:${ma.Net>=0?'var(--acc-green)':'var(--acc-red)'};font-family:'JetBrains Mono',monospace">${fmtE(ma.Net)}</span></div><div class="compare-stat"><span style="color:var(--text3)">Txns</span><span>${txA.length+TXNS.filter(t=>t.d.startsWith(a)&&t.t==='In').length}</span></div></div><div class="compare-card"><h4>${b}</h4><div class="compare-stat"><span style="color:var(--text3)">Income</span><span style="color:var(--acc-green);font-family:'JetBrains Mono',monospace">${fmtE(mb.Inflow)} ${delta(ma.Inflow,mb.Inflow)}</span></div><div class="compare-stat"><span style="color:var(--text3)">Expenses</span><span style="color:var(--acc-red);font-family:'JetBrains Mono',monospace">${fmtE(mb.Outflow)} ${delta(ma.Outflow,mb.Outflow)}</span></div><div class="compare-stat"><span style="color:var(--text3)">Net</span><span style="color:${mb.Net>=0?'var(--acc-green)':'var(--acc-red)'};font-family:'JetBrains Mono',monospace">${fmtE(mb.Net)}</span></div><div class="compare-stat"><span style="color:var(--text3)">Txns</span><span>${txB.length+TXNS.filter(t=>t.d.startsWith(b)&&t.t==='In').length}</span></div></div></div><div class="section" style="margin-top:16px"><div class="section-title">${tr('sec.cat_breakdown')}</div>${mc("cmpChart",280)}</div>
+<div class="section" style="margin-top:16px"><div class="section-title">Category Deltas <span style="font-size:10px;color:var(--text5);text-transform:none;letter-spacing:0;font-weight:400">(${a} → ${b})</span></div>
+<div class="table-wrap" style="max-height:420px"><table class="txn-table">
+<thead><tr><th>Category</th><th>${a}</th><th>${b}</th><th>Δ €</th><th>Δ %</th></tr></thead>
+<tbody>${allC.slice(0,15).map(c=>{
+  const va=catA[c]||0,vb=catB[c]||0,d=vb-va;
+  const pct=va>0?(d/va*100):null;
+  const cls=Math.abs(d)<1?'':(d>0?'out':'in');
+  const chip=pct==null
+    ?'<span style="color:var(--text4)">new</span>'
+    :`<span style="background:${d>0?'rgba(239,68,68,.12)':'rgba(16,185,129,.12)'};color:${d>0?'var(--acc-red)':'var(--acc-green)'};padding:1px 8px;border-radius:10px;font-size:11px;font-weight:600">${d>0?'+':''}${pct.toFixed(0)}%</span>`;
+  return `<tr><td>${escapeHtml(c)}</td><td style="font-family:'JetBrains Mono',monospace">${fmtE(va)}</td><td style="font-family:'JetBrains Mono',monospace">${fmtE(vb)}</td><td class="${cls}" style="font-family:'JetBrains Mono',monospace">${d>=0?'+':'−'}€${Math.abs(Math.round(d)).toLocaleString()}</td><td>${chip}</td></tr>`;
+}).join('')}</tbody></table></div></div>`;
 const topC=allC.slice(0,10);charts.cmpChart=new Chart(document.getElementById("cmpChart"),{type:"bar",data:{labels:topC,datasets:[{label:a,data:topC.map(c=>catA[c]||0),backgroundColor:"#3b82f6aa",borderRadius:4},{label:b,data:topC.map(c=>catB[c]||0),backgroundColor:"#f59e0baa",borderRadius:4}]},options:{responsive:true,maintainAspectRatio:false,scales:{y:{ticks:{callback:v=>fmtAxis(v)}},x:{ticks:{maxRotation:45,font:{size:10}}}},plugins:{tooltip:ttcb(1)}}})}
 
 function renderProjection(){const el=document.getElementById("content");const m=gfm();const last6=m.slice(-6);const avgIn=Math.round(last6.reduce((s,d)=>s+d.Inflow,0)/Math.max(last6.length,1));const avgOut=Math.round(last6.reduce((s,d)=>s+d.Outflow,0)/Math.max(last6.length,1));const cumNow=m.reduce((s,d)=>s+d.Net,0);
@@ -2035,6 +2072,86 @@ function addRuleFromMerchant(name){
 // ============================================================
 // RULES TAB
 // ============================================================
+// ============================================================
+// AI RULE SUGGESTIONS — scans uncategorized transactions, asks the
+// configured AI (Gemini/Claude via callAIText) to propose contains-
+// patterns mapped to existing categories. User approves each with one
+// tap. Suggestions live in module state so re-renders keep them.
+// ============================================================
+let _ruleSuggestions=null; // null = not fetched; [] = fetched, none; [...] = proposals
+function _uncategorizedSources(){
+  const unc=TXNS.filter(t=>t.t==='Out'&&(!t.c||t.c==='Uncategorized'||t.c==='(uncategorized)'));
+  const m={};
+  unc.forEach(t=>{const s=t.s||'(no source)';m[s]=m[s]||{source:s,count:0,total:0};m[s].count++;m[s].total+=t.v;});
+  return Object.values(m).sort((a,b)=>b.count-a.count).slice(0,20);
+}
+function renderRuleSuggestions(){
+  if(!_ruleSuggestions||!_ruleSuggestions.length)return'';
+  return `<div style="border:1px solid var(--border2);border-radius:10px;padding:12px 14px;margin-bottom:14px;background:var(--bg2)">
+    <div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--text4);font-weight:700;margin-bottom:10px">✨ AI suggestions — review before adding <button class="page-btn" style="float:right" onclick="_ruleSuggestions=null;render()">Dismiss all</button></div>
+    ${_ruleSuggestions.map((s,i)=>`
+      <div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-top:1px solid var(--border);font-size:12px;flex-wrap:wrap">
+        <code style="background:var(--input-bg);padding:2px 8px;border-radius:5px">${escapeHtml(s.pattern)}</code>
+        <span style="color:var(--text4)">${escapeHtml(s.target)}</span>
+        <span style="color:var(--text4)">→</span>
+        <strong style="color:var(--acc-green)">${escapeHtml(s.category)}</strong>
+        <span style="color:var(--text5)">${s.matches} match${s.matches===1?'':'es'}</span>
+        ${s.added
+          ?'<span style="color:var(--acc-green);font-weight:600;margin-left:auto">✓ Added</span>'
+          :`<button class="page-btn" style="margin-left:auto" onclick="addSuggestedRule(${i})">+ Add</button>`}
+      </div>`).join('')}
+  </div>`;
+}
+async function suggestRulesAI(){
+  const status=document.getElementById('ruleSugStatus');
+  const srcs=_uncategorizedSources();
+  if(!srcs.length){if(status)status.textContent='No uncategorized outflows found — nothing to suggest.';return;}
+  if(typeof pickProvider==='function'&&!pickProvider()){if(status)status.textContent='Add an AI key in chat settings (💬 → ⚙) first.';return;}
+  if(status)status.textContent='Asking AI for suggestions…';
+  const cats=[...new Set(TXNS.map(t=>t.c))].filter(c=>c&&c!=='Uncategorized').sort();
+  const prompt=`You categorize personal-finance transactions. Below are merchant sources with uncategorized spending, and the list of the user's existing categories. Propose categorization rules.
+
+RULES FOR YOUR OUTPUT:
+- Respond with ONLY a JSON array, no prose, no markdown fences.
+- Each item: {"pattern":"<short case-insensitive substring of the merchant name>","target":"source","category":"<one of the existing categories>"}
+- Only use categories from the existing list. Skip merchants you cannot confidently map.
+- Max ${Math.min(srcs.length,12)} suggestions, best-confidence first.
+
+EXISTING CATEGORIES: ${cats.join(', ')}
+
+UNCATEGORIZED MERCHANTS (name | charges | total €):
+${srcs.map(s=>`${s.source} | ${s.count} | ${Math.round(s.total)}`).join('\n')}`;
+  try{
+    const r=await callAIText({prompt,maxTokens:900});
+    let arr=[];
+    try{arr=JSON.parse(r.text);}catch{
+      const f=r.text.indexOf('['),l=r.text.lastIndexOf(']');
+      if(f!==-1&&l>f)arr=JSON.parse(r.text.slice(f,l+1));
+    }
+    if(!Array.isArray(arr))throw new Error('AI returned no usable JSON');
+    _ruleSuggestions=arr
+      .filter(s=>s&&s.pattern&&s.category&&cats.includes(s.category))
+      .map(s=>{
+        const rule={pattern:String(s.pattern),isRegex:false,target:'source',category:s.category,enabled:true};
+        const m=compileRule(rule);
+        const matches=m?TXNS.filter(t=>m.test(t.s)).length:0;
+        return {...rule,matches,added:false};
+      })
+      .filter(s=>s.matches>0);
+    if(status)status.textContent=_ruleSuggestions.length?'':'AI had no confident suggestions for these merchants.';
+    document.getElementById('ruleSuggestions').innerHTML=renderRuleSuggestions();
+  }catch(err){
+    if(status)status.textContent='Suggestion failed: '+(err.message||err);
+  }
+}
+function addSuggestedRule(i){
+  const s=_ruleSuggestions&&_ruleSuggestions[i];
+  if(!s||s.added)return;
+  RULES.push({id:'r'+Date.now()+'-'+i,pattern:s.pattern,isRegex:false,target:s.target,category:s.category,enabled:true});
+  s.added=true;
+  saveRules();
+  reapplyRules(); // re-renders; suggestions persist via module state
+}
 function renderRules(){
   const el=document.getElementById('content');
   const allCats=[...new Set(TXNS.map(t=>t.c))].filter(Boolean).sort();
@@ -2059,6 +2176,11 @@ function renderRules(){
         </label>
         <button class="fp-btn fp-btn-primary" onclick="addRule()" style="flex:0">Add rule</button>
       </div>
+      <div style="display:flex;align-items:center;gap:10px;margin:4px 0 12px 0">
+        <button class="fp-btn fp-btn-secondary" onclick="suggestRulesAI()" style="flex:0;white-space:nowrap">✨ Suggest rules (AI)</button>
+        <span id="ruleSugStatus" style="font-size:12px;color:var(--text4)"></span>
+      </div>
+      <div id="ruleSuggestions">${renderRuleSuggestions()}</div>
       <div class="table-wrap">
         <table class="txn-table">
           <thead><tr><th>On</th><th>Field</th><th>Pattern</th><th>Type</th><th>→ Category</th><th>Matches</th><th></th></tr></thead>
@@ -4095,6 +4217,36 @@ let CHAT={
   history:[],
   busy:false
 };
+
+// One-shot AI text call for non-chat features (Overview summary, PDF
+// narrative, rule suggestions). Uses the chat's Anthropic key with Haiku —
+// cheap and fast; tool use isn't needed for these. Returns {text}.
+// NOTE: until now the Overview/PDF summary code guarded on
+// `typeof callAIText==='function'` and silently fell back to the
+// deterministic template because this function only existed in the PDF
+// dashboard. Adding it here turns those features' AI path on.
+function pickProvider(){return CHAT.apiKey?'claude':null;}
+async function callAIText({system,prompt,maxTokens=600}){
+  if(!CHAT.apiKey)throw new Error('No AI key configured. Add your Anthropic key in chat settings (💬 → ⚙).');
+  const res=await fetch('https://api.anthropic.com/v1/messages',{
+    method:'POST',
+    headers:{'content-type':'application/json','x-api-key':CHAT.apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+    body:JSON.stringify({
+      model:'claude-haiku-4-5',
+      max_tokens:maxTokens,
+      ...(system?{system}:{}),
+      messages:[{role:'user',content:prompt}]
+    })
+  });
+  if(!res.ok){
+    const body=await res.text();
+    let m='Claude error '+res.status;
+    try{const j=JSON.parse(body);if(j.error&&j.error.message)m=j.error.message;}catch{}
+    throw new Error(m);
+  }
+  const data=await res.json();
+  return {text:(data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('').trim()};
+}
 
 function toggleChat(){
   const p=document.getElementById('chatPanel');
