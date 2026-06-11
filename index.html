@@ -693,7 +693,7 @@ function escapeAttr(s){return escapeHtml(s).replace(/\\/g,'\\\\');}
 const RULES_KEY='fin-cat-rules';
 let RULES=[];
 function loadRules(){try{RULES=JSON.parse(localStorage.getItem(RULES_KEY))||[]}catch{RULES=[]}}
-function saveRules(){localStorage.setItem(RULES_KEY,JSON.stringify(RULES))}
+function saveRules(){localStorage.setItem(RULES_KEY,JSON.stringify(RULES));syncStatePush(RULES_KEY,RULES);}
 function compileRule(r){
   if(!r.enabled)return null;
   if(r.isRegex){try{return new RegExp(r.pattern,'i')}catch{return null}}
@@ -711,8 +711,47 @@ function applyCategoryRules(txns){
 }
 loadRules();
 
+// ============================================================
+// CROSS-DEVICE STATE SYNC — rules, budgets, net worth and plan goals
+// live in the Supabase `app_state` key-value table (one row per key,
+// whole state as jsonb). localStorage stays as the offline fallback
+// and write-through cache. Strategy: pull once at startup (server
+// wins), push on every save (last write wins). Device-local prefs
+// (theme, language, AI caches) intentionally NOT synced.
+// Requires the `app_state` table — see repo README / the SQL in the
+// commit message. All failures are silent: without the table the
+// dashboard behaves exactly as before (localStorage only).
+// ============================================================
+const SYNC_KEYS=['fin-cat-rules','finance-budgets','finance-networth','plan-state-v1'];
+async function syncStatePull(){
+  try{
+    const {data,error}=await _supabase.from('app_state').select('key,value').in('key',SYNC_KEYS);
+    if(error){console.warn('State sync pull skipped:',error.message);return;}
+    for(const row of (data||[])){
+      try{localStorage.setItem(row.key,JSON.stringify(row.value));}catch{}
+      // Rehydrate the live globals that were already loaded from localStorage.
+      if(row.key===RULES_KEY)RULES=Array.isArray(row.value)?row.value:[];
+      else if(row.key==='finance-budgets'&&typeof BUDGETS!=='undefined')BUDGETS=row.value&&typeof row.value==='object'?row.value:{};
+      else if(row.key==='finance-networth'&&typeof NETWORTH!=='undefined')NETWORTH={baselines:{},investments:{},snapshots:[],...(row.value||{})};
+      // plan-state-v1 is read on demand via loadPlanState() → localStorage
+      // is already updated above, nothing to rehydrate.
+    }
+  }catch(e){console.warn('State sync pull failed:',e.message);}
+}
+function syncStatePush(key,value){
+  try{
+    _supabase.from('app_state')
+      .upsert({key,value,updated_at:new Date().toISOString()})
+      .then(({error})=>{if(error)console.warn('State sync push failed for',key+':',error.message);});
+  }catch(e){console.warn('State sync push failed:',e.message);}
+}
+
 async function loadFromSupabase() {
   document.getElementById('content').innerHTML = '<div style="text-align:center;padding:60px;color:var(--text4)"><p style="font-size:18px">Loading transactions from Supabase...</p></div>';
+
+  // Kick off the cross-device state pull in parallel with the
+  // transaction fetch; awaited below before rules are applied.
+  const statePull = syncStatePull();
 
   // Fetch all rows (Supabase paginates at 1000 by default)
   let allData = [];
@@ -747,7 +786,10 @@ async function loadFromSupabase() {
   // Sort by date descending (newest first, matching original)
   TXNS.sort((a, b) => b.d.localeCompare(a.d));
 
-  // Capture immutable snapshot, then apply rules
+  // Capture immutable snapshot, then apply rules — but only after the
+  // state pull resolves, so rules created on another device apply to
+  // this load instead of the stale local copy.
+  await statePull;
   ORIGINAL_TXNS = TXNS.map(t => ({ ...t }));
   applyCategoryRules(TXNS);
 
@@ -2042,7 +2084,7 @@ function addRuleFromMerchant(name){
 const BUDGET_KEY='finance-budgets';
 let BUDGETS={}; // {category: monthlyLimit}
 (function loadBudgets(){try{const raw=localStorage.getItem(BUDGET_KEY);if(raw)BUDGETS=JSON.parse(raw)||{};}catch{}})();
-function saveBudgets(){try{localStorage.setItem(BUDGET_KEY,JSON.stringify(BUDGETS));}catch{}}
+function saveBudgets(){try{localStorage.setItem(BUDGET_KEY,JSON.stringify(BUDGETS));}catch{}syncStatePush(BUDGET_KEY,BUDGETS);}
 // Suggested limit = median of the category's spend over the last 6 FULL
 // months, +10% headroom, rounded up to the nearest €5. Months with zero
 // spend are excluded so occasional categories aren't anchored at 0.
@@ -2975,7 +3017,7 @@ let NETWORTH={baselines:{},investments:{},snapshots:[]};
   if(!NETWORTH.investments)NETWORTH.investments={};
   if(!NETWORTH.snapshots)NETWORTH.snapshots=[];
 })();
-function saveNetWorth(){localStorage.setItem(NW_KEY,JSON.stringify(NETWORTH));}
+function saveNetWorth(){localStorage.setItem(NW_KEY,JSON.stringify(NETWORTH));syncStatePush(NW_KEY,NETWORTH);}
 
 function nwDistinctBanks(){return [...new Set(TXNS.map(t=>t.b).filter(Boolean))].sort();}
 function nwDistinctInvAccounts(){return [...new Set(TXNS.filter(t=>t.t==='Inv').map(t=>t.s).filter(Boolean))].sort();}
@@ -3853,6 +3895,7 @@ function loadPlanState(){
 }
 function savePlanState(s){
   localStorage.setItem(PLAN_KEY, JSON.stringify(s));
+  syncStatePush(PLAN_KEY, s);
 }
 
 // Compute the auto baseline. Returns:
