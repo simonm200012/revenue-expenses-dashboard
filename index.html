@@ -162,12 +162,14 @@ html.is-mobile-device #quickAddPanel.open{transform:translateX(0)}
 .bar-track{height:6px;background:var(--bar-track);border-radius:3px}.bar-fill{height:100%;border-radius:3px;transition:width .6s ease}
 .bar-list{max-height:380px;overflow:auto}
 
-.insights{margin-top:24px;padding:20px 24px;background:linear-gradient(135deg,rgba(16,185,129,0.05) 0%,rgba(139,92,246,0.05) 100%);border:1px solid var(--border);border-radius:14px}
-.insights-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;font-size:13px;color:var(--text3);line-height:1.6}
 
 .search-bar{display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap}
 .search-input{flex:1;min-width:200px;background:var(--input-bg);border:1px solid var(--border2);border-radius:8px;color:var(--text);padding:10px 14px;font-size:13px;font-family:inherit;outline:none}
 .search-input:focus{border-color:var(--acc-green)}
+/* .insights-grid survives the Key Insights removal — the Net Worth tab's
+   Trend section reuses this layout. */
+.insights-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;font-size:13px;color:var(--text3);line-height:1.6}
+@media(max-width:768px),(pointer:coarse) and (max-width:1100px){.insights-grid{grid-template-columns:1fr;gap:10px}}
 /* ===== BUDGETS TAB ===== */
 .budget-row{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border);flex-wrap:wrap}
 .budget-name{flex:0 0 170px;font-size:13px;font-weight:600;color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -289,13 +291,6 @@ html.is-mobile-device .chat-fab{bottom:calc(78px + env(safe-area-inset-bottom)) 
 .proj-card-value{font-size:22px;font-weight:800;font-family:'JetBrains Mono',monospace}
 
 /* Grower badges */
-.grower{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px}
-.grower:last-child{border-bottom:none}
-.grower-name{flex:1;color:var(--text2)}
-.grower-vals{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text3)}
-.grower-delta{font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;padding:2px 8px;border-radius:4px}
-.grower-delta.up{background:rgba(239,68,68,0.12);color:var(--acc-red)}
-.grower-delta.down{background:rgba(16,185,129,0.12);color:var(--acc-green)}
 
 /* Recurring */
 .rec-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px;margin-bottom:20px}
@@ -373,8 +368,6 @@ html.is-mobile-device .span-2{grid-column:span 1}
 html.is-mobile-device .kpis{flex-direction:column;gap:10px;margin-bottom:18px}
 html.is-mobile-device .kpi{padding:14px 16px;min-width:0}
 html.is-mobile-device .kpi-value{font-size:22px}
-html.is-mobile-device .insights{padding:16px;margin-top:16px}
-html.is-mobile-device .insights-grid{grid-template-columns:1fr;gap:10px}
 html.is-mobile-device .controls{flex-direction:column;align-items:stretch;gap:10px}
 html.is-mobile-device .filter-panel{width:100%;max-width:100%;right:-110%;padding-top:max(20px,env(safe-area-inset-top))}
 html.is-mobile-device .filter-panel.open{right:0}
@@ -494,8 +487,6 @@ html.is-mobile-device .section .txn-table input.fp-input{width:120px !important;
   .kpis{flex-direction:column;gap:10px;margin-bottom:18px}
   .kpi{padding:14px 16px;min-width:0}
   .kpi-value{font-size:22px}
-  .insights{padding:16px;margin-top:16px}
-  .insights-grid{grid-template-columns:1fr;gap:10px}
   .controls{flex-direction:column;align-items:stretch;gap:10px}
   /* Ensure the panel slides fully off-screen on phones. Default uses
      right:-400px which only hides ~400px of a 100%-wide panel. */
@@ -620,7 +611,6 @@ html.is-mobile-device .section .txn-table input.fp-input{width:120px !important;
   </div>
   <div class="kpis" id="kpis"><div class="skel skel-kpi"></div><div class="skel skel-kpi"></div><div class="skel skel-kpi"></div><div class="skel skel-kpi"></div><div class="skel skel-kpi"></div></div>
   <div id="content"><div class="skel skel-block"></div><div class="skel skel-block short"></div><div class="skel skel-block short"></div></div>
-  <div class="insights" id="insightsSection"></div>
 </div>
 <!-- Mobile-only bottom navigation: 4 primary sections + More (opens the
      nav pane with every tab). Hidden on desktop via CSS. Buttons are built
@@ -1274,52 +1264,6 @@ ${invCard}<div class="kpi" data-accent="${hasActiveFilters()?'violet':'cyan'}"><
 requestAnimationFrame(animateKpiNumbers);}
 
 // Dynamic insights
-function renderInsights(){
-  const txns=getFilteredTxns();const outT=txns.filter(t=>t.t==="Out");const inT=txns.filter(t=>t.t==="In");
-  const totalIn=inT.reduce((s,t)=>s+t.v,0),totalOut=outT.reduce((s,t)=>s+t.v,0);
-  // Top category
-  const catMap={};outT.forEach(t=>{catMap[t.c]=(catMap[t.c]||0)+t.v});
-  const topCat=Object.entries(catMap).sort((a,b)=>b[1]-a[1])[0];
-  // Top source
-  const srcMap={};outT.forEach(t=>{srcMap[t.s]=(srcMap[t.s]||0)+t.v});
-  const topSrc=Object.entries(srcMap).sort((a,b)=>b[1]-a[1])[0];
-  // Top income
-  const incMap={};inT.forEach(t=>{incMap[t.r]=(incMap[t.r]||0)+t.v});
-  const topInc=Object.entries(incMap).sort((a,b)=>b[1]-a[1])[0];
-  // YoY growers — categories that grew most vs prior period
-  let growerHTML="";
-  const curYear=yearFilter!=="All"?parseInt(yearFilter):2025;
-  const prevYear=curYear-1;
-  const curOut=TXNS.filter(t=>t.t==="Out"&&t.d.startsWith(curYear.toString()));
-  const prevOut=TXNS.filter(t=>t.t==="Out"&&t.d.startsWith(prevYear.toString()));
-  if(curOut.length&&prevOut.length){
-    const curCats={},prevCats={};
-    curOut.forEach(t=>{curCats[t.c]=(curCats[t.c]||0)+t.v});
-    prevOut.forEach(t=>{prevCats[t.c]=(prevCats[t.c]||0)+t.v});
-    const growers=Object.keys(curCats).filter(c=>prevCats[c]&&prevCats[c]>50).map(c=>({cat:c,cur:curCats[c],prev:prevCats[c],delta:curCats[c]-prevCats[c],pct:((curCats[c]-prevCats[c])/prevCats[c]*100)})).sort((a,b)=>b.delta-a.delta).slice(0,3);
-    const shrinkers=Object.keys(prevCats).filter(c=>curCats[c]&&prevCats[c]>50).map(c=>({cat:c,cur:curCats[c]||0,prev:prevCats[c],delta:(curCats[c]||0)-prevCats[c],pct:(((curCats[c]||0)-prevCats[c])/prevCats[c]*100)})).sort((a,b)=>a.delta-b.delta).slice(0,2);
-    if(growers.length){
-      growerHTML=`<div style="margin-top:16px"><div style="font-size:12px;font-weight:700;color:var(--text4);margin-bottom:8px;text-transform:uppercase">\u2191 ${tr('ins.biggest_increases')} ${curYear} vs ${prevYear}</div>`;
-      growers.forEach(g=>{growerHTML+=`<div class="grower"><span class="grower-name">${g.cat}</span><span class="grower-vals">${fmtE(g.prev)} \u2192 ${fmtE(g.cur)}</span><span class="grower-delta up">+${g.pct.toFixed(0)}%</span></div>`});
-      growerHTML+=`</div>`;
-    }
-    if(shrinkers.length){
-      growerHTML+=`<div style="margin-top:12px"><div style="font-size:12px;font-weight:700;color:var(--text4);margin-bottom:8px;text-transform:uppercase">\u2193 ${tr('ins.biggest_decreases')} ${curYear} vs ${prevYear}</div>`;
-      shrinkers.forEach(g=>{growerHTML+=`<div class="grower"><span class="grower-name">${g.cat}</span><span class="grower-vals">${fmtE(g.prev)} \u2192 ${fmtE(g.cur)}</span><span class="grower-delta down">${g.pct.toFixed(0)}%</span></div>`});
-      growerHTML+=`</div>`;
-    }
-  }
-
-  document.getElementById("insightsSection").innerHTML=`
-    <div class="section-title">${tr('sec.key_insights')}${yearFilter!=="All"?' \u2014 '+yearFilter:''}</div>
-    <div class="insights-grid">
-      <div><span style="color:var(--acc-green)">\u2197</span> Total income: <span style="color:var(--text)">${fmtE(totalIn)}</span> across <strong>${inT.length}</strong> transactions.${topInc?` Top source: <span style="color:var(--acc-green)">${topInc[0]}</span> (${fmtE(topInc[1])}).`:''}</div>
-      <div><span style="color:var(--acc-red)">\u2199</span> Total spent: <span style="color:var(--text)">${fmtE(totalOut)}</span> across <strong>${outT.length}</strong> transactions.${topCat?` #1 category: <span style="color:var(--acc-red)">${topCat[0]}</span> (${fmtE(topCat[1])}).`:''}</div>
-      <div><span style="color:var(--acc-cyan)">📊</span> ${topSrc?`Top merchant: <span style="color:var(--text)">${topSrc[0]}</span> at ${fmtE(topSrc[1])}.`:'No outflow data.'} Net: <span style="color:${totalIn-totalOut>=0?'var(--acc-green)':'var(--acc-red)'}">${fmtE(totalIn-totalOut)}</span>.</div>
-      <div><span style="color:var(--acc-violet)">💡</span> ${outT.length?`Avg transaction: ${fmtE(totalOut/outT.length)}. Largest: ${fmtE(Math.max(...outT.map(t=>t.v)))}.`:'No spending data for this selection.'}</div>
-    </div>
-    ${growerHTML}`;
-}
 
 function getDynamicCats(){if(!hasActiveFilters())return TOP_CATEGORIES;const txns=getFilteredTxns().filter(t=>t.t==="Out");const m={};txns.forEach(t=>{m[t.c]=(m[t.c]||0)+t.v});return Object.entries(m).sort((a,b)=>b[1]-a[1]).slice(0,15).map(([k,v])=>({Category:k,Total:Math.round(v)}))}
 function getDynamicSources(){if(!hasActiveFilters())return TOP_SOURCES;const txns=getFilteredTxns().filter(t=>t.t==="Out");const m={};txns.forEach(t=>{m[t.s]=(m[t.s]||0)+t.v});return Object.entries(m).sort((a,b)=>b[1]-a[1]).slice(0,15).map(([k,v])=>({Source:k,Total:Math.round(v)}))}
@@ -3599,40 +3543,33 @@ function render(){
   document.querySelector('.subtitle').innerHTML=dashboardSubtitle;
   if(isBudgets){
     document.getElementById('kpis').innerHTML='';
-    document.getElementById('insightsSection').innerHTML='';
     renderBudgets();
     return;
   }
   if(isRules){
     document.getElementById('kpis').innerHTML='';
-    document.getElementById('insightsSection').innerHTML='';
     renderRules();
     return;
   }
   if(isFuel){
-    document.getElementById('insightsSection').innerHTML='';
     renderFuel();
     return;
   }
   if(isInvestments){
-    document.getElementById('insightsSection').innerHTML='';
     renderInvestments();
     return;
   }
   if(isNetWorth){
-    document.getElementById('insightsSection').innerHTML='';
     renderNetWorth();
     return;
   }
   if(isPlan){
     document.getElementById('kpis').innerHTML='';
-    document.getElementById('insightsSection').innerHTML='';
     renderPlan();
     return;
   }
   renderActiveTags();
   renderKPIs();
-  renderInsights();
   ({overview:renderOverview,spending:renderSpending,income:renderIncome,trends:renderTrends,flow:renderFlow,recurring:renderRecurring,transactions:renderTransactions,compare:renderCompare,projection:renderProjection,rules:renderRules})[activeTab]();
 }
 
