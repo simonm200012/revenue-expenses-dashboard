@@ -18,24 +18,42 @@ const sevenDaysAgo  = isoDate(new Date(now - 7  * dayMs));
 const fourteenIso   = isoDate(new Date(now - 14 * dayMs));
 const thirtyIso     = isoDate(new Date(now - 30 * dayMs));
 const sixtyIso      = isoDate(new Date(now - 60 * dayMs));
-const ninetyIso     = isoDate(new Date(now - 90 * dayMs));
 const nowIso        = isoDate(now);
 
-// Fetch last 90 days from Supabase via REST (richer comparisons)
+// Window: we need Jan 1 (YTD recap) AND 6 full prior months (category
+// medians), whichever reaches further back.
+const yearStart   = nowIso.slice(0,4) + '-01-01';
+const curMonth    = nowIso.slice(0,7);
+const monthStart  = curMonth + '-01';
+const medianStartD = new Date(now); medianStartD.setDate(1); medianStartD.setMonth(medianStartD.getMonth()-6);
+const fromIso = isoDate(Math.min(new Date(yearStart).getTime(), medianStartD.getTime()));
+
+// Fetch the whole window from Supabase via REST, paginated — PostgREST
+// caps responses at 1000 rows regardless of `limit`, so a single request
+// would silently truncate once the window holds more than that.
 async function supabaseFetch(){
-  const url = `${SUPABASE_URL}/rest/v1/transactions?date=gte.${ninetyIso}&order=date.desc&limit=5000`;
-  const res = await fetch(url, {
-    headers: {
-      apikey: SUPABASE_ANON_KEY,
-      Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-      'Accept': 'application/json'
+  const out = [];
+  const page = 1000;
+  let offset = 0;
+  while(true){
+    const url = `${SUPABASE_URL}/rest/v1/transactions?date=gte.${fromIso}&order=date.desc&limit=${page}&offset=${offset}`;
+    const res = await fetch(url, {
+      headers: {
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+        'Accept': 'application/json'
+      }
+    });
+    if(!res.ok){
+      console.error('Supabase fetch failed:', res.status, await res.text());
+      process.exit(1);
     }
-  });
-  if(!res.ok){
-    console.error('Supabase fetch failed:', res.status, await res.text());
-    process.exit(1);
+    const rows = await res.json();
+    out.push(...rows);
+    if(rows.length < page) break;
+    offset += page;
   }
-  return res.json();
+  return out;
 }
 
 // ---- Helpers ----------------------------------------------------------
@@ -180,10 +198,61 @@ const weeklyPaceVs30 = {
   incomePctVsPace: pctChange(cur.inflow, dailyAvgInflow30 * 7)
 };
 
+// ---- Month-to-date cumulative pace vs prior month at the same point ----
+const dayOfMonth = now.getDate();
+const mtdRows = pickRange(all, monthStart, nowIso);
+const mtd = summarize(mtdRows);
+const prevMonthStartD = new Date(monthStart + 'T12:00:00Z'); prevMonthStartD.setMonth(prevMonthStartD.getMonth()-1);
+const prevMonthStart = isoDate(prevMonthStartD);
+const prevSamePointD = new Date(prevMonthStartD); prevSamePointD.setDate(prevSamePointD.getDate() + (dayOfMonth - 1));
+const prevMtd = summarize(pickRange(all, prevMonthStart, isoDate(prevSamePointD)));
+const monthPace = {
+  dayOfMonth,
+  spentSoFar: mtd.outflow,
+  priorMonthAtSamePoint: prevMtd.outflow,
+  pctVsPriorMonth: pctChange(mtd.outflow, prevMtd.outflow),
+  incomeSoFar: mtd.inflow
+};
+
+// ---- Year-to-date recap ----
+const ytdRows = pickRange(all, yearStart, nowIso);
+const ytd = summarize(ytdRows);
+const ytdSavingsRatePct = ytd.inflow > 0 ? round2((ytd.inflow - ytd.outflow) / ytd.inflow * 100) : null;
+
+// ---- Current month vs 6-month category medians (notable monthly movers) ----
+// Compares MTD totals against each category's median over the 6 prior FULL
+// months. Early in a month MTD is naturally below median, so only categories
+// already EXCEEDING their full-month median are flagged as up.
+const monthsBack = [];
+for(let i=1;i<=6;i++){
+  const d = new Date(monthStart + 'T12:00:00Z'); d.setMonth(d.getMonth()-i);
+  monthsBack.push(isoDate(d).slice(0,7));
+}
+const histByCatMonth = {};
+for(const t of all){
+  if(t.type !== 'Outflow') continue;
+  const m = t.date.slice(0,7);
+  if(!monthsBack.includes(m)) continue;
+  const c = cat(t);
+  histByCatMonth[c] = histByCatMonth[c] || {};
+  histByCatMonth[c][m] = round2((histByCatMonth[c][m]||0) + n(t.value));
+}
+const mtdByCat = group(mtdRows.filter(t=>t.type==='Outflow'), cat);
+const monthVsMedian = mtdByCat.map(g => {
+  const hist = Object.values(histByCatMonth[g.key]||{}).sort((a,b)=>a-b);
+  const median = hist.length ? hist[Math.floor(hist.length/2)] : 0;
+  return {category: g.key, mtdTotal: g.total, sixMonthMedian: round2(median), delta: round2(g.total - median)};
+}).filter(x => x.sixMonthMedian > 0 && x.delta > 25)
+  .sort((a,b) => b.delta - a.delta)
+  .slice(0, 4);
+
 const context = {
   thisWeek: cur,
   priorWeek: prev,
   last30Days: m30,
+  monthSoFar: { ...mtd, ...monthPace },
+  yearToDate: { ...ytd, savingsRatePct: ytdSavingsRatePct },
+  monthVsMedian,
   wowChange: {
     income: pctChange(cur.inflow, prev.inflow),
     expenses: pctChange(cur.outflow, prev.outflow),
@@ -235,28 +304,31 @@ STRUCTURE (use exactly these sections, in order, but skip any section where data
 3. <h2>Vs your 30-day pace</h2>
    2-3 sentences explaining whether this week was hotter or cooler than your average pace. Reference the actual numbers: "Spent \u20ACX vs your typical 7-day pace of \u20ACY (Z% above/below)".
 
-4. <h2>Top spending categories</h2>
+4. <h2>Month & year so far</h2>
+   2-3 sentences from monthSoFar + yearToDate: whether this month's cumulative spend (\u20ACX by day N) is running above or below last month at the same point (\u20ACY, Z%), then a one-line YTD recap (income, expenses, net, savings rate). If monthVsMedian is non-empty, name the single category most clearly blowing past its 6-month median with figures (note: those are month-to-date totals already EXCEEDING a full-month median \u2014 that's why they're notable).
+
+5. <h2>Top spending categories</h2>
    <ul> with the top 5 categories. For each: "<strong>Category name</strong> \u2014 \u20ACamount across N transactions (WoW% badge)". Use green for declines, red for big growth.
 
-5. <h2>Spending shifts</h2>
+6. <h2>Spending shifts</h2>
    ONLY include this section if there are categories with significant week-over-week swings (provided in spendingMovers). Highlight 2-4 categories that grew or shrank the most, with concrete numbers: "<strong>Groceries</strong> +\u20AC85 vs last week (€220 \u2192 €305)".
 
-6. <h2>Notable transactions</h2>
+7. <h2>Notable transactions</h2>
    <ul> of 3-5 of the largest or most unusual single transactions. Format: "<strong>Source</strong> on date \u2014 \u20ACamount (Category)".
 
-7. <h2>New merchants this week</h2>
+8. <h2>New merchants this week</h2>
    ONLY if newMerchants is non-empty. Brief list: "<strong>Merchant</strong> \u2014 \u20ACamount (N charge(s))". Add a one-line note like "Worth checking these \u2014 either first-time spend or a new subscription you may want to track."
 
-8. <h2>Income breakdown</h2>
+9. <h2>Income breakdown</h2>
    ONLY if income > 0 last week. List income sources from incomeSources. Format: "<strong>Source</strong> \u2014 \u20ACamount".
 
-9. <h2>Investment activity</h2>
+10. <h2>Investment activity</h2>
    ONLY if invested > 0 last week. List by broker: "<strong>Broker</strong> \u2014 \u20ACamount across N contribution(s)". Add a one-sentence reflection on whether they're keeping up their investment habit.
 
-10. <h2>One thing to act on</h2>
+11. <h2>One thing to act on</h2>
     A SINGLE concrete, actionable recommendation tied to something specific in the data above. Examples: "Cancel the X subscription you haven't used", "Your grocery spend is up 30% \u2014 check if a price hike or behavior change", "Net is down 3 weeks running, consider trimming Y", "You're on pace to invest €X this month if you keep this up".
 
-Keep paragraphs short (1-2 sentences). Aim for ~400-550 words total. Use only the styles in the structure above plus:
+Keep paragraphs short (1-2 sentences). Aim for ~450-650 words total. Use only the styles in the structure above plus:
 - <p style="margin:0 0 10px 0;line-height:1.55;color:#334155;font-size:14px">
 - <ul style="margin:0 0 14px 0;padding-left:20px;color:#334155;font-size:14px;line-height:1.7">
 - <h2 style="color:#10b981;font-size:17px;margin:20px 0 8px 0;border-bottom:1px solid #e2e8f0;padding-bottom:4px">
@@ -315,7 +387,7 @@ const emailHtml = `<!DOCTYPE html>
   </div>
   <div style="padding:14px 28px;background:#f1f5f9;border-top:1px solid #e2e8f0;color:#64748b;font-size:11px;text-align:center">
     <a href="${DASHBOARD_URL}" style="color:#10b981;text-decoration:none;font-weight:600">Open dashboard \u2192</a>
-    &nbsp;\u00B7&nbsp; Generated by Claude (${ANTHROPIC_MODEL}) over ${all.length} transactions in 90 days
+    &nbsp;\u00B7&nbsp; Generated by Claude (${ANTHROPIC_MODEL}) over ${all.length} transactions since ${fromIso}
   </div>
 </div>
 </body></html>`;
