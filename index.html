@@ -964,7 +964,7 @@ function getChipVal(id){const c=document.getElementById(id);if(!c)return"";const
 function applyFilters(){gFilters={type:getChipVal("fpTypeChips"),bank:getChipVal("fpBankChips"),category:document.getElementById("fpCategory").value,dateFrom:document.getElementById("fpDateFrom").value,dateTo:document.getElementById("fpDateTo").value,amtMin:document.getElementById("fpAmtMin").value,amtMax:document.getElementById("fpAmtMax").value,search:document.getElementById("fpSearch").value,recon:getChipVal("fpReconChips"),statement:document.getElementById("fpStatement").value,source:document.getElementById("fpSource").value.trim()};closeFilters();txnPage=0;render();serializeStateToHash();}
 function resetFilters(){gFilters={type:"",bank:"",category:"",dateFrom:"",dateTo:"",amtMin:"",amtMax:"",search:"",recon:"",statement:"",source:""};document.getElementById("fpDateFrom").value="";document.getElementById("fpDateTo").value="";document.getElementById("fpCategory").value="";document.getElementById("fpAmtMin").value="";document.getElementById("fpAmtMax").value="";document.getElementById("fpSearch").value="";document.getElementById("fpStatement").value="";document.getElementById("fpSource").value="";setChipState("fpTypeChips","");setChipState("fpBankChips","");setChipState("fpReconChips","");closeFilters();txnPage=0;render();serializeStateToHash();}
 function removeFilter(k){gFilters[k]="";txnPage=0;render();serializeStateToHash();}
-function renderActiveTags(){const el=document.getElementById("activeFilters");const t=[];if(yearFilter!=="All")t.push({key:"_year",label:"Year: "+yearFilter});if(gFilters.type)t.push({key:"type",label:"Type: "+(gFilters.type==="In"?"Inflow":(gFilters.type==="Inv"?"Investment":"Outflow"))});if(gFilters.bank)t.push({key:"bank",label:"Bank: "+gFilters.bank});if(gFilters.category)t.push({key:"category",label:gFilters.category});if(gFilters.dateFrom)t.push({key:"dateFrom",label:"From: "+gFilters.dateFrom});if(gFilters.dateTo)t.push({key:"dateTo",label:"To: "+gFilters.dateTo});if(gFilters.amtMin)t.push({key:"amtMin",label:"Min \u20AC"+gFilters.amtMin});if(gFilters.amtMax)t.push({key:"amtMax",label:"Max \u20AC"+gFilters.amtMax});if(gFilters.search)t.push({key:"search",label:'"'+gFilters.search+'"'});if(gFilters.recon)t.push({key:"recon",label:gFilters.recon==="reconciled"?"Reconciled":"Unreconciled"});if(gFilters.statement)t.push({key:"statement",label:"Stmt: "+gFilters.statement});if(gFilters.source)t.push({key:"source",label:"Source: "+gFilters.source});el.innerHTML=t.map(x=>`<span class="af-tag">${x.label}<button onclick="${x.key==='_year'?'document.getElementById(\"yearFilter\").value=\"All\";yearFilter=\"All\";render()':'removeFilter(\''+x.key+'\')'}">\u00D7</button></span>`).join("")}
+function renderActiveTags(){const el=document.getElementById("activeFilters");const t=[];if(yearFilter!=="All")t.push({key:"_year",label:"Year: "+yearFilter});if(gFilters.type)t.push({key:"type",label:"Type: "+(gFilters.type==="In"?"Inflow":(gFilters.type==="Inv"?"Investment":"Outflow"))});if(gFilters.bank)t.push({key:"bank",label:"Bank: "+gFilters.bank});if(gFilters.category)t.push({key:"category",label:gFilters.category});if(gFilters.dateFrom)t.push({key:"dateFrom",label:"From: "+gFilters.dateFrom});if(gFilters.dateTo)t.push({key:"dateTo",label:"To: "+gFilters.dateTo});if(gFilters.amtMin)t.push({key:"amtMin",label:"Min \u20AC"+gFilters.amtMin});if(gFilters.amtMax)t.push({key:"amtMax",label:"Max \u20AC"+gFilters.amtMax});if(gFilters.search)t.push({key:"search",label:'"'+gFilters.search+'"'});if(gFilters.recon)t.push({key:"recon",label:gFilters.recon==="reconciled"?"Reconciled":"Unreconciled"});if(gFilters.statement)t.push({key:"statement",label:"Stmt: "+gFilters.statement});if(gFilters.source)t.push({key:"source",label:"Source: "+gFilters.source});el.innerHTML=t.map(x=>`<span class="af-tag">${escapeHtml(x.label)}<button onclick="${x.key==='_year'?'document.getElementById(\"yearFilter\").value=\"All\";yearFilter=\"All\";render()':'removeFilter(\''+x.key+'\')'}">\u00D7</button></span>`).join("")}
 
 function getFilteredTxns(){let f=TXNS;if(yearFilter!=="All")f=f.filter(t=>t.d.startsWith(yearFilter));if(gFilters.type)f=f.filter(t=>t.t===gFilters.type);if(gFilters.bank)f=f.filter(t=>t.b===gFilters.bank);if(gFilters.category)f=f.filter(t=>t.c===gFilters.category);if(gFilters.dateFrom)f=f.filter(t=>t.d>=gFilters.dateFrom);if(gFilters.dateTo)f=f.filter(t=>t.d<=gFilters.dateTo);if(gFilters.amtMin)f=f.filter(t=>t.v>=parseFloat(gFilters.amtMin));if(gFilters.amtMax)f=f.filter(t=>t.v<=parseFloat(gFilters.amtMax));if(gFilters.search){const q=gFilters.search.toLowerCase();f=f.filter(t=>(t.s+t.c+t.r+t.b+t.d).toLowerCase().includes(q))}if(gFilters.recon==="reconciled")f=f.filter(t=>!!t.f);else if(gFilters.recon==="unreconciled")f=f.filter(t=>!t.f);if(gFilters.statement)f=f.filter(t=>t.f===gFilters.statement);if(gFilters.source){const sq=gFilters.source.toLowerCase();f=f.filter(t=>(t.s||"").toLowerCase().includes(sq))}return f}
 function hasActiveFilters(){return yearFilter!=="All"||Object.values(gFilters).some(v=>v!=="")}
@@ -1247,19 +1247,19 @@ function renderInsights(){
     const growers=Object.keys(curCats).filter(c=>prevCats[c]&&prevCats[c]>50).map(c=>({cat:c,cur:curCats[c],prev:prevCats[c],delta:curCats[c]-prevCats[c],pct:((curCats[c]-prevCats[c])/prevCats[c]*100)})).sort((a,b)=>b.delta-a.delta).slice(0,3);
     const shrinkers=Object.keys(prevCats).filter(c=>curCats[c]&&prevCats[c]>50).map(c=>({cat:c,cur:curCats[c]||0,prev:prevCats[c],delta:(curCats[c]||0)-prevCats[c],pct:(((curCats[c]||0)-prevCats[c])/prevCats[c]*100)})).sort((a,b)=>a.delta-b.delta).slice(0,2);
     if(growers.length){
-      growerHTML=`<div style="margin-top:16px"><div style="font-size:12px;font-weight:700;color:var(--text4);margin-bottom:8px">\u2191 BIGGEST INCREASES ${curYear} vs ${prevYear}</div>`;
+      growerHTML=`<div style="margin-top:16px"><div style="font-size:12px;font-weight:700;color:var(--text4);margin-bottom:8px;text-transform:uppercase">\u2191 ${tr('ins.biggest_increases')} ${curYear} vs ${prevYear}</div>`;
       growers.forEach(g=>{growerHTML+=`<div class="grower"><span class="grower-name">${g.cat}</span><span class="grower-vals">${fmtE(g.prev)} \u2192 ${fmtE(g.cur)}</span><span class="grower-delta up">+${g.pct.toFixed(0)}%</span></div>`});
       growerHTML+=`</div>`;
     }
     if(shrinkers.length){
-      growerHTML+=`<div style="margin-top:12px"><div style="font-size:12px;font-weight:700;color:var(--text4);margin-bottom:8px">\u2193 BIGGEST DECREASES ${curYear} vs ${prevYear}</div>`;
+      growerHTML+=`<div style="margin-top:12px"><div style="font-size:12px;font-weight:700;color:var(--text4);margin-bottom:8px;text-transform:uppercase">\u2193 ${tr('ins.biggest_decreases')} ${curYear} vs ${prevYear}</div>`;
       shrinkers.forEach(g=>{growerHTML+=`<div class="grower"><span class="grower-name">${g.cat}</span><span class="grower-vals">${fmtE(g.prev)} \u2192 ${fmtE(g.cur)}</span><span class="grower-delta down">${g.pct.toFixed(0)}%</span></div>`});
       growerHTML+=`</div>`;
     }
   }
 
   document.getElementById("insightsSection").innerHTML=`
-    <div class="section-title">Key Insights${yearFilter!=="All"?' \u2014 '+yearFilter:''}</div>
+    <div class="section-title">${tr('sec.key_insights')}${yearFilter!=="All"?' \u2014 '+yearFilter:''}</div>
     <div class="insights-grid">
       <div><span style="color:#10b981">\u2197</span> Total income: <span style="color:var(--text)">${fmtE(totalIn)}</span> across <strong>${inT.length}</strong> transactions.${topInc?` Top source: <span style="color:#10b981">${topInc[0]}</span> (${fmtE(topInc[1])}).`:''}</div>
       <div><span style="color:#ef4444">\u2199</span> Total spent: <span style="color:var(--text)">${fmtE(totalOut)}</span> across <strong>${outT.length}</strong> transactions.${topCat?` #1 category: <span style="color:#ef4444">${topCat[0]}</span> (${fmtE(topCat[1])}).`:''}</div>
@@ -1349,20 +1349,20 @@ function _dashTinySparkline(canvasId,data,color){
 }
 function _dashAISummaryHTML(ym){
   return `<div class="dash-ai-summary">
-    <div class="dash-ai-summary-label"><span>Executive Summary</span><span class="month-tag">${escapeHtml(ym)}</span></div>
-    <div class="dash-ai-summary-text" id="dashAISummaryText"><span class="dash-ai-summary-loading">Generating insight…</span></div>
+    <div class="dash-ai-summary-label"><span>${tr('ai.exec_summary')}</span><span class="month-tag">${escapeHtml(ym)}</span></div>
+    <div class="dash-ai-summary-text" id="dashAISummaryText"><span class="dash-ai-summary-loading">${tr('ai.generating')}</span></div>
   </div>`;
 }
 function _dashYTDStripHTML(s){
   const items=[
-    {label:'Income',value:'€'+fmt(s.ytdIn),color:'#10b981',sparkVar:'sparkIn',id:'ytdSpI'},
-    {label:'Expenses',value:'€'+fmt(s.ytdOut),color:'#ef4444',sparkVar:'sparkOut',id:'ytdSpO'},
-    {label:'Net',value:(s.ytdNet>=0?'+':'-')+'€'+fmt(Math.abs(s.ytdNet)),color:s.ytdNet>=0?'#10b981':'#ef4444',sparkVar:'sparkNet',id:'ytdSpN'},
-    {label:'Invested',value:'€'+fmt(s.ytdInv),color:'#8b5cf6',sparkVar:'sparkInv',id:'ytdSpV'},
-    {label:'Savings rate',value:s.ytdSav.toFixed(1)+'%',color:'#06b6d4',sparkVar:'sparkSav',id:'ytdSpS'}
+    {label:tr('ytd.income'),value:'€'+fmt(s.ytdIn),color:'#10b981',sparkVar:'sparkIn',id:'ytdSpI'},
+    {label:tr('ytd.expenses'),value:'€'+fmt(s.ytdOut),color:'#ef4444',sparkVar:'sparkOut',id:'ytdSpO'},
+    {label:tr('ytd.net'),value:(s.ytdNet>=0?'+':'-')+'€'+fmt(Math.abs(s.ytdNet)),color:s.ytdNet>=0?'#10b981':'#ef4444',sparkVar:'sparkNet',id:'ytdSpN'},
+    {label:tr('ytd.invested'),value:'€'+fmt(s.ytdInv),color:'#8b5cf6',sparkVar:'sparkInv',id:'ytdSpV'},
+    {label:tr('ytd.savings'),value:s.ytdSav.toFixed(1)+'%',color:'#06b6d4',sparkVar:'sparkSav',id:'ytdSpS'}
   ];
   return `<div class="dash-ytd-strip">
-    <div class="dash-ytd-heading">Year-to-date <span class="year">${s.year}</span></div>
+    <div class="dash-ytd-heading">${tr('ytd.heading')} <span class="year">${s.year}</span></div>
     ${items.map(it=>`<div class="dash-ytd-item">
       <div class="ytd-label">${it.label}</div>
       <div class="ytd-value" style="color:${it.color}">${it.value}</div>
@@ -1374,16 +1374,16 @@ function _dashCalloutsHTML(n){
   const fmtAmt=v=>'€'+Math.round(Math.abs(v)).toLocaleString();
   const cells=[];
   if(n.catUp){
-    cells.push(`<div class="callout-card" data-tone="up"><div class="cc-label">▲ ${escapeHtml(n.catUp.cat)} UP</div><div class="cc-value">+${fmtAmt(n.catUp.delta)}</div><div class="cc-sub">vs 6-mo median of ${fmtAmt(n.catUp.median)}</div></div>`);
+    cells.push(`<div class="callout-card" data-tone="up"><div class="cc-label">▲ ${escapeHtml(n.catUp.cat)} ${tr('cc.up')}</div><div class="cc-value">+${fmtAmt(n.catUp.delta)}</div><div class="cc-sub">${tr('cc.vs_median',{v:fmtAmt(n.catUp.median)})}</div></div>`);
   } else {
-    cells.push(`<div class="callout-card" data-tone="muted"><div class="cc-label">Category up</div><div class="cc-value">—</div><div class="cc-sub">no significant increase</div></div>`);
+    cells.push(`<div class="callout-card" data-tone="muted"><div class="cc-label">${tr('cc.cat_up_label')}</div><div class="cc-value">—</div><div class="cc-sub">${tr('cc.no_increase')}</div></div>`);
   }
   if(n.catDown){
-    cells.push(`<div class="callout-card" data-tone="down"><div class="cc-label">▼ ${escapeHtml(n.catDown.cat)} DOWN</div><div class="cc-value">-${fmtAmt(n.catDown.delta)}</div><div class="cc-sub">vs 6-mo median of ${fmtAmt(n.catDown.median)}</div></div>`);
+    cells.push(`<div class="callout-card" data-tone="down"><div class="cc-label">▼ ${escapeHtml(n.catDown.cat)} ${tr('cc.down')}</div><div class="cc-value">-${fmtAmt(n.catDown.delta)}</div><div class="cc-sub">${tr('cc.vs_median',{v:fmtAmt(n.catDown.median)})}</div></div>`);
   } else {
-    cells.push(`<div class="callout-card" data-tone="muted"><div class="cc-label">Category down</div><div class="cc-value">—</div><div class="cc-sub">no significant decrease</div></div>`);
+    cells.push(`<div class="callout-card" data-tone="muted"><div class="cc-label">${tr('cc.cat_down_label')}</div><div class="cc-value">—</div><div class="cc-sub">${tr('cc.no_decrease')}</div></div>`);
   }
-  cells.push(`<div class="callout-card" data-tone="new"><div class="cc-label">★ New merchants</div><div class="cc-value">${n.newMerchCount}</div><div class="cc-sub">first seen in 6+ months</div></div>`);
+  cells.push(`<div class="callout-card" data-tone="new"><div class="cc-label">★ ${tr('cc.new_merch')}</div><div class="cc-value">${n.newMerchCount}</div><div class="cc-sub">${tr('cc.new_merch_sub')}</div></div>`);
   return `<div class="dash-callouts">${cells.join('')}</div>`;
 }
 // AI summary cache — keyed by (month + txn count) so re-renders never re-bill.
@@ -1393,7 +1393,7 @@ function _dashSaveAICache(c){try{localStorage.setItem(DASH_AI_CACHE_KEY,JSON.str
 async function _dashHydrateAISummary(ym){
   const el=document.getElementById('dashAISummaryText');if(!el)return;
   const monthTxns=TXNS.filter(t=>t.d.startsWith(ym));
-  const cacheKey=`${ym}-${monthTxns.length}`;
+  const cacheKey=`${ym}-${monthTxns.length}-${CURRENT_LANG}`;
   const cache=_dashLoadAICache();
   if(cache[cacheKey]){el.textContent=cache[cacheKey];return;}
   // Build totals for the prompt
@@ -1411,10 +1411,13 @@ async function _dashHydrateAISummary(ym){
   const tc=Object.entries(catMap).sort((a,b)=>b[1]-a[1])[0];
   const topCat=tc?tc[0]:'-';
   const topCatAmt=tc?tc[1]:0;
-  // Try AI if a key is configured
+  // Try AI if a key is configured. The summary is written in the dashboard's
+  // current language (the cache key includes the language so switching
+  // regenerates rather than serving the other language's text).
+  const lang=CURRENT_LANG==='sl'?'Slovenian':'plain English';
   if(typeof callAIText==='function'&&typeof CHAT==='object'&&(CHAT.geminiKey||CHAT.apiKey)){
     try{
-      const prompt=`Write a 2-3 sentence financial summary for ${ym} in plain English. Be specific with figures (use the EUR symbol), focus on the most notable changes, no preachiness, no markdown.
+      const prompt=`Write a 2-3 sentence financial summary for ${ym} in ${lang}. Be specific with figures (use the EUR symbol), focus on the most notable changes, no preachiness, no markdown.
 
 Month: ${ym}
 Income: EUR${totalIn.toFixed(0)} (prior month EUR${prevIn.toFixed(0)})
@@ -1432,9 +1435,19 @@ Top category: ${topCat} at EUR${topCatAmt.toFixed(0)} (${totalOut>0?(topCatAmt/t
       }
     }catch(e){/* swallow, fall through to deterministic */}
   }
-  // Deterministic fallback
-  const dir=totalOut>prevOut?'up from':(totalOut<prevOut?'down from':'level with');
-  const text=`Spent €${Math.round(totalOut).toLocaleString()} this month${prevOut>0?` (${dir} €${Math.round(prevOut).toLocaleString()} last month)`:''}. Top category was ${topCat} at €${Math.round(topCatAmt).toLocaleString()} (${totalOut>0?Math.round(topCatAmt/totalOut*100):0}% of expenses). Net was ${net>=0?'+':'-'}€${Math.round(Math.abs(net)).toLocaleString()} for a ${savRate.toFixed(1)}% savings rate.`;
+  // Deterministic fallback — fully translated via tr() templates.
+  const prevPart=prevOut>0
+    ?tr(totalOut>prevOut?'ai.prev_up':(totalOut<prevOut?'ai.prev_down':'ai.prev_level'),{v:Math.round(prevOut).toLocaleString()})
+    :'';
+  const text=tr('ai.fallback',{
+    out:Math.round(totalOut).toLocaleString(),
+    prev:prevPart,
+    cat:topCat,
+    amt:Math.round(topCatAmt).toLocaleString(),
+    pct:totalOut>0?Math.round(topCatAmt/totalOut*100):0,
+    net:(net>=0?'+':'-')+'€'+Math.round(Math.abs(net)).toLocaleString(),
+    rate:savRate.toFixed(1)
+  });
   cache[cacheKey]=text;_dashSaveAICache(cache);
   const elFinal=document.getElementById('dashAISummaryText');
   if(elFinal)elFinal.textContent=text;
@@ -1448,7 +1461,7 @@ const notable=latestMonth?_dashNotable(latestMonth):null;
 const overviewExtras=latestMonth?`${_dashAISummaryHTML(latestMonth)}${_dashYTDStripHTML(ytdStats)}${_dashCalloutsHTML(notable)}`:'';
 el.innerHTML=`${overviewExtras}<div class="grid grid-2">
 <div class="section span-2"><div class="section-title">${isMonthly?'Monthly':'Yearly'} Income vs Expenses</div>${mc("c1",300)}</div>
-<div class="section"><div class="section-title">${tr('sec.top_cats')}</div>${cats.length?bl(cats,"Category","Total",cats[0].Total):es('💸','No outflows','No outflow transactions match the current filters.')}</div>
+<div class="section"><div class="section-title">${tr('sec.top_cats')}</div>${cats.length?bl(cats,"Category","Total",cats[0].Total):es('💸',tr('es.no_outflows_t'),tr('es.no_outflows_s'))}</div>
 <div class="section"><div class="section-title">${tr('sec.income_sources')}</div>${mc("c2",340)}</div>
 <div class="section span-2"><div class="section-title">${tr('sec.expense_ratio')}</div><div id="treemapContainer"></div></div></div>`;
 setTimeout(()=>renderTreemap("treemapContainer",cats,"Category","Total"),50);
@@ -1467,6 +1480,9 @@ charts.c1=new Chart(document.getElementById("c1"),{type:"bar",data:{labels:data.
 charts.c2=new Chart(document.getElementById("c2"),{type:"doughnut",data:{labels:inc.map(d=>d.Type),datasets:[{data:inc.map(d=>d.Total),backgroundColor:P,borderWidth:0}]},options:{responsive:true,maintainAspectRatio:false,cutout:"50%",plugins:{legend:{position:"right",labels:{boxWidth:12,padding:8,font:{size:11}}},tooltip:{callbacks:{label:ctx=>ctx.label+": "+fmtE(ctx.parsed)}}}}});}
 
 function renderSpending(){const data=gfm(),sources=getDynamicSources(),cats=getDynamicCats(),el=document.getElementById("content");
+// Invalidate the per-render category-series cache — filters/rules/data may
+// have changed since the last render; within this render it fills once.
+_catMonthlyCache={key:null,months:[],map:{}};
 // Build sparkline HTML for categories
 const sparkMonths=Math.min(12,gfm().length);
 let sparkHTML='<div style="max-height:400px;overflow:auto">';
@@ -1485,7 +1501,7 @@ el.innerHTML=`<div class="grid grid-2">
 <div class="section span-2"><div class="section-title">Cumulative Spend <span style="font-size:10px;color:var(--text5);text-transform:none;letter-spacing:0;font-weight:400">(this month vs prior)</span></div>${mc("c3c",260)}</div>
 <div class="section span-2"><div class="section-title">Spending Breakdown <span style="font-size:10px;color:var(--text5);text-transform:none;letter-spacing:0;font-weight:400">(top ${Math.min(20,cats.length)} categories)</span></div>${mc("c3b",Math.min(20,cats.length)*22+60)}</div>
 <div class="section"><div class="section-title">Category Trends <span style="font-size:10px;color:var(--text5);text-transform:none;letter-spacing:0;font-weight:400">(L${sparkMonths}M)</span></div>${sparkHTML}</div>
-<div class="section"><div class="section-title">${tr('sec.top_merchants')}</div>${sources.length?bl(sources,"Source","Total",sources[0].Total,'openMerchant'):es('🛒','No merchants','Nothing matches the current filters.')}</div>
+<div class="section"><div class="section-title">${tr('sec.top_merchants')}</div>${sources.length?bl(sources,"Source","Total",sources[0].Total,'openMerchant'):es('🛒',tr('es.no_merchants_t'),tr('es.no_merchants_s'))}</div>
 <div class="section span-2"><div class="section-title">${tr('sec.dow')}</div>${mc("c4",320)}</div>
 <div class="section span-2"><div class="section-title">${tr('sec.heatmap')}</div><div id="heatmapContainer"></div></div></div>`;
 setTimeout(()=>renderHeatmap('heatmapContainer'),50);
@@ -1567,16 +1583,16 @@ const varIn=Math.max(0,avgIn-recMonthlyIn);
 // Build recurring breakdown table
 let recBreakdown='';
 if(recOut.length||recIn.length){
-  recBreakdown=`<div class="section" style="margin-top:16px"><div class="section-title">Cash Flow Breakdown (Recurring vs Variable)</div>
+  recBreakdown=`<div class="section" style="margin-top:16px"><div class="section-title">${tr('sec.cashflow_breakdown')}</div>
   <div class="grid grid-2">
-    <div><h4 style="font-size:13px;color:var(--text3);margin-bottom:8px">INCOME SOURCES</h4>
+    <div><h4 style="font-size:13px;color:var(--text3);margin-bottom:8px;text-transform:uppercase">${tr('sec.income_sources')}</h4>
     <table class="forecast-table"><thead><tr><th>Source</th><th>Monthly</th><th>Type</th></tr></thead><tbody>
-    ${recIn.map(r=>`<tr><td>${r.source}</td><td style="color:#10b981;font-family:'JetBrains Mono',monospace">\u20AC${Math.round(r.annual/12).toLocaleString()}</td><td><span class="rec-card-freq">recurring</span></td></tr>`).join('')}
+    ${recIn.map(r=>`<tr><td>${escapeHtml(r.source)}</td><td style="color:#10b981;font-family:'JetBrains Mono',monospace">\u20AC${Math.round(r.annual/12).toLocaleString()}</td><td><span class="rec-card-freq">recurring</span></td></tr>`).join('')}
     <tr><td style="color:var(--text4)">Variable / Other</td><td style="color:#10b981;font-family:'JetBrains Mono',monospace">\u20AC${varIn.toLocaleString()}</td><td><span style="font-size:10px;color:var(--text5)">estimated</span></td></tr>
     </tbody></table></div>
-    <div><h4 style="font-size:13px;color:var(--text3);margin-bottom:8px">EXPENSE SOURCES</h4>
+    <div><h4 style="font-size:13px;color:var(--text3);margin-bottom:8px;text-transform:uppercase">${tr('prj.expense_sources')}</h4>
     <table class="forecast-table"><thead><tr><th>Source</th><th>Monthly</th><th>Type</th></tr></thead><tbody>
-    ${recOut.slice(0,10).map(r=>`<tr><td>${r.source}</td><td style="color:#ef4444;font-family:'JetBrains Mono',monospace">\u20AC${Math.round(r.annual/12).toLocaleString()}</td><td><span class="rec-card-freq">recurring</span></td></tr>`).join('')}
+    ${recOut.slice(0,10).map(r=>`<tr><td>${escapeHtml(r.source)}</td><td style="color:#ef4444;font-family:'JetBrains Mono',monospace">\u20AC${Math.round(r.annual/12).toLocaleString()}</td><td><span class="rec-card-freq">recurring</span></td></tr>`).join('')}
     <tr><td style="color:var(--text4)">Variable / Other</td><td style="color:#ef4444;font-family:'JetBrains Mono',monospace">\u20AC${varOut.toLocaleString()}</td><td><span style="font-size:10px;color:var(--text5)">estimated</span></td></tr>
     </tbody></table></div>
   </div></div>`;
@@ -1748,7 +1764,7 @@ function renderRecurring(){
   const dormantMonthly=Math.round(dormantAnnual/12);
 
   function recCards(items,isIncome,isDormant){
-    if(!items.length)return'<p style="color:var(--text4);padding:12px">'+(isDormant?'No dormant subscriptions detected — nothing obvious to cancel.':'No recurring transactions detected.')+'</p>';
+    if(!items.length)return'<p style="color:var(--text4);padding:12px">'+(isDormant?tr('rec.no_dormant'):tr('rec.no_recurring'))+'</p>';
     return'<div class="rec-grid">'+items.map(r=>{
       const days=r._days!=null?r._days:daysSince(r.lastDate);
       const ageBadge=days!=null?`<span class="delta ${isDormant?'neg':'pos'}" style="font-size:10px">${days}d ago</span>`:'';
@@ -1764,10 +1780,10 @@ function renderRecurring(){
       <div class="rec-summary-card"><div class="rec-summary-label">Active Subscriptions / mo</div><div class="rec-summary-value" style="color:#ef4444">\u20AC${Math.round(outActive.reduce((s,r)=>s+r.annual,0)/12).toLocaleString()}</div></div>
       <div class="rec-summary-card"><div class="rec-summary-label">Recurring Income / mo</div><div class="rec-summary-value" style="color:#10b981">\u20AC${totalInMonthly.toLocaleString()}</div></div>
       <div class="rec-summary-card"><div class="rec-summary-label">Net Recurring / mo</div><div class="rec-summary-value" style="color:${totalInMonthly-totalOutMonthly>=0?'#06b6d4':'#ef4444'}">\u20AC${Math.abs(totalInMonthly-totalOutMonthly).toLocaleString()}</div></div>
-      <div class="rec-summary-card"><div class="rec-summary-label">Dormant / Possibly Cancelled</div><div class="rec-summary-value" style="color:#f59e0b">${outDormant.length}<span style="font-size:13px;color:var(--text4);margin-left:6px">\u00B7 \u20AC${dormantMonthly}/mo</span></div></div>
+      <div class="rec-summary-card"><div class="rec-summary-label">${tr('rec.dormant_label')}</div><div class="rec-summary-value" style="color:#f59e0b">${outDormant.length}<span style="font-size:13px;color:var(--text4);margin-left:6px">\u00B7 \u20AC${dormantMonthly}/mo</span></div></div>
     </div>
     <div class="section"><div class="section-title">Active Subscriptions (${outActive.length})</div>${recCards(outActive,false,false)}</div>
-    <div class="section" style="margin-top:16px"><div class="section-title" style="color:#f59e0b">\u26A0 Dormant / Possibly Cancelled (${outDormant.length})</div><p style="font-size:11px;color:var(--text4);margin-bottom:10px">Recurring expenses not seen recently. Check if you cancelled them \u2014 or if a payment failed.</p>${recCards(outDormant,false,true)}</div>
+    <div class="section" style="margin-top:16px"><div class="section-title" style="color:#f59e0b">\u26A0 ${tr('rec.dormant_label')} (${outDormant.length})</div><p style="font-size:11px;color:var(--text4);margin-bottom:10px">${tr('rec.dormant_hint')}</p>${recCards(outDormant,false,true)}</div>
     <div class="section" style="margin-top:16px"><div class="section-title">Recurring Income (${inRec.length})</div>${recCards(inRec,true,false)}</div>
     <div class="section" style="margin-top:16px"><div class="section-title">${tr('sec.rec_breakdown')}</div>${mc("recChart",300)}</div>`;
 
@@ -1803,11 +1819,31 @@ function drawSparkline(canvasId,data,color){
   ctx.fillStyle=(typeof theme!=='undefined'&&theme==='dark')?'#0d0d1a':'#f8fafc';ctx.fill();
 }
 
+// Bulk per-category monthly series, computed in ONE pass over the filtered
+// transactions and memoized. renderSpending calls getCategoryMonthlyData 30×
+// per render (15 sparkline rows × HTML pass + draw pass); the naive version
+// re-scanned all ~3k transactions on every call (~60 full scans per render).
+// The cache is reset at the top of renderSpending, so within a render the
+// scan happens once and every later call is a lookup.
+let _catMonthlyCache={key:null,months:[],map:{}};
+function _catMonthlySeries(monthCount){
+  if(_catMonthlyCache.key===monthCount)return _catMonthlyCache;
+  const months=gfm().map(m=>m.YM).slice(-monthCount);
+  const idx={};months.forEach((m,i)=>idx[m]=i);
+  const map={};
+  getFilteredTxns().forEach(t=>{
+    if(t.t!=='Out')return;
+    const i=idx[t.d.slice(0,7)];
+    if(i===undefined)return;
+    (map[t.c]=map[t.c]||Array.from({length:months.length},()=>0))[i]+=t.v;
+  });
+  for(const c in map)map[c]=map[c].map(v=>Math.round(v));
+  _catMonthlyCache={key:monthCount,months,map};
+  return _catMonthlyCache;
+}
 function getCategoryMonthlyData(category,monthCount){
-  const txns=getFilteredTxns().filter(t=>t.t==="Out"&&t.c===category);
-  const allMonths=gfm().map(m=>m.YM).slice(-monthCount);
-  const byMonth={};txns.forEach(t=>{const ym=t.d.slice(0,7);byMonth[ym]=(byMonth[ym]||0)+t.v});
-  return allMonths.map(ym=>Math.round(byMonth[ym]||0));
+  const s=_catMonthlySeries(monthCount);
+  return s.map[category]||Array.from({length:s.months.length},()=>0);
 }
 
 // ============================================================
@@ -1815,7 +1851,7 @@ function getCategoryMonthlyData(category,monthCount){
 // ============================================================
 function renderTreemap(containerId,items,labelKey,valueKey){
   const total=items.reduce((s,it)=>s+it[valueKey],0);
-  if(!total){document.getElementById(containerId).innerHTML=es('📊','No expense data','Adjust filters to see your category mix here.');return}
+  if(!total){document.getElementById(containerId).innerHTML=es('📊',tr('es.no_expense_t'),tr('es.no_expense_s'));return}
   // Squarified treemap layout (simplified: rows)
   const sorted=[...items].sort((a,b)=>b[valueKey]-a[valueKey]).slice(0,20);
   let html='<div class="treemap">';
@@ -2002,13 +2038,13 @@ function ruleRow(r){
   const m=compileRule({...r,enabled:true});
   const matches=m?TXNS.filter(t=>m.test(r.target==='source'?t.s:r.target==='detail'?t.r:t.c)).length:0;
   return `<tr>
-    <td><input type="checkbox" ${r.enabled?'checked':''} onchange="toggleRule('${r.id}')"></td>
-    <td>${r.target}</td>
+    <td><input type="checkbox" ${r.enabled?'checked':''} onchange="toggleRule('${escapeAttr(r.id)}')"></td>
+    <td>${escapeHtml(r.target)}</td>
     <td><code>${escapeHtml(r.pattern)}</code></td>
     <td>${r.isRegex?'regex':'contains'}</td>
     <td>${escapeHtml(r.category)}</td>
     <td>${matches}</td>
-    <td><button class="page-btn" onclick="deleteRule('${r.id}')">×</button></td>
+    <td><button class="page-btn" onclick="deleteRule('${escapeAttr(r.id)}')">×</button></td>
   </tr>`;
 }
 function addRule(){
@@ -2192,7 +2228,6 @@ async function exportMonthPDF(){
   });
   const banks=Object.entries(bankMap).sort((a,b)=>(b[1].out+b[1].in)-(a[1].out+a[1].in));
   // Daily totals (for spending trend line)
-  const days=Object.keys({}.constructor).constructor;
   const daysInMonth=new Date(parseInt(ym.slice(0,4)),parseInt(ym.slice(5,7)),0).getDate();
   const dailyOut=Array.from({length:daysInMonth},(_,i)=>0);
   const dailyIn=Array.from({length:daysInMonth},(_,i)=>0);
@@ -2810,7 +2845,7 @@ function renderNetWorth(){
       ${invAccounts.length?`<div class="table-wrap"><table class="txn-table">
         <thead><tr><th>Account</th><th>Total contributed</th><th>Current value (\u20AC)</th><th>Gain/Loss</th><th>%</th></tr></thead>
         <tbody>${invRows}</tbody>
-      </table></div>`:es('📈','No investment activity','Investment-type transactions will appear here when imported.')}
+      </table></div>`:es('📈',tr('es.no_inv_t'),tr('es.no_inv_s'))}
     </div>
     <div class="section" style="margin-top:16px">
       <div class="section-title">${tr('sec.nw_over_time')}</div>
@@ -2827,7 +2862,7 @@ function renderNetWorth(){
         {label:'Liquid',data:NETWORTH.snapshots.map(s=>s.liquid),borderColor:'#06b6d4',borderWidth:1.5,fill:false,tension:.25,pointRadius:0,borderDash:[4,3]},
         {label:'Invested',data:NETWORTH.snapshots.map(s=>s.invested),borderColor:'#8b5cf6',borderWidth:1.5,fill:false,tension:.25,pointRadius:0,borderDash:[4,3]}
       ]},
-      options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'nearest',axis:'x',intersect:false},scales:{x:{ticks:{maxTicksLimit:12,color:'#94a3b8'},grid:{display:false}},y:{ticks:{callback:v=>'\u20AC'+fmt(v),color:'#94a3b8'},grid:{color:'rgba(255,255,255,0.04)'}}},plugins:{legend:{position:'top',labels:{boxWidth:12,padding:10,font:{size:12}}},tooltip:{callbacks:{label:ctx=>ctx.dataset.label+': \u20AC'+fmt(ctx.parsed.y)}}}}
+      options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'nearest',axis:'x',intersect:false},scales:{x:{ticks:{maxTicksLimit:12},grid:{display:false}},y:{ticks:{callback:v=>'\u20AC'+fmt(v)}}},plugins:{legend:{position:'top',labels:{boxWidth:12,padding:10,font:{size:12}}},tooltip:{callbacks:{label:ctx=>ctx.dataset.label+': \u20AC'+fmt(ctx.parsed.y)}}}}
     });
   }
 }
@@ -2951,8 +2986,8 @@ function renderFuel(){
       responsive:true,maintainAspectRatio:false,
       interaction:{mode:'nearest',axis:'x',intersect:false},
       scales:{
-        x:{ticks:{maxTicksLimit:12,maxRotation:0,autoSkip:true,color:'#94a3b8'},grid:{display:false}},
-        y:{ticks:{callback:v=>'€'+v.toFixed(2),color:'#94a3b8'},grid:{color:'rgba(255,255,255,0.04)'}}
+        x:{ticks:{maxTicksLimit:12,maxRotation:0,autoSkip:true},grid:{display:false}},
+        y:{ticks:{callback:v=>'€'+v.toFixed(2)}}
       },
       plugins:{
         legend:{position:'top',labels:{boxWidth:12,padding:10,font:{size:12}}},
@@ -3049,7 +3084,7 @@ function renderInvestments(){
   `;
 
   if(positions.length===0){
-    c.innerHTML='<div class="section">'+es('📊','No open positions','Your Trading 212 portfolio is currently empty. Holdings will appear here once you open a position.')+'</div>';
+    c.innerHTML='<div class="section">'+es('📊',tr('es.no_pos_t'),tr('es.no_pos_s'))+'</div>';
     return;
   }
 
@@ -3168,7 +3203,7 @@ function renderInvestments(){
   charts.invPnlChart=new Chart(document.getElementById('invPnlChart'),{
     type:'bar',
     data:{labels:pnlChartData.map(p=>p.ticker.replace(/_US_EQ|_UK_EQ|_DE_EQ/g,'')),datasets:[{label:'Unrealized P/L',data:pnlChartData.map(p=>p.unrealizedPL),backgroundColor:pnlChartData.map(p=>p.unrealizedPL>=0?'#10b981cc':'#ef4444cc'),borderRadius:4}]},
-    options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,scales:{x:{ticks:{callback:v=>fmtAxis(v),color:'#94a3b8'}}},plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>'\u20AC'+fmt(ctx.parsed.x)+' ('+pnlChartData[ctx.dataIndex].unrealizedPLPct.toFixed(2)+'%)'}}}}
+    options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,scales:{x:{ticks:{callback:v=>fmtAxis(v)}}},plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>'\u20AC'+fmt(ctx.parsed.x)+' ('+pnlChartData[ctx.dataIndex].unrealizedPLPct.toFixed(2)+'%)'}}}}
   });
 }
 
@@ -4351,7 +4386,21 @@ const T_KEYS = {
     // Projection
     'prj.monthly_in':'Monthly Income (€)','prj.monthly_out':'Monthly Expenses (€)','prj.cur_bal':'Current Balance (€)','prj.months':'Months',
     // Subtitle
-    'sub.live':'transactions (live)','sub.unrec':'unreconciled'
+    'sub.live':'transactions (live)','sub.unrec':'unreconciled',
+    // Insights
+    'ins.biggest_increases':'Biggest increases','ins.biggest_decreases':'Biggest decreases',
+    // Projection source lists
+    'prj.expense_sources':'Expense sources',
+    // Recurring
+    'rec.no_dormant':'No dormant subscriptions detected — nothing obvious to cancel.','rec.no_recurring':'No recurring transactions detected.','rec.dormant_label':'Dormant / Possibly Cancelled','rec.dormant_hint':'Recurring expenses not seen recently. Check if you cancelled them — or if a payment failed.',
+    // Empty states
+    'es.no_outflows_t':'No outflows','es.no_outflows_s':'No outflow transactions match the current filters.','es.no_merchants_t':'No merchants','es.no_merchants_s':'Nothing matches the current filters.','es.no_expense_t':'No expense data','es.no_expense_s':'Adjust filters to see your category mix here.','es.no_inv_t':'No investment activity','es.no_inv_s':'Investment-type transactions will appear here when imported.','es.no_pos_t':'No open positions','es.no_pos_s':'Your Trading 212 portfolio is currently empty. Holdings will appear here once you open a position.',
+    // Overview AI summary + YTD strip + callouts
+    'ai.exec_summary':'Executive Summary','ai.generating':'Generating insight…',
+    'ai.fallback':'Spent €{out} this month{prev}. Top category was {cat} at €{amt} ({pct}% of expenses). Net was {net} for a {rate}% savings rate.',
+    'ai.prev_up':' (up from €{v} last month)','ai.prev_down':' (down from €{v} last month)','ai.prev_level':' (level with last month)',
+    'ytd.heading':'Year-to-date','ytd.income':'Income','ytd.expenses':'Expenses','ytd.net':'Net','ytd.invested':'Invested','ytd.savings':'Savings rate',
+    'cc.up':'UP','cc.down':'DOWN','cc.cat_up_label':'Category up','cc.cat_down_label':'Category down','cc.no_increase':'no significant increase','cc.no_decrease':'no significant decrease','cc.new_merch':'New merchants','cc.new_merch_sub':'first seen in 6+ months','cc.vs_median':'vs 6-mo median of {v}'
   },
   sl: {
     // Tabs
@@ -4366,7 +4415,16 @@ const T_KEYS = {
     'tx.date':'Datum','tx.source':'Vir','tx.amount':'Znesek','tx.type':'Vrsta','tx.category':'Kategorija','tx.detail':'Opis','tx.prev':'← Prejšnja','tx.next':'Naslednja →','tx.search_ph':'Hitro iskanje znotraj filtriranih rezultatov...','tx.txns_label':'transakcij','tx.page':'Stran','tx.unrec_on_page':'{n} neusklajenih na tej strani','tx.no_outflows':'Ni odlivov.','tx.no_data':'Ni podatkov.','tx.inflow':'Priliv','tx.outflow':'Odliv','tx.investment':'Naložba',
     'cmp.select_a':'Izberite mesec A','cmp.select_b':'Izberite mesec B','cmp.income':'Prihodki','cmp.expenses':'Odhodki','cmp.net':'Neto','cmp.txns':'Trans.',
     'prj.monthly_in':'Mesečni prihodki (€)','prj.monthly_out':'Mesečni odhodki (€)','prj.cur_bal':'Trenutno stanje (€)','prj.months':'Meseci',
-    'sub.live':'transakcij (v živo)','sub.unrec':'neusklajenih'
+    'sub.live':'transakcij (v živo)','sub.unrec':'neusklajenih',
+    'ins.biggest_increases':'Največja povečanja','ins.biggest_decreases':'Največja zmanjšanja',
+    'prj.expense_sources':'Viri odhodkov',
+    'rec.no_dormant':'Ni zaznanih mirujočih naročnin — nič očitnega za preklic.','rec.no_recurring':'Ni zaznanih ponavljajočih transakcij.','rec.dormant_label':'Mirujoče / morda preklicane','rec.dormant_hint':'Ponavljajoči stroški, ki jih v zadnjem času ni bilo. Preverite, ali ste jih preklicali — ali pa plačilo ni uspelo.',
+    'es.no_outflows_t':'Ni odlivov','es.no_outflows_s':'Nobena odlivna transakcija ne ustreza trenutnim filtrom.','es.no_merchants_t':'Ni trgovcev','es.no_merchants_s':'Nič ne ustreza trenutnim filtrom.','es.no_expense_t':'Ni podatkov o odhodkih','es.no_expense_s':'Prilagodite filtre za prikaz razčlenitve po kategorijah.','es.no_inv_t':'Ni naložbene aktivnosti','es.no_inv_s':'Naložbene transakcije se bodo prikazale po uvozu.','es.no_pos_t':'Ni odprtih pozicij','es.no_pos_s':'Vaš portfelj Trading 212 je trenutno prazen. Pozicije se bodo prikazale, ko jih odprete.',
+    'ai.exec_summary':'Povzetek meseca','ai.generating':'Ustvarjam povzetek…',
+    'ai.fallback':'Ta mesec ste porabili €{out}{prev}. Največja kategorija je bila {cat} z €{amt} ({pct} % odhodkov). Neto stanje je bilo {net}, stopnja varčevanja {rate} %.',
+    'ai.prev_up':' (več kot €{v} prejšnji mesec)','ai.prev_down':' (manj kot €{v} prejšnji mesec)','ai.prev_level':' (enako kot prejšnji mesec)',
+    'ytd.heading':'Od začetka leta','ytd.income':'Prihodki','ytd.expenses':'Odhodki','ytd.net':'Neto','ytd.invested':'Naloženo','ytd.savings':'Stopnja varčevanja',
+    'cc.up':'GOR','cc.down':'DOL','cc.cat_up_label':'Kategorija gor','cc.cat_down_label':'Kategorija dol','cc.no_increase':'brez večjega povečanja','cc.no_decrease':'brez večjega zmanjšanja','cc.new_merch':'Novi trgovci','cc.new_merch_sub':'prvič po 6+ mesecih','cc.vs_median':'proti 6-mes. mediani {v}'
   }
 };
 let CURRENT_LANG = localStorage.getItem('dash-lang') || 'en';
