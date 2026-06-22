@@ -176,7 +176,7 @@ const bankSpend = group(lastWeek.filter(t=>t.type==='Outflow'), r=>r.bank||'(no 
 const DOW = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 const dowMap = {};
 for(const t of lastWeek.filter(t=>t.type==='Outflow')){
-  const d = DOW[new Date(t.date).getDay()];
+  const d = DOW[new Date(t.date + 'T00:00:00').getDay()];
   dowMap[d] = round2((dowMap[d]||0) + n(t.value));
 }
 const dowBreakdown = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(d => ({day:d, total: dowMap[d]||0}));
@@ -205,7 +205,11 @@ const mtd = summarize(mtdRows);
 const prevMonthStartD = new Date(monthStart + 'T12:00:00Z'); prevMonthStartD.setMonth(prevMonthStartD.getMonth()-1);
 const prevMonthStart = isoDate(prevMonthStartD);
 const prevSamePointD = new Date(prevMonthStartD); prevSamePointD.setDate(prevSamePointD.getDate() + (dayOfMonth - 1));
-const prevMtd = summarize(pickRange(all, prevMonthStart, isoDate(prevSamePointD)));
+// Clamp the window so a longer current month can't spill into the current
+// month — e.g. on day 31 with a 28-day prior month, the naive window would
+// cover all of Feb PLUS early March and double-count current-month spend.
+const prevEnd = new Date(Math.min(prevSamePointD.getTime(), new Date(monthStart + 'T12:00:00Z').getTime()));
+const prevMtd = summarize(pickRange(all, prevMonthStart, isoDate(prevEnd)));
 const monthPace = {
   dayOfMonth,
   spentSoFar: mtd.outflow,
