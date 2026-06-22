@@ -728,13 +728,25 @@ async function syncStatePull(){
     const {data,error}=await _supabase.from('app_state').select('key,value').in('key',SYNC_KEYS);
     if(error){console.warn('State sync pull skipped:',error.message);return;}
     for(const row of (data||[])){
-      try{localStorage.setItem(row.key,JSON.stringify(row.value));}catch{}
       // Rehydrate the live globals that were already loaded from localStorage.
-      if(row.key===RULES_KEY)RULES=Array.isArray(row.value)?row.value:[];
-      else if(row.key==='finance-budgets'&&typeof BUDGETS!=='undefined')BUDGETS=row.value&&typeof row.value==='object'?row.value:{};
-      else if(row.key==='finance-networth'&&typeof NETWORTH!=='undefined')NETWORTH={baselines:{},investments:{},snapshots:[],...(row.value||{})};
-      // plan-state-v1 is read on demand via loadPlanState() → localStorage
-      // is already updated above, nothing to rehydrate.
+      // Validate/sanitize on the way in — the app_state row is writable by
+      // anyone with the anon key, so treat it as untrusted: drop bad budget
+      // numbers and scrub net-worth baseline dates to a plain YYYY-MM-DD shape
+      // (they're rendered into the Net Worth table; escapeHtml at the sink is
+      // the other half of this defense).
+      let value=row.value;
+      if(row.key===RULES_KEY)RULES=Array.isArray(value)?value:[];
+      else if(row.key==='finance-budgets'&&typeof BUDGETS!=='undefined'){value=_sanitizeBudgets(value);BUDGETS=value;}
+      else if(row.key==='finance-networth'&&typeof NETWORTH!=='undefined'){
+        value={baselines:{},investments:{},snapshots:[],...(value||{})};
+        for(const b in (value.baselines||{})){
+          const d=value.baselines[b]&&value.baselines[b].date;
+          if(typeof d==='string'&&!/^\d{4}-\d{2}-\d{2}$/.test(d))value.baselines[b].date=String(d).replace(/[^\d-]/g,'').slice(0,10);
+        }
+        NETWORTH=value;
+      }
+      // plan-state-v1 is read on demand via loadPlanState() → localStorage only.
+      try{localStorage.setItem(row.key,JSON.stringify(value));}catch{}
     }
   }catch(e){console.warn('State sync pull failed:',e.message);}
 }
@@ -816,14 +828,14 @@ async function loadFromSupabase() {
 
   // Populate category filter
   const allCats = [...new Set(TXNS.map(t => t.c))].filter(Boolean).sort();
-  document.getElementById('fpCategory').innerHTML = '<option value="">All Categories</option>' + allCats.map(c => '<option value="' + c.replace(/"/g, '&quot;') + '">' + c + '</option>').join('');
+  document.getElementById('fpCategory').innerHTML = '<option value="">All Categories</option>' + allCats.map(c => '<option value="' + escapeAttr(c) + '">' + escapeHtml(c) + '</option>').join('');
 
   // Populate bank statement filter — newest first (e.g. "2026-05 (NLB)")
   const stmtCounts = {};
   for (const t of TXNS) { if (t.f) stmtCounts[t.f] = (stmtCounts[t.f] || 0) + 1; }
   const allStmts = Object.keys(stmtCounts).sort().reverse();
   document.getElementById('fpStatement').innerHTML = '<option value="">All Statements</option>' +
-    allStmts.map(s => `<option value="${s.replace(/"/g, '&quot;')}">${s} \u00B7 ${stmtCounts[s]}</option>`).join('');
+    allStmts.map(s => `<option value="${escapeAttr(s)}">${escapeHtml(s)} \u00B7 ${stmtCounts[s]}</option>`).join('');
 }
 
 function recomputeAggregates() {
@@ -868,7 +880,7 @@ function recomputeAggregates() {
 
   // DOW_SORTED
   const dowMap = { 0: { Day: 'Sun', Total: 0, Count: 0 }, 1: { Day: 'Mon', Total: 0, Count: 0 }, 2: { Day: 'Tue', Total: 0, Count: 0 }, 3: { Day: 'Wed', Total: 0, Count: 0 }, 4: { Day: 'Thu', Total: 0, Count: 0 }, 5: { Day: 'Fri', Total: 0, Count: 0 }, 6: { Day: 'Sat', Total: 0, Count: 0 } };
-  TXNS.forEach(t => { const dow = new Date(t.d).getDay(); dowMap[dow].Total += t.v; dowMap[dow].Count++; });
+  TXNS.forEach(t => { const dow = new Date(t.d + 'T00:00:00').getDay(); dowMap[dow].Total += t.v; dowMap[dow].Count++; });
   DOW_SORTED = [1, 2, 3, 4, 5, 6, 0].map(i => ({ Day: dowMap[i].Day, Total: Math.round(dowMap[i].Total), Count: dowMap[i].Count }));
 }
 
@@ -1583,7 +1595,7 @@ charts.c3=new Chart(document.getElementById("c3"),{type:"line",data:{labels:data
 // Spending Breakdown — horizontal bar chart of top categories (mirrors Income Breakdown style).
 const topCats=cats.slice(0,20);
 charts.c3b=new Chart(document.getElementById("c3b"),{type:"bar",data:{labels:topCats.map(c=>c.Category),datasets:[{label:"Total",data:topCats.map(c=>c.Total),backgroundColor:topCats.map((_,i)=>ramp(i,topCats.length)),borderRadius:6}]},options:{indexAxis:"y",responsive:true,maintainAspectRatio:false,scales:{x:{ticks:{callback:v=>fmtAxis(v)}},y:{ticks:{autoSkip:false,font:{size:11}}}},plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>fmtE(ctx.parsed.x)}}}}});
-const ftxns=getFilteredTxns().filter(t=>t.t==="Out");const dowMap={};["Mon","Tue","Wed","Thu","Fri","Sat","Sun"].forEach(d=>dowMap[d]={total:0,count:0});ftxns.forEach(t=>{const d=new Date(t.d);const day=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][d.getDay()];if(dowMap[day]){dowMap[day].total+=t.v;dowMap[day].count++}});const dowData=["Mon","Tue","Wed","Thu","Fri","Sat","Sun"].map(d=>({Day:d,Total:Math.round(dowMap[d].total),Count:dowMap[d].count}));
+const ftxns=getFilteredTxns().filter(t=>t.t==="Out");const dowMap={};["Mon","Tue","Wed","Thu","Fri","Sat","Sun"].forEach(d=>dowMap[d]={total:0,count:0});ftxns.forEach(t=>{const d=new Date(t.d+'T00:00:00');const day=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][d.getDay()];if(dowMap[day]){dowMap[day].total+=t.v;dowMap[day].count++}});const dowData=["Mon","Tue","Wed","Thu","Fri","Sat","Sun"].map(d=>({Day:d,Total:Math.round(dowMap[d].total),Count:dowMap[d].count}));
 charts.c4=new Chart(document.getElementById("c4"),{type:"bar",data:{labels:dowData.map(d=>d.Day),datasets:[{label:"Total Spend",data:dowData.map(d=>d.Total),backgroundColor:"#8b5cf6dd",borderRadius:6}]},options:{responsive:true,maintainAspectRatio:false,scales:{y:{ticks:{callback:v=>fmtAxis(v)}}},plugins:{tooltip:{callbacks:{label:ctx=>fmtE(ctx.parsed.y)+" ("+dowData[ctx.dataIndex].Count+" txns)"}}}}});}
 
 function renderIncome(){const data=gfm(),inc=getDynamicIncome(),el=document.getElementById("content");
@@ -2083,23 +2095,33 @@ function addRuleFromMerchant(name){
 // ============================================================
 const BUDGET_KEY='finance-budgets';
 let BUDGETS={}; // {category: monthlyLimit}
-(function loadBudgets(){try{const raw=localStorage.getItem(BUDGET_KEY);if(raw)BUDGETS=JSON.parse(raw)||{};}catch{}})();
+(function loadBudgets(){try{const raw=localStorage.getItem(BUDGET_KEY);if(raw)BUDGETS=_sanitizeBudgets(JSON.parse(raw)||{});}catch{}})();
 function saveBudgets(){try{localStorage.setItem(BUDGET_KEY,JSON.stringify(BUDGETS));}catch{}syncStatePush(BUDGET_KEY,BUDGETS);}
+// Shared statistics + clock helpers (used by budgets, the PDF export, etc.)
+// _median averages the two central values for even-length series (the old
+// inline `arr[floor(n/2)]` biased every estimate to the upper-middle element).
+function _median(a){if(!a||!a.length)return 0;const s=[...a].sort((x,y)=>x-y);const n=s.length;return n%2?s[(n-1)/2]:(s[n/2-1]+s[n/2])/2;}
+// Current month as YYYY-MM from the LOCAL clock — toISOString() is UTC and
+// disagrees with getDate()/getMonth() in the hours around a month boundary.
+function _localYM(d){d=d||new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');}
+// Drop any non-finite / non-positive budget limits (guards against corrupt or
+// tampered synced state rendering '€NaN' and poisoning the Total row).
+function _sanitizeBudgets(o){const out={};for(const k in (o||{})){const v=o[k];if(typeof v==='number'&&isFinite(v)&&v>0)out[k]=v;}return out;}
+
 // Suggested limit = median of the category's spend over the last 6 FULL
 // months, +10% headroom, rounded up to the nearest €5. Months with zero
 // spend are excluded so occasional categories aren't anchored at 0.
 function budgetSuggest(cat){
   const months=[];
-  for(let i=1;i<=6;i++){const d=new Date();d.setDate(1);d.setMonth(d.getMonth()-i);months.push(d.toISOString().slice(0,7));}
+  for(let i=1;i<=6;i++){const d=new Date();d.setDate(1);d.setMonth(d.getMonth()-i);months.push(_localYM(d));}
   const totals=months
     .map(m=>TXNS.filter(t=>t.t==='Out'&&t.c===cat&&t.d.startsWith(m)).reduce((s,t)=>s+t.v,0))
-    .filter(v=>v>0)
-    .sort((a,b)=>a-b);
+    .filter(v=>v>0);
   if(!totals.length)return 0;
-  return Math.ceil(totals[Math.floor(totals.length/2)]*1.1/5)*5;
+  return Math.ceil(_median(totals)*1.1/5)*5;
 }
-function _budgetMtd(){
-  const ym=new Date().toISOString().slice(0,7);
+function _budgetMtd(ym){
+  ym=ym||_localYM();
   const m={};
   TXNS.forEach(t=>{if(t.t!=='Out'||!t.d.startsWith(ym))return;m[t.c]=(m[t.c]||0)+t.v;});
   return m;
@@ -2121,6 +2143,7 @@ function budCatChanged(){
 function updateBudgetLimit(cat,val){
   const v=parseFloat(val);
   if(v>0){BUDGETS[cat]=Math.round(v*100)/100;saveBudgets();render();}
+  else render(); // blank/invalid: re-render so the input snaps back to the stored limit
 }
 function removeBudget(cat){delete BUDGETS[cat];saveBudgets();render();}
 function autoAddBudgets(){
@@ -2140,10 +2163,10 @@ function autoAddBudgets(){
 function renderBudgets(){
   const el=document.getElementById('content');
   const now=new Date();
-  const ym=now.toISOString().slice(0,7);
+  const ym=_localYM(now);
   const dayOfMonth=now.getDate();
   const daysInMonth=new Date(now.getFullYear(),now.getMonth()+1,0).getDate();
-  const mtd=_budgetMtd();
+  const mtd=_budgetMtd(ym);
   const allCats=[...new Set(TXNS.filter(t=>t.t==='Out').map(t=>t.c))].filter(Boolean).sort();
   const unbudgetedCats=allCats.filter(c=>!BUDGETS[c]);
   const rows=Object.entries(BUDGETS)
@@ -2152,7 +2175,9 @@ function renderBudgets(){
       const pct=limit>0?(spent/limit*100):0;
       // Projected month-end spend from current daily pace.
       const projected=dayOfMonth>0?(spent/dayOfMonth)*daysInMonth:spent;
-      return {cat,limit,spent,pct,projected,willExceed:projected>limit&&pct<100};
+      // Suppress the pace warning in the first few days — one early purchase
+      // extrapolated over a full month produces wildly false alarms.
+      return {cat,limit,spent,pct,projected,willExceed:projected>limit&&pct<100&&dayOfMonth>=5};
     })
     .sort((a,b)=>b.pct-a.pct);
   const totalLimit=rows.reduce((s,r)=>s+r.limit,0);
@@ -2176,7 +2201,7 @@ function renderBudgets(){
         <span class="budget-meta" style="${r.pct>100?'color:var(--acc-red);font-weight:700':''}">€${Math.round(r.spent)} / €${Math.round(r.limit)} · ${r.pct.toFixed(0)}%</span>
         ${r.willExceed?`<span class="budget-proj" title="At the current pace of €${Math.round(r.spent/Math.max(dayOfMonth,1))}/day you'd end the month at €${Math.round(r.projected)}">⚠ on pace €${Math.round(r.projected)}</span>`:''}
         <input class="budget-limit-input" type="number" value="${r.limit}" step="1" min="1" data-cat="${escapeHtml(r.cat)}" onchange="updateBudgetLimit(this.dataset.cat,this.value)" title="Edit limit">
-        <button class="page-btn" data-cat="${escapeHtml(r.cat)}" onclick="removeBudget(this.dataset.cat)" title="Remove budget">×</button>
+        <button class="page-btn" data-cat="${escapeHtml(r.cat)}" onclick="removeBudget(this.dataset.cat)" title="Remove budget" aria-label="Remove budget for ${escapeAttr(r.cat)}">×</button>
       </div>`).join('')
     :es('🎯','No budgets yet','Add one above, or use ⚡ Auto-fill to seed limits from your spending history.')}
     ${rows.length?`<div class="budget-row" style="border-bottom:none;margin-top:4px">
@@ -2417,7 +2442,7 @@ function ruleRow(r){
     <td>${r.isRegex?'regex':'contains'}</td>
     <td>${escapeHtml(r.category)}</td>
     <td>${matches}</td>
-    <td><button class="page-btn" onclick="deleteRule('${escapeAttr(r.id)}')">×</button></td>
+    <td><button class="page-btn" onclick="deleteRule('${escapeAttr(r.id)}')" title="Delete rule" aria-label="Delete rule">×</button></td>
   </tr>`;
 }
 function addRule(){
@@ -2506,7 +2531,7 @@ function _pdfSparkline(doc,x,y,w,h,data,color){
 // labels when the cell is tall enough.
 function _pdfHeatmap(doc,x,y,w,h,daily,ym){
   const days=daily.length;
-  const firstDay=new Date(ym+'-01');
+  const firstDay=new Date(ym+'-01T00:00:00');
   const offset=(firstDay.getDay()+6)%7;
   const max=Math.max(...daily,1);
   const cellW=w/7;
@@ -2610,7 +2635,7 @@ async function exportMonthPDF(){
   // Day-of-week distribution
   const dowOrder=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
   const dowMap={};dowOrder.forEach(d=>dowMap[d]=0);
-  out.forEach(t=>{const idx=(new Date(t.d).getDay()+6)%7;dowMap[dowOrder[idx]]+=t.v;});
+  out.forEach(t=>{const idx=(new Date(t.d+'T00:00:00').getDay()+6)%7;dowMap[dowOrder[idx]]+=t.v;});
   // New merchants this month (not seen in prior 6 months)
   const priorWindow=[];for(let i=1;i<=6;i++){const d=new Date(ym+'-15');d.setMonth(d.getMonth()-i);priorWindow.push(d.toISOString().slice(0,7));}
   const priorMerchants=new Set(TXNS.filter(t=>priorWindow.includes(t.d.slice(0,7))).map(t=>t.s));
@@ -2666,8 +2691,7 @@ async function exportMonthPDF(){
   });
   const catDeltas=topCats.map(([cat,current])=>{
     const hist=Object.values(histByCatMo[cat]||{});
-    hist.sort((a,b)=>a-b);
-    const median=hist.length?hist[Math.floor(hist.length/2)]:0;
+    const median=_median(hist);
     return {cat,current,median,delta:current-median};
   });
   const catUp=catDeltas.filter(d=>d.delta>0&&d.median>0).sort((a,b)=>b.delta-a.delta)[0];
@@ -2744,8 +2768,18 @@ Top merchant: ${topMerchName}
 New merchants this month: ${newMerchants.length}`;
       const r=await callAIText({prompt:aiPrompt,maxTokens:220});
       if(r&&r.text){
-        // Replace any "EUR" placeholder with literal € since the AI may echo it back.
-        aiSummary=r.text.trim().replace(/EUR/g,'€');
+        // Replace any "EUR" placeholder with literal € since the AI may echo it
+        // back, then normalize the smart punctuation Haiku routinely emits
+        // (em/en dashes, minus sign, curly quotes, ellipsis, nbsp) down to
+        // ASCII — jsPDF's helvetica is WinAnsi-encoded and renders the rest as
+        // mojibake. € itself is in WinAnsi (0x80), so it stays.
+        aiSummary=r.text.trim()
+          .replace(/EUR/g,'\u20AC')
+          .replace(/[\u2012\u2013\u2014\u2015\u2212]/g,'-')
+          .replace(/[\u2018\u2019]/g,"'")
+          .replace(/[\u201C\u201D]/g,'"')
+          .replace(/\u2026/g,'...')
+          .replace(/[\u00A0\u202F\u2009]/g,' ');
       }
     }
   }catch(e){/* swallow — fall back below */}
@@ -3160,7 +3194,7 @@ function renderNetWorth(){
     const bal=nwBankBalance(b);
     return `<tr>
       <td><strong>${escapeHtml(b)}</strong></td>
-      <td style="color:var(--text4);font-size:12px">${base.date}<br>\u20AC${fmt(parseFloat(base.amount)||0)}</td>
+      <td style="color:var(--text4);font-size:12px">${escapeHtml(base.date)}<br>\u20AC${fmt(parseFloat(base.amount)||0)}</td>
       <td style="font-family:'JetBrains Mono',monospace;color:var(--acc-green)">+\u20AC${fmt(flows.inflow)}</td>
       <td style="font-family:'JetBrains Mono',monospace;color:var(--acc-red)">\u2212\u20AC${fmt(flows.outflow)}</td>
       <td style="font-family:'JetBrains Mono',monospace;font-weight:700;font-size:15px;color:${bal>=0?'var(--acc-green)':'var(--acc-red)'}">\u20AC${fmt(bal)}</td>
@@ -3335,7 +3369,7 @@ function renderFuel(){
     <div class="section">
       <div class="section-title">Regulated Fuel Prices · Slovenia · €/liter</div>
       <div style="font-size:11px;color:var(--text5);margin-bottom:12px">
-        Source: <a href="${escapeHtml(FUEL_DATA.source||'#')}" target="_blank" rel="noopener" style="color:var(--acc-green)">energetika-portal.si</a>
+        Source: <a href="${/^https?:\/\//.test(FUEL_DATA.source||'')?escapeHtml(FUEL_DATA.source):'#'}" target="_blank" rel="noopener" style="color:var(--acc-green)">energetika-portal.si</a>
         · ${prices.length} weekly records · Last scrape: ${escapeHtml(updated)}
       </div>
       <div style="position:relative;height:380px"><canvas id="fuelChart"></canvas></div>
@@ -3890,7 +3924,10 @@ function loadPlanState(){
     const raw = localStorage.getItem(PLAN_KEY);
     if(!raw) return {overrides:{}, buckets:[]};
     const s = JSON.parse(raw);
-    return {overrides: s.overrides || {}, buckets: Array.isArray(s.buckets) ? s.buckets : []};
+    // Spread the whole object first so fields like `calc` (the growth-
+    // calculator inputs) survive the load→mutate→save round-trip instead of
+    // being silently dropped — and therefore wiped from every synced device.
+    return {...s, overrides: s.overrides || {}, buckets: Array.isArray(s.buckets) ? s.buckets : []};
   }catch{ return {overrides:{}, buckets:[]}; }
 }
 function savePlanState(s){
@@ -4802,7 +4839,6 @@ const T_KEYS = {
     // Subtitle
     'sub.live':'transactions (live)','sub.unrec':'unreconciled',
     // Insights
-    'ins.biggest_increases':'Biggest increases','ins.biggest_decreases':'Biggest decreases',
     // Projection source lists
     'prj.expense_sources':'Expense sources',
     // Recurring
@@ -4830,7 +4866,6 @@ const T_KEYS = {
     'cmp.select_a':'Izberite mesec A','cmp.select_b':'Izberite mesec B','cmp.income':'Prihodki','cmp.expenses':'Odhodki','cmp.net':'Neto','cmp.txns':'Trans.',
     'prj.monthly_in':'Mesečni prihodki (€)','prj.monthly_out':'Mesečni odhodki (€)','prj.cur_bal':'Trenutno stanje (€)','prj.months':'Meseci',
     'sub.live':'transakcij (v živo)','sub.unrec':'neusklajenih',
-    'ins.biggest_increases':'Največja povečanja','ins.biggest_decreases':'Največja zmanjšanja',
     'prj.expense_sources':'Viri odhodkov',
     'rec.no_dormant':'Ni zaznanih mirujočih naročnin — nič očitnega za preklic.','rec.no_recurring':'Ni zaznanih ponavljajočih transakcij.','rec.dormant_label':'Mirujoče / morda preklicane','rec.dormant_hint':'Ponavljajoči stroški, ki jih v zadnjem času ni bilo. Preverite, ali ste jih preklicali — ali pa plačilo ni uspelo.',
     'es.no_outflows_t':'Ni odlivov','es.no_outflows_s':'Nobena odlivna transakcija ne ustreza trenutnim filtrom.','es.no_merchants_t':'Ni trgovcev','es.no_merchants_s':'Nič ne ustreza trenutnim filtrom.','es.no_expense_t':'Ni podatkov o odhodkih','es.no_expense_s':'Prilagodite filtre za prikaz razčlenitve po kategorijah.','es.no_inv_t':'Ni naložbene aktivnosti','es.no_inv_s':'Naložbene transakcije se bodo prikazale po uvozu.','es.no_pos_t':'Ni odprtih pozicij','es.no_pos_s':'Vaš portfelj Trading 212 je trenutno prazen. Pozicije se bodo prikazale, ko jih odprete.',

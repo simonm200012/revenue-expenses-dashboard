@@ -60,11 +60,12 @@ try {
   console.error('cash error:', e.message);
 }
 await sleep(1500);
+let portfolioFailed = false;
 try {
   portfolio = await t212('/api/v0/equity/portfolio');
 } catch (e) {
   console.error('portfolio error:', e.message);
-  if (!cash) process.exit(1);
+  portfolioFailed = true;
 }
 await sleep(1500);
 try {
@@ -227,6 +228,15 @@ const out = {
   },
   positions
 };
+
+// If the portfolio endpoint actually failed, do NOT overwrite the last
+// known-good file with a zeroed-out positions list (a transient 429/500
+// would otherwise silently drop every holding). Key off the explicit fetch
+// failure, not positions.length — a legitimately all-cash account is valid.
+if (portfolioFailed) {
+  console.error('Portfolio fetch failed — preserving last known-good t212-portfolio.json, not writing.');
+  process.exit(1);
+}
 
 await mkdir(new URL('../data/', import.meta.url), { recursive: true });
 await writeFile(
