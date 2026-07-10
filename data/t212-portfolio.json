@@ -1,5 +1,5 @@
 {
-  "updated": "2026-07-10T17:21:13Z",
+  "updated": "2026-07-10T18:58:16Z",
   "source": "Trading 212 live API",
   "currency": "EUR",
   "fxRates": {
@@ -13,19 +13,19 @@
   "cash": {
     "free": 0,
     "invested": 46.26,
-    "ppl": -11.71,
+    "ppl": -11.69,
     "result": 426.42,
-    "total": 34.55,
+    "total": 34.57,
     "pieCash": 0,
     "blocked": 0
   },
   "totals": {
     "positionCount": 2,
-    "marketValue": 34.55,
+    "marketValue": 34.57,
     "costBasis": 46.26,
-    "unrealizedPL": -11.71,
-    "unrealizedPLPct": -25.31,
-    "accountValue": 34.55
+    "unrealizedPL": -11.69,
+    "unrealizedPLPct": -25.27,
+    "accountValue": 34.57
   },
   "positions": [
     {
@@ -33,34 +33,34 @@
       "nativeCurrency": "USD",
       "quantity": 0.1358418,
       "averagePrice": 244.99086437,
-      "currentPrice": 176.47,
+      "currentPrice": 176.48,
       "nativeCurrencyValue": 23.97,
-      "costBasis": 30.62,
+      "costBasis": 30.6,
       "marketValue": 20.97,
-      "unrealizedPL": -9.65,
-      "unrealizedPLPct": -31.51,
-      "fxPpl": -1.5,
+      "unrealizedPL": -9.63,
+      "unrealizedPLPct": -31.47,
+      "fxPpl": -1.48,
       "initialFillDate": "2024-03-19T18:49:19.000+02:00",
       "pieQuantity": 0,
       "frontend": "IOS",
-      "allocationPercent": 60.69
+      "allocationPercent": 60.66
     },
     {
       "ticker": "SPCX_US_EQ",
       "nativeCurrency": "USD",
       "quantity": 0.10425283,
       "averagePrice": 173.52046942,
-      "currentPrice": 148.67,
-      "nativeCurrencyValue": 15.5,
-      "costBasis": 15.62,
-      "marketValue": 13.56,
+      "currentPrice": 148.54,
+      "nativeCurrencyValue": 15.49,
+      "costBasis": 15.61,
+      "marketValue": 13.55,
       "unrealizedPL": -2.06,
-      "unrealizedPLPct": -13.19,
-      "fxPpl": 0.21,
+      "unrealizedPLPct": -13.2,
+      "fxPpl": 0.22,
       "initialFillDate": "2026-06-12T19:59:07.000+03:00",
       "pieQuantity": 0,
       "frontend": "IOS",
-      "allocationPercent": 39.25
+      "allocationPercent": 39.2
     }
   ]
 }
