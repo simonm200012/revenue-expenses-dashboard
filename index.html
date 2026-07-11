@@ -807,19 +807,15 @@ async function loadFromSupabase() {
 
   recomputeAggregates();
 
-  // Update subtitle with dynamic count and date range
+  // Capture the raw subtitle inputs; the localized string is (re)built each
+  // render via buildSubtitle() so it follows the language toggle.
   const dates = TXNS.map(t => t.d).filter(Boolean);
-  const minDate = dates[dates.length - 1] || '';
-  const maxDate = dates[0] || '';
-  const minMonth = minDate ? new Date(minDate).toLocaleString('en', { month: 'short', year: 'numeric' }) : '';
-  const maxMonth = maxDate ? new Date(maxDate).toLocaleString('en', { month: 'short', year: 'numeric' }) : '';
-  const unreconCount = TXNS.filter(t=>!t.f).length;
-  const baseSub = minMonth + ' \u2014 ' + maxMonth + ' \u00B7 ' + TXNS.length.toLocaleString() + ' transactions (live)';
-  const subEl = document.querySelector('.subtitle');
-  subEl.innerHTML = baseSub + (unreconCount>0
-    ? ' \u00B7 <a href="#" onclick="event.preventDefault();setChipState(\'fpReconChips\',\'unreconciled\');gFilters.recon=\'unreconciled\';render();serializeStateToHash();" style="color:var(--acc-amber);text-decoration:none;font-weight:600">\u26A0 '+unreconCount.toLocaleString()+' unreconciled</a>'
-    : '');
-  dashboardSubtitle = subEl.innerHTML;
+  _subMinDate = dates[dates.length - 1] || '';
+  _subMaxDate = dates[0] || '';
+  _subCount = TXNS.length;
+  _subUnrecon = TXNS.filter(t=>!t.f).length;
+  dashboardSubtitle = buildSubtitle();
+  document.querySelector('.subtitle').innerHTML = dashboardSubtitle;
 
   // Dynamically populate year filter
   const years = [...new Set(TXNS.map(t => t.d.slice(0, 4)))].sort();
@@ -919,6 +915,18 @@ const TAB_LABELS={overview:"Overview",networth:"Net Worth",spending:"Spending",b
 let gFilters={type:"",bank:"",category:"",dateFrom:"",dateTo:"",amtMin:"",amtMax:"",search:"",recon:"",statement:"",source:""};
 
 let dashboardSubtitle='Loading from Supabase...';
+// Raw subtitle inputs captured at data load; buildSubtitle() localizes them
+// per render so the header follows the language toggle.
+let _subMinDate='', _subMaxDate='', _subCount=0, _subUnrecon=0;
+function buildSubtitle(){
+  if(!_subCount) return dashboardSubtitle;
+  const loc = (typeof CURRENT_LANG!=='undefined' && CURRENT_LANG==='sl') ? 'sl' : 'en';
+  const fmtM = d => d ? new Date(d+'T00:00:00').toLocaleString(loc,{month:'short',year:'numeric'}) : '';
+  const base = fmtM(_subMinDate) + ' — ' + fmtM(_subMaxDate) + ' · ' + _subCount.toLocaleString() + ' ' + tr('sub.live');
+  return base + (_subUnrecon>0
+    ? ' · <a href="#" onclick="event.preventDefault();setChipState(\'fpReconChips\',\'unreconciled\');gFilters.recon=\'unreconciled\';render();serializeStateToHash();" style="color:var(--acc-amber);text-decoration:none;font-weight:600">⚠ '+_subUnrecon.toLocaleString()+' '+tr('sub.unrec')+'</a>'
+    : '');
+}
 
 
 // ============================================================
@@ -1642,19 +1650,19 @@ function renderCompare(){const months=MONTHLY.map(m=>m.YM);const el=document.get
 // Smart defaults: current month vs same month last year
 const now=new Date();const curYM=now.toISOString().slice(0,7);const prevYM=(now.getFullYear()-1)+curYM.slice(4);
 const defB=months.includes(curYM)?curYM:months[months.length-1];const defA=months.includes(prevYM)?prevYM:months[months.length-2];
-el.innerHTML=`<div class="section"><div class="section-title">${tr('sec.mom_compare')}</div><div class="compare-row"><select class="compare-select" id="cmpA" onchange="updateCompare()"><option value="">Select Month A</option>${months.map(m=>`<option value="${m}"${m===defA?' selected':''}>${m}</option>`).join("")}</select><span style="color:var(--text4);font-weight:700">vs</span><select class="compare-select" id="cmpB" onchange="updateCompare()"><option value="">Select Month B</option>${months.map(m=>`<option value="${m}"${m===defB?' selected':''}>${m}</option>`).join("")}</select></div><div id="compareResult"></div></div>`;updateCompare()}
-function updateCompare(){const a=document.getElementById("cmpA").value,b=document.getElementById("cmpB").value;if(!a||!b){document.getElementById("compareResult").innerHTML='<p style="color:var(--text4)">Select two months.</p>';return}const ma=MONTHLY.find(m=>m.YM===a),mb=MONTHLY.find(m=>m.YM===b);if(!ma||!mb)return;const txA=TXNS.filter(t=>t.d.startsWith(a)&&t.t==='Out'),txB=TXNS.filter(t=>t.d.startsWith(b)&&t.t==='Out');const catA={},catB={};txA.forEach(t=>{catA[t.c]=(catA[t.c]||0)+t.v});txB.forEach(t=>{catB[t.c]=(catB[t.c]||0)+t.v});const allC=[...new Set([...Object.keys(catA),...Object.keys(catB)])].sort((x,y)=>((catB[y]||0)-(catB[x]||0)));
+el.innerHTML=`<div class="section"><div class="section-title">${tr('sec.mom_compare')}</div><div class="compare-row"><select class="compare-select" id="cmpA" onchange="updateCompare()"><option value="">${tr('cmp.select_a')}</option>${months.map(m=>`<option value="${m}"${m===defA?' selected':''}>${m}</option>`).join("")}</select><span style="color:var(--text4);font-weight:700">vs</span><select class="compare-select" id="cmpB" onchange="updateCompare()"><option value="">${tr('cmp.select_b')}</option>${months.map(m=>`<option value="${m}"${m===defB?' selected':''}>${m}</option>`).join("")}</select></div><div id="compareResult"></div></div>`;updateCompare()}
+function updateCompare(){const a=document.getElementById("cmpA").value,b=document.getElementById("cmpB").value;if(!a||!b){document.getElementById("compareResult").innerHTML='<p style="color:var(--text4)">'+tr('cmp.select_months')+'</p>';return}const ma=MONTHLY.find(m=>m.YM===a),mb=MONTHLY.find(m=>m.YM===b);if(!ma||!mb)return;const txA=TXNS.filter(t=>t.d.startsWith(a)&&t.t==='Out'),txB=TXNS.filter(t=>t.d.startsWith(b)&&t.t==='Out');const catA={},catB={};txA.forEach(t=>{catA[t.c]=(catA[t.c]||0)+t.v});txB.forEach(t=>{catB[t.c]=(catB[t.c]||0)+t.v});const allC=[...new Set([...Object.keys(catA),...Object.keys(catB)])].sort((x,y)=>((catB[y]||0)-(catB[x]||0)));
 function delta(va,vb){const d=vb-va;if(Math.abs(d)<0.5)return'<span class="delta" style="opacity:.5">\u2014</span>';return`<span class="delta ${d>0?'neg':'pos'}">${d>0?'+':''}${fmtE(d)}</span>`}
-document.getElementById("compareResult").innerHTML=`<div class="compare-grid"><div class="compare-card"><h4>${a}</h4><div class="compare-stat"><span style="color:var(--text3)">Income</span><span style="color:var(--acc-green);font-family:'JetBrains Mono',monospace">${fmtE(ma.Inflow)}</span></div><div class="compare-stat"><span style="color:var(--text3)">Expenses</span><span style="color:var(--acc-red);font-family:'JetBrains Mono',monospace">${fmtE(ma.Outflow)}</span></div><div class="compare-stat"><span style="color:var(--text3)">Net</span><span style="color:${ma.Net>=0?'var(--acc-green)':'var(--acc-red)'};font-family:'JetBrains Mono',monospace">${fmtE(ma.Net)}</span></div><div class="compare-stat"><span style="color:var(--text3)">Txns</span><span>${txA.length+TXNS.filter(t=>t.d.startsWith(a)&&t.t==='In').length}</span></div></div><div class="compare-card"><h4>${b}</h4><div class="compare-stat"><span style="color:var(--text3)">Income</span><span style="color:var(--acc-green);font-family:'JetBrains Mono',monospace">${fmtE(mb.Inflow)} ${delta(ma.Inflow,mb.Inflow)}</span></div><div class="compare-stat"><span style="color:var(--text3)">Expenses</span><span style="color:var(--acc-red);font-family:'JetBrains Mono',monospace">${fmtE(mb.Outflow)} ${delta(ma.Outflow,mb.Outflow)}</span></div><div class="compare-stat"><span style="color:var(--text3)">Net</span><span style="color:${mb.Net>=0?'var(--acc-green)':'var(--acc-red)'};font-family:'JetBrains Mono',monospace">${fmtE(mb.Net)}</span></div><div class="compare-stat"><span style="color:var(--text3)">Txns</span><span>${txB.length+TXNS.filter(t=>t.d.startsWith(b)&&t.t==='In').length}</span></div></div></div><div class="section" style="margin-top:16px"><div class="section-title">${tr('sec.cat_breakdown')}</div>${mc("cmpChart",280)}</div>
-<div class="section" style="margin-top:16px"><div class="section-title">Category Deltas <span style="font-size:10px;color:var(--text5);text-transform:none;letter-spacing:0;font-weight:400">(${a} → ${b})</span></div>
+document.getElementById("compareResult").innerHTML=`<div class="compare-grid"><div class="compare-card"><h4>${a}</h4><div class="compare-stat"><span style="color:var(--text3)">${tr('cmp.income')}</span><span style="color:var(--acc-green);font-family:'JetBrains Mono',monospace">${fmtE(ma.Inflow)}</span></div><div class="compare-stat"><span style="color:var(--text3)">${tr('cmp.expenses')}</span><span style="color:var(--acc-red);font-family:'JetBrains Mono',monospace">${fmtE(ma.Outflow)}</span></div><div class="compare-stat"><span style="color:var(--text3)">${tr('cmp.net')}</span><span style="color:${ma.Net>=0?'var(--acc-green)':'var(--acc-red)'};font-family:'JetBrains Mono',monospace">${fmtE(ma.Net)}</span></div><div class="compare-stat"><span style="color:var(--text3)">${tr('cmp.txns')}</span><span>${txA.length+TXNS.filter(t=>t.d.startsWith(a)&&t.t==='In').length}</span></div></div><div class="compare-card"><h4>${b}</h4><div class="compare-stat"><span style="color:var(--text3)">${tr('cmp.income')}</span><span style="color:var(--acc-green);font-family:'JetBrains Mono',monospace">${fmtE(mb.Inflow)} ${delta(ma.Inflow,mb.Inflow)}</span></div><div class="compare-stat"><span style="color:var(--text3)">${tr('cmp.expenses')}</span><span style="color:var(--acc-red);font-family:'JetBrains Mono',monospace">${fmtE(mb.Outflow)} ${delta(ma.Outflow,mb.Outflow)}</span></div><div class="compare-stat"><span style="color:var(--text3)">${tr('cmp.net')}</span><span style="color:${mb.Net>=0?'var(--acc-green)':'var(--acc-red)'};font-family:'JetBrains Mono',monospace">${fmtE(mb.Net)}</span></div><div class="compare-stat"><span style="color:var(--text3)">${tr('cmp.txns')}</span><span>${txB.length+TXNS.filter(t=>t.d.startsWith(b)&&t.t==='In').length}</span></div></div></div><div class="section" style="margin-top:16px"><div class="section-title">${tr('sec.cat_breakdown')}</div>${mc("cmpChart",280)}</div>
+<div class="section" style="margin-top:16px"><div class="section-title">${tr('cmp.deltas')} <span style="font-size:10px;color:var(--text5);text-transform:none;letter-spacing:0;font-weight:400">(${escapeHtml(a)} → ${escapeHtml(b)})</span></div>
 <div class="table-wrap" style="max-height:420px"><table class="txn-table">
-<thead><tr><th>Category</th><th>${a}</th><th>${b}</th><th>Δ €</th><th>Δ %</th></tr></thead>
+<thead><tr><th>${tr('cmp.category')}</th><th>${escapeHtml(a)}</th><th>${escapeHtml(b)}</th><th>Δ €</th><th>Δ %</th></tr></thead>
 <tbody>${allC.slice(0,15).map(c=>{
   const va=catA[c]||0,vb=catB[c]||0,d=vb-va;
   const pct=va>0?(d/va*100):null;
   const cls=Math.abs(d)<1?'':(d>0?'out':'in');
   const chip=pct==null
-    ?'<span style="color:var(--text4)">new</span>'
+    ?'<span style="color:var(--text4)">'+tr('cmp.new')+'</span>'
     :`<span style="background:${d>0?'rgba(239,68,68,.12)':'rgba(16,185,129,.12)'};color:${d>0?'var(--acc-red)':'var(--acc-green)'};padding:1px 8px;border-radius:10px;font-size:11px;font-weight:600">${d>0?'+':''}${pct.toFixed(0)}%</span>`;
   return `<tr><td>${escapeHtml(c)}</td><td style="font-family:'JetBrains Mono',monospace">${fmtE(va)}</td><td style="font-family:'JetBrains Mono',monospace">${fmtE(vb)}</td><td class="${cls}" style="font-family:'JetBrains Mono',monospace">${d>=0?'+':'−'}€${Math.abs(Math.round(d)).toLocaleString()}</td><td>${chip}</td></tr>`;
 }).join('')}</tbody></table></div></div>`;
@@ -2138,7 +2146,7 @@ function budCatChanged(){
   const cat=document.getElementById('budCat').value;
   const sug=budgetSuggest(cat);
   const inp=document.getElementById('budLimit');
-  if(inp)inp.placeholder=sug>0?`suggested €${sug}`:'amount €';
+  if(inp)inp.placeholder=sug>0?tr('bud.suggested_ph',{v:sug}):tr('bud.amount_ph');
 }
 function updateBudgetLimit(cat,val){
   const v=parseFloat(val);
@@ -2186,33 +2194,33 @@ function renderBudgets(){
   const barColor=p=>p>100?'var(--acc-red)':(p>70?'var(--acc-amber)':'var(--acc-green)');
   el.innerHTML=`
   <div class="section">
-    <div class="section-title">Budgets — ${ym} <span style="font-size:10px;color:var(--text5);text-transform:none;letter-spacing:0;font-weight:400">day ${dayOfMonth} of ${daysInMonth}</span></div>
+    <div class="section-title">${tr('bud.title')} — ${ym} <span style="font-size:10px;color:var(--text5);text-transform:none;letter-spacing:0;font-weight:400">${tr('bud.day_of',{d:dayOfMonth,n:daysInMonth})}</span></div>
     <div class="search-bar" style="margin-bottom:6px">
       <select class="compare-select" id="budCat" onchange="budCatChanged()">${unbudgetedCats.map(c=>`<option>${escapeHtml(c)}</option>`).join('')}</select>
-      <input class="fp-input" type="number" id="budLimit" step="1" min="1" placeholder="amount €" style="max-width:150px">
-      <button class="fp-btn fp-btn-primary" onclick="addBudget()" style="flex:0;white-space:nowrap">Add budget</button>
-      <button class="fp-btn fp-btn-secondary" onclick="autoAddBudgets()" style="flex:0;white-space:nowrap" title="Add the top categories from your last 6 months at median +10%">⚡ Auto-fill from history</button>
+      <input class="fp-input" type="number" id="budLimit" step="1" min="1" placeholder="${tr('bud.amount_ph')}" style="max-width:150px">
+      <button class="fp-btn fp-btn-primary" onclick="addBudget()" style="flex:0;white-space:nowrap">${tr('bud.add')}</button>
+      <button class="fp-btn fp-btn-secondary" onclick="autoAddBudgets()" style="flex:0;white-space:nowrap" title="${tr('bud.autofill_title')}">${tr('bud.autofill')}</button>
     </div>
-    <p style="font-size:11px;color:var(--text5);margin-bottom:14px">Leave the amount empty to use the suggested limit (6-month median +10%). Budgets always track the current calendar month.</p>
+    <p style="font-size:11px;color:var(--text5);margin-bottom:14px">${tr('bud.hint')}</p>
     ${rows.length?rows.map(r=>`
       <div class="budget-row">
         <span class="budget-name" title="${escapeHtml(r.cat)}">${escapeHtml(r.cat)}</span>
         <div class="budget-track"><div class="budget-fill" style="width:${Math.min(r.pct,100)}%;background:${barColor(r.pct)}"></div></div>
         <span class="budget-meta" style="${r.pct>100?'color:var(--acc-red);font-weight:700':''}">€${Math.round(r.spent)} / €${Math.round(r.limit)} · ${r.pct.toFixed(0)}%</span>
-        ${r.willExceed?`<span class="budget-proj" title="At the current pace of €${Math.round(r.spent/Math.max(dayOfMonth,1))}/day you'd end the month at €${Math.round(r.projected)}">⚠ on pace €${Math.round(r.projected)}</span>`:''}
-        <input class="budget-limit-input" type="number" value="${r.limit}" step="1" min="1" data-cat="${escapeHtml(r.cat)}" onchange="updateBudgetLimit(this.dataset.cat,this.value)" title="Edit limit">
-        <button class="page-btn" data-cat="${escapeHtml(r.cat)}" onclick="removeBudget(this.dataset.cat)" title="Remove budget" aria-label="Remove budget for ${escapeAttr(r.cat)}">×</button>
+        ${r.willExceed?`<span class="budget-proj" title="${tr('bud.on_pace_title',{d:Math.round(r.spent/Math.max(dayOfMonth,1)),v:Math.round(r.projected)})}">${tr('bud.on_pace',{v:Math.round(r.projected)})}</span>`:''}
+        <input class="budget-limit-input" type="number" value="${r.limit}" step="1" min="1" data-cat="${escapeHtml(r.cat)}" onchange="updateBudgetLimit(this.dataset.cat,this.value)" title="${tr('bud.edit_limit')}">
+        <button class="page-btn" data-cat="${escapeHtml(r.cat)}" onclick="removeBudget(this.dataset.cat)" title="${tr('bud.remove')}" aria-label="${escapeAttr(tr('bud.remove_for',{c:r.cat}))}">×</button>
       </div>`).join('')
-    :es('🎯','No budgets yet','Add one above, or use ⚡ Auto-fill to seed limits from your spending history.')}
+    :es('🎯',tr('bud.empty_title'),tr('bud.empty_sub'))}
     ${rows.length?`<div class="budget-row" style="border-bottom:none;margin-top:4px">
-      <span class="budget-name" style="font-weight:800">Total</span>
+      <span class="budget-name" style="font-weight:800">${tr('bud.total')}</span>
       <div class="budget-track"><div class="budget-fill" style="width:${totalLimit>0?Math.min(totalSpent/totalLimit*100,100):0}%;background:${barColor(totalLimit>0?totalSpent/totalLimit*100:0)}"></div></div>
       <span class="budget-meta" style="font-weight:700">€${Math.round(totalSpent)} / €${Math.round(totalLimit)} · ${totalLimit>0?(totalSpent/totalLimit*100).toFixed(0):0}%</span>
     </div>`:''}
   </div>
   ${unbudgetedSpend>0?`<div class="section" style="margin-top:16px">
-    <div class="section-title">Unbudgeted spending this month</div>
-    <p style="font-size:13px;color:var(--text3)">€${Math.round(unbudgetedSpend).toLocaleString()} across categories without a budget${(()=>{const top=Object.entries(mtd).filter(([c])=>!BUDGETS[c]).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([c,v])=>`${escapeHtml(c)} (€${Math.round(v)})`);return top.length?' — mostly '+top.join(', '):'';})()}.</p>
+    <div class="section-title">${tr('bud.unbudgeted_title')}</div>
+    <p style="font-size:13px;color:var(--text3)">${tr('bud.unbudgeted_body',{v:Math.round(unbudgetedSpend).toLocaleString()})}${(()=>{const top=Object.entries(mtd).filter(([c])=>!BUDGETS[c]).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([c,v])=>`${escapeHtml(c)} (€${Math.round(v)})`);return top.length?tr('bud.unbudgeted_mostly',{list:top.join(', ')}):'';})()}.</p>
   </div>`:''}`;
 }
 
@@ -2234,7 +2242,7 @@ function renderFlow(){
   const totalOut=outT.reduce((s,t)=>s+t.v,0);
   const totalInv=invT.reduce((s,t)=>s+t.v,0);
   if(totalIn<=0&&totalOut<=0){
-    el.innerHTML=`<div class="section"><div class="section-title">Money Flow</div>${es('🌊','No flows to draw','No income or expenses match the current filters.')}</div>`;
+    el.innerHTML=`<div class="section"><div class="section-title">${tr('flow.title')}</div>${es('🌊',tr('flow.empty_title'),tr('flow.empty_sub'))}</div>`;
     return;
   }
   // Group helper: top N + "Other".
@@ -2250,11 +2258,11 @@ function renderFlow(){
   // Left: income sources (income label = detail r, else source) + reserves on deficit.
   const greens=['#10b981','#34d399','#059669','#6ee7b7','#047857','#a7f3d0','#065f46'];
   const leftNodes=topN(inT,t=>t.r||t.s,6).map((n,i)=>({...n,color:greens[i%greens.length]}));
-  if(leftover<0)leftNodes.push({name:'From reserves',v:-leftover,color:'var(--acc-amber)'});
+  if(leftover<0)leftNodes.push({name:tr('flow.reserves'),v:-leftover,color:'var(--acc-amber)'});
   // Right: expense categories + invested + saved on surplus.
   const rightNodes=topN(outT,t=>t.c,10).map((n,i,arr)=>({...n,color:ramp(i,arr.length)}));
-  if(totalInv>0)rightNodes.push({name:'Invested',v:totalInv,color:'var(--acc-violet)'});
-  if(leftover>0)rightNodes.push({name:'Saved',v:leftover,color:'var(--acc-cyan)'});
+  if(totalInv>0)rightNodes.push({name:tr('flow.invested'),v:totalInv,color:'var(--acc-violet)'});
+  if(leftover>0)rightNodes.push({name:tr('flow.saved'),v:leftover,color:'var(--acc-cyan)'});
   const T=leftNodes.reduce((s,n)=>s+n.v,0); // equals right total by construction
   // Geometry.
   const W=1000,nodeW=14,leftX=205,rightX=W-205-nodeW,midX=W/2-nodeW/2;
@@ -2291,8 +2299,8 @@ function renderFlow(){
   });
   // Center spine drawn last so ribbon seams tuck under it.
   svg+=`<rect x="${midX}" y="${topPad}" width="${nodeW}" height="${T*scale}" rx="3" fill="var(--text4)"><title>Total: ${fmtE(T)}</title></rect>`;
-  svg+=`<text class="flow-sub" x="${midX+nodeW/2}" y="${topPad-10}" text-anchor="middle">Total ${fmtE(T)}</text>`;
-  const periodLabel=yearFilter!=='All'?yearFilter:(hasActiveFilters()?'filtered':'all time');
+  svg+=`<text class="flow-sub" x="${midX+nodeW/2}" y="${topPad-10}" text-anchor="middle">${tr('flow.total')} ${fmtE(T)}</text>`;
+  const periodLabel=yearFilter!=='All'?yearFilter:(hasActiveFilters()?tr('flow.filtered'):tr('flow.all_time'));
   // Table view: the same nodes and colors as the sankey, as two ranked
   // bar columns — sources on the left, allocation on the right.
   const flowTableCol=(title,nodes)=>{
@@ -2302,11 +2310,11 @@ function renderFlow(){
     ).join('')}</div></div>`;
   };
   const body=FLOW_VIEW==='table'
-    ?`<div class="grid grid-2">${flowTableCol('Where it came from · '+fmtE(T),leftNodes)}${flowTableCol('Where it went · '+fmtE(T),rightNodes)}</div>`
+    ?`<div class="grid grid-2">${flowTableCol(tr('flow.from')+' · '+fmtE(T),leftNodes)}${flowTableCol(tr('flow.to')+' · '+fmtE(T),rightNodes)}</div>`
     :`<div class="flow-wrap"><svg class="flow-svg" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">${svg}</svg></div>
-    <p style="font-size:11px;color:var(--text5);margin-top:10px">Income sources on the left flow into the total; expenses, investments and savings flow out on the right. Hover any ribbon for details. Use the year selector or filters to change the period.</p>`;
+    <p style="font-size:11px;color:var(--text5);margin-top:10px">${tr('flow.desc')}</p>`;
   el.innerHTML=`<div class="section">
-    <div class="section-title" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px"><span>Money Flow <span style="font-size:10px;color:var(--text5);text-transform:none;letter-spacing:0;font-weight:400">(${escapeHtml(periodLabel)} · where every euro goes)</span></span><span class="view-toggle"><button class="${FLOW_VIEW!=='table'?'active':''}" onclick="setFlowView('graph')">Graph</button><button class="${FLOW_VIEW==='table'?'active':''}" onclick="setFlowView('table')">Table</button></span></div>
+    <div class="section-title" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px"><span>${tr('flow.title')} <span style="font-size:10px;color:var(--text5);text-transform:none;letter-spacing:0;font-weight:400">(${escapeHtml(periodLabel)} · ${tr('flow.where')})</span></span><span class="view-toggle"><button class="${FLOW_VIEW!=='table'?'active':''}" onclick="setFlowView('graph')">${tr('flow.graph')}</button><button class="${FLOW_VIEW==='table'?'active':''}" onclick="setFlowView('table')">${tr('flow.table')}</button></span></div>
     ${body}
   </div>`;
 }
@@ -3634,7 +3642,7 @@ function render(){
   const isBudgets=activeTab==='budgets';
   document.getElementById('activeFilters').style.display=(isRules||isFuel||isInvestments||isNetWorth||isPlan||isBudgets)?'none':'flex';
   document.getElementById('yearFilter').style.display=(isRules||isFuel||isInvestments||isNetWorth||isPlan||isBudgets)?'none':'inline-block';
-  document.querySelector('.subtitle').innerHTML=dashboardSubtitle;
+  document.querySelector('.subtitle').innerHTML=buildSubtitle();
   if(isBudgets){
     document.getElementById('kpis').innerHTML='';
     renderBudgets();
@@ -4838,6 +4846,12 @@ const T_KEYS = {
     'prj.monthly_in':'Monthly Income (€)','prj.monthly_out':'Monthly Expenses (€)','prj.cur_bal':'Current Balance (€)','prj.months':'Months',
     // Subtitle
     'sub.live':'transactions (live)','sub.unrec':'unreconciled',
+    // Budgets tab
+    'bud.title':'Budgets','bud.day_of':'day {d} of {n}','bud.add':'Add budget','bud.autofill':'⚡ Auto-fill from history','bud.autofill_title':'Add the top categories from your last 6 months at median +10%','bud.amount_ph':'amount €','bud.suggested_ph':'suggested €{v}','bud.hint':'Leave the amount empty to use the suggested limit (6-month median +10%). Budgets always track the current calendar month.','bud.total':'Total','bud.on_pace':'⚠ on pace €{v}','bud.on_pace_title':'At the current pace of €{d}/day you would end the month at €{v}','bud.edit_limit':'Edit limit','bud.remove':'Remove budget','bud.remove_for':'Remove budget for {c}','bud.empty_title':'No budgets yet','bud.empty_sub':'Add one above, or use ⚡ Auto-fill to seed limits from your spending history.','bud.unbudgeted_title':'Unbudgeted spending this month','bud.unbudgeted_body':'€{v} across categories without a budget','bud.unbudgeted_mostly':' — mostly {list}',
+    // Money Flow tab
+    'flow.title':'Money Flow','flow.where':'where every euro goes','flow.all_time':'all time','flow.filtered':'filtered','flow.graph':'Graph','flow.table':'Table','flow.from':'Where it came from','flow.to':'Where it went','flow.total':'Total','flow.desc':'Income sources on the left flow into the total; expenses, investments and savings flow out on the right. Hover any ribbon for details. Use the year selector or filters to change the period.','flow.empty_title':'No flows to draw','flow.empty_sub':'No income or expenses match the current filters.','flow.reserves':'From reserves','flow.saved':'Saved','flow.invested':'Invested',
+    // Compare tab
+    'cmp.deltas':'Category Deltas','cmp.category':'Category','cmp.new':'new','cmp.select_months':'Select two months.',
     // Insights
     // Projection source lists
     'prj.expense_sources':'Expense sources',
@@ -4866,6 +4880,12 @@ const T_KEYS = {
     'cmp.select_a':'Izberite mesec A','cmp.select_b':'Izberite mesec B','cmp.income':'Prihodki','cmp.expenses':'Odhodki','cmp.net':'Neto','cmp.txns':'Trans.',
     'prj.monthly_in':'Mesečni prihodki (€)','prj.monthly_out':'Mesečni odhodki (€)','prj.cur_bal':'Trenutno stanje (€)','prj.months':'Meseci',
     'sub.live':'transakcij (v živo)','sub.unrec':'neusklajenih',
+    // Budgets tab
+    'bud.title':'Proračun','bud.day_of':'dan {d} od {n}','bud.add':'Dodaj proračun','bud.autofill':'⚡ Samodejno iz zgodovine','bud.autofill_title':'Dodaj glavne kategorije zadnjih 6 mesecev pri mediani +10 %','bud.amount_ph':'znesek €','bud.suggested_ph':'predlagano €{v}','bud.hint':'Pustite znesek prazen za uporabo predlagane meje (6-mesečna mediana +10 %). Proračuni vedno spremljajo tekoči koledarski mesec.','bud.total':'Skupaj','bud.on_pace':'⚠ na poti do €{v}','bud.on_pace_title':'Pri trenutni hitrosti €{d}/dan bi mesec končali pri €{v}','bud.edit_limit':'Uredi mejo','bud.remove':'Odstrani proračun','bud.remove_for':'Odstrani proračun za {c}','bud.empty_title':'Še ni proračunov','bud.empty_sub':'Dodajte enega zgoraj ali uporabite ⚡ Samodejno za nastavitev mej iz zgodovine porabe.','bud.unbudgeted_title':'Neproračunska poraba ta mesec','bud.unbudgeted_body':'€{v} po kategorijah brez proračuna','bud.unbudgeted_mostly':' — večinoma {list}',
+    // Money Flow tab
+    'flow.title':'Tok denarja','flow.where':'kam gre vsak evro','flow.all_time':'vse obdobje','flow.filtered':'filtrirano','flow.graph':'Graf','flow.table':'Tabela','flow.from':'Od kod je prišlo','flow.to':'Kam je šlo','flow.total':'Skupaj','flow.desc':'Viri prihodkov na levi se stekajo v skupni znesek; odhodki, naložbe in prihranki odtekajo na desno. Za podrobnosti se pomaknite čez trak. Za spremembo obdobja uporabite izbirnik leta ali filtre.','flow.empty_title':'Ni tokov za prikaz','flow.empty_sub':'Noben prihodek ali odhodek ne ustreza trenutnim filtrom.','flow.reserves':'Iz rezerv','flow.saved':'Prihranjeno','flow.invested':'Naloženo',
+    // Compare tab
+    'cmp.deltas':'Razlike po kategorijah','cmp.category':'Kategorija','cmp.new':'novo','cmp.select_months':'Izberite dva meseca.',
     'prj.expense_sources':'Viri odhodkov',
     'rec.no_dormant':'Ni zaznanih mirujočih naročnin — nič očitnega za preklic.','rec.no_recurring':'Ni zaznanih ponavljajočih transakcij.','rec.dormant_label':'Mirujoče / morda preklicane','rec.dormant_hint':'Ponavljajoči stroški, ki jih v zadnjem času ni bilo. Preverite, ali ste jih preklicali — ali pa plačilo ni uspelo.',
     'es.no_outflows_t':'Ni odlivov','es.no_outflows_s':'Nobena odlivna transakcija ne ustreza trenutnim filtrom.','es.no_merchants_t':'Ni trgovcev','es.no_merchants_s':'Nič ne ustreza trenutnim filtrom.','es.no_expense_t':'Ni podatkov o odhodkih','es.no_expense_s':'Prilagodite filtre za prikaz razčlenitve po kategorijah.','es.no_inv_t':'Ni naložbene aktivnosti','es.no_inv_s':'Naložbene transakcije se bodo prikazale po uvozu.','es.no_pos_t':'Ni odprtih pozicij','es.no_pos_s':'Vaš portfelj Trading 212 je trenutno prazen. Pozicije se bodo prikazale, ko jih odprete.',
