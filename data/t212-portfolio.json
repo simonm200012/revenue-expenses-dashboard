@@ -1,5 +1,5 @@
 {
-  "updated": "2026-07-13T17:52:34Z",
+  "updated": "2026-07-13T19:20:06Z",
   "source": "Trading 212 live API",
   "currency": "EUR",
   "fxRates": {
@@ -13,19 +13,19 @@
   "cash": {
     "free": 0,
     "invested": 46.26,
-    "ppl": -12.8,
+    "ppl": -12.83,
     "result": 426.42,
-    "total": 33.46,
+    "total": 33.43,
     "pieCash": 0,
     "blocked": 0
   },
   "totals": {
     "positionCount": 2,
-    "marketValue": 33.46,
+    "marketValue": 33.43,
     "costBasis": 46.26,
-    "unrealizedPL": -12.8,
-    "unrealizedPLPct": -27.67,
-    "accountValue": 33.46
+    "unrealizedPL": -12.83,
+    "unrealizedPLPct": -27.73,
+    "accountValue": 33.43
   },
   "positions": [
     {
@@ -33,34 +33,34 @@
       "nativeCurrency": "USD",
       "quantity": 0.1358418,
       "averagePrice": 244.99086437,
-      "currentPrice": 174.86,
-      "nativeCurrencyValue": 23.75,
+      "currentPrice": 174.47,
+      "nativeCurrencyValue": 23.7,
       "costBasis": 30.56,
-      "marketValue": 20.79,
-      "unrealizedPL": -9.77,
-      "unrealizedPLPct": -31.97,
-      "fxPpl": -1.4,
+      "marketValue": 20.75,
+      "unrealizedPL": -9.81,
+      "unrealizedPLPct": -32.1,
+      "fxPpl": -1.39,
       "initialFillDate": "2024-03-19T18:49:19.000+02:00",
       "pieQuantity": 0,
       "frontend": "IOS",
-      "allocationPercent": 62.13
+      "allocationPercent": 62.07
     },
     {
       "ticker": "SPCX_US_EQ",
       "nativeCurrency": "USD",
       "quantity": 0.10425283,
       "averagePrice": 173.52046942,
-      "currentPrice": 137.61,
+      "currentPrice": 137.67,
       "nativeCurrencyValue": 14.35,
-      "costBasis": 15.59,
+      "costBasis": 15.58,
       "marketValue": 12.56,
-      "unrealizedPL": -3.03,
-      "unrealizedPLPct": -19.44,
+      "unrealizedPL": -3.02,
+      "unrealizedPLPct": -19.38,
       "fxPpl": 0.26,
       "initialFillDate": "2026-06-12T19:59:07.000+03:00",
       "pieQuantity": 0,
       "frontend": "IOS",
-      "allocationPercent": 37.54
+      "allocationPercent": 37.57
     }
   ]
 }
