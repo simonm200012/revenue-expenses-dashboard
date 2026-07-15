@@ -1,5 +1,5 @@
 {
-  "updated": "2026-07-14T19:15:26Z",
+  "updated": "2026-07-15T09:07:36Z",
   "source": "Trading 212 live API",
   "currency": "EUR",
   "fxRates": {
@@ -13,19 +13,19 @@
   "cash": {
     "free": 0,
     "invested": 46.26,
-    "ppl": -12.65,
+    "ppl": -12.66,
     "result": 426.42,
-    "total": 33.61,
+    "total": 33.6,
     "pieCash": 0,
     "blocked": 0
   },
   "totals": {
     "positionCount": 2,
-    "marketValue": 33.61,
+    "marketValue": 33.6,
     "costBasis": 46.26,
-    "unrealizedPL": -12.65,
-    "unrealizedPLPct": -27.35,
-    "accountValue": 33.61
+    "unrealizedPL": -12.66,
+    "unrealizedPLPct": -27.37,
+    "accountValue": 33.6
   },
   "positions": [
     {
@@ -33,34 +33,34 @@
       "nativeCurrency": "USD",
       "quantity": 0.1358418,
       "averagePrice": 244.99086437,
-      "currentPrice": 176.24,
-      "nativeCurrencyValue": 23.94,
-      "costBasis": 30.67,
-      "marketValue": 20.99,
-      "unrealizedPL": -9.68,
-      "unrealizedPLPct": -31.56,
-      "fxPpl": -1.51,
+      "currentPrice": 176.77,
+      "nativeCurrencyValue": 24.01,
+      "costBasis": 30.66,
+      "marketValue": 21.05,
+      "unrealizedPL": -9.61,
+      "unrealizedPLPct": -31.34,
+      "fxPpl": -1.5,
       "initialFillDate": "2024-03-19T18:49:19.000+02:00",
       "pieQuantity": 0,
       "frontend": "IOS",
-      "allocationPercent": 62.45
+      "allocationPercent": 62.65
     },
     {
       "ticker": "SPCX_US_EQ",
       "nativeCurrency": "USD",
       "quantity": 0.10425283,
       "averagePrice": 173.52046942,
-      "currentPrice": 138.73,
-      "nativeCurrencyValue": 14.46,
+      "currentPrice": 137.83,
+      "nativeCurrencyValue": 14.37,
       "costBasis": 15.65,
-      "marketValue": 12.68,
-      "unrealizedPL": -2.97,
-      "unrealizedPLPct": -18.98,
-      "fxPpl": 0.2,
+      "marketValue": 12.6,
+      "unrealizedPL": -3.05,
+      "unrealizedPLPct": -19.49,
+      "fxPpl": 0.21,
       "initialFillDate": "2026-06-12T19:59:07.000+03:00",
       "pieQuantity": 0,
       "frontend": "IOS",
-      "allocationPercent": 37.73
+      "allocationPercent": 37.5
     }
   ]
 }
