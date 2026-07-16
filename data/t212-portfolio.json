@@ -1,10 +1,10 @@
 {
-  "updated": "2026-07-16T12:58:02Z",
+  "updated": "2026-07-16T15:06:25Z",
   "source": "Trading 212 live API",
   "currency": "EUR",
   "fxRates": {
     "EUR": 1,
-    "USD": 1.1406
+    "USD": 1.1467
   },
   "account": {
     "id": 30881486,
@@ -13,19 +13,19 @@
   "cash": {
     "free": 0,
     "invested": 46.26,
-    "ppl": -12.88,
+    "ppl": -12.69,
     "result": 426.42,
-    "total": 33.38,
+    "total": 33.57,
     "pieCash": 0,
     "blocked": 0
   },
   "totals": {
     "positionCount": 2,
-    "marketValue": 33.38,
+    "marketValue": 33.57,
     "costBasis": 46.26,
-    "unrealizedPL": -12.88,
-    "unrealizedPLPct": -27.84,
-    "accountValue": 33.38
+    "unrealizedPL": -12.69,
+    "unrealizedPLPct": -27.43,
+    "accountValue": 33.57
   },
   "positions": [
     {
@@ -33,34 +33,34 @@
       "nativeCurrency": "USD",
       "quantity": 0.1358418,
       "averagePrice": 244.99086437,
-      "currentPrice": 178.7,
-      "nativeCurrencyValue": 24.27,
-      "costBasis": 30.71,
-      "marketValue": 21.28,
-      "unrealizedPL": -9.43,
-      "unrealizedPLPct": -30.7,
-      "fxPpl": -1.56,
+      "currentPrice": 179.51,
+      "nativeCurrencyValue": 24.38,
+      "costBasis": 30.58,
+      "marketValue": 21.27,
+      "unrealizedPL": -9.31,
+      "unrealizedPLPct": -30.45,
+      "fxPpl": -1.53,
       "initialFillDate": "2024-03-19T18:49:19.000+02:00",
       "pieQuantity": 0,
       "frontend": "IOS",
-      "allocationPercent": 63.75
+      "allocationPercent": 63.36
     },
     {
       "ticker": "SPCX_US_EQ",
       "nativeCurrency": "USD",
       "quantity": 0.10425283,
       "averagePrice": 173.52046942,
-      "currentPrice": 133.8,
-      "nativeCurrencyValue": 13.95,
-      "costBasis": 15.68,
-      "marketValue": 12.23,
-      "unrealizedPL": -3.45,
-      "unrealizedPLPct": -22,
-      "fxPpl": 0.17,
+      "currentPrice": 134.36,
+      "nativeCurrencyValue": 14.01,
+      "costBasis": 15.6,
+      "marketValue": 12.22,
+      "unrealizedPL": -3.38,
+      "unrealizedPLPct": -21.67,
+      "fxPpl": 0.19,
       "initialFillDate": "2026-06-12T19:59:07.000+03:00",
       "pieQuantity": 0,
       "frontend": "IOS",
-      "allocationPercent": 36.64
+      "allocationPercent": 36.4
     }
   ]
 }
