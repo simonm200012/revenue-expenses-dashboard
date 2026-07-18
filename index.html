@@ -2478,14 +2478,58 @@ async function _pdfRenderChart(config,width,height){
   canvas.width=width;canvas.height=height;
   canvas.style.position='fixed';canvas.style.top='-9999px';
   document.body.appendChild(canvas);
+  // Print theme: the app's Chart defaults follow the UI theme, so in dark
+  // mode every offscreen render would inherit pale grey text/grid — nearly
+  // invisible on the white PDF page. Temporarily force ink-on-white print
+  // colors, paint an opaque white background behind the chart, and render
+  // at 2x devicePixelRatio so the embedded PNG stays crisp.
+  const saved={color:Chart.defaults.color,border:Chart.defaults.borderColor};
+  Chart.defaults.color='#334155';
+  Chart.defaults.borderColor='rgba(15,23,42,0.08)';
+  const whiteBg={id:'pdfWhiteBg',beforeDraw(c){const x=c.ctx;x.save();x.globalCompositeOperation='destination-over';x.fillStyle='#ffffff';x.fillRect(0,0,c.width,c.height);x.restore();}};
   const chart=new Chart(canvas,{
     ...config,
-    options:{...(config.options||{}),animation:false,responsive:false,maintainAspectRatio:false}
+    plugins:[...(config.plugins||[]),whiteBg],
+    options:{...(config.options||{}),animation:false,responsive:false,maintainAspectRatio:false,devicePixelRatio:2}
   });
   await new Promise(r=>setTimeout(r,220));
   const img=canvas.toDataURL('image/png');
   chart.destroy();canvas.remove();
+  Chart.defaults.color=saved.color;
+  Chart.defaults.borderColor=saved.border;
   return img;
+}
+// ---- Shared print design system for the monthly report ----
+// One accent (brand navy + gold), neutral slate inks, hairline rules.
+const PDF_S={
+  ink:[15,23,42], body:[51,65,85], muted:[100,116,139], faint:[148,163,184],
+  rule:[226,232,240], card:[248,250,252],
+  navy:[5,12,28], navyHead:[15,42,74], gold:[212,161,63],
+  green:[5,150,105], red:[220,38,38], violet:[124,58,237], cyan:[8,145,178],
+  tintRed:[254,235,235], tintGreen:[228,247,240], tintViolet:[240,236,254], tintGrey:[241,245,249]
+};
+// Section header: gold tick + small-caps title + hairline rule. Returns new y.
+function _pdfSection(doc,title,y,M,W){
+  doc.setFillColor(...PDF_S.gold).rect(M,y-7.5,3,9,'F');
+  doc.setFont('helvetica','bold').setFontSize(9.5).setTextColor(...PDF_S.ink);
+  doc.text(title.toUpperCase(),M+9,y);
+  doc.setDrawColor(...PDF_S.rule).setLineWidth(0.6).line(M,y+6,W-M,y+6);
+  doc.setTextColor(0);
+  return y+18;
+}
+// Page-break guard: if `needed` points don't fit above the footer, start a
+// fresh page and return its top margin.
+function _pdfEnsure(doc,y,needed,H){if(y+needed>H-48){doc.addPage();return 44;}return y;}
+// Shared autoTable theme — navy header, hairline grid, striped rows,
+// right-aligned numerics passed per-table via columnStyles.
+function _pdfTable(extra){
+  return Object.assign({
+    theme:'grid',
+    headStyles:{fillColor:PDF_S.navyHead,textColor:255,fontSize:8.5,fontStyle:'bold',cellPadding:5,lineColor:PDF_S.navyHead,lineWidth:0.1},
+    styles:{fontSize:8.5,cellPadding:4.5,lineColor:PDF_S.rule,lineWidth:0.4,textColor:PDF_S.body},
+    alternateRowStyles:{fillColor:PDF_S.card},
+    footStyles:{fillColor:[241,245,249],textColor:PDF_S.ink,fontSize:8.5,fontStyle:'bold',cellPadding:5,lineColor:PDF_S.rule,lineWidth:0.4}
+  },extra);
 }
 // jsPDF's built-in helvetica is WinAnsi-encoded — Unicode minus (U+2212)
 // and em-dash (U+2014) aren't in the glyph set, so they render as garbage
@@ -2498,22 +2542,23 @@ function _pdfFmtDelta(v){
   const s=v>=0?'+':'-';
   return s+Math.abs(v).toFixed(0)+'%';
 }
-// Page footer — drawn after content of each page so page numbers reflect total.
+// Page footer — drawn after content of each page so page numbers reflect
+// total. Brand small-caps left, timestamp center, page numbers right, with
+// a gold tick on the hairline. (ASCII separators only — WinAnsi font.)
 function _pdfFooter(doc,ym){
   const pageCount=doc.internal.getNumberOfPages();
   for(let p=1;p<=pageCount;p++){
     doc.setPage(p);
     const W=doc.internal.pageSize.getWidth();
     const H=doc.internal.pageSize.getHeight();
-    doc.setDrawColor(220).line(40,H-30,W-40,H-30);
-    doc.setFont('helvetica','normal').setFontSize(8).setTextColor(140);
-    // Use ASCII separators in the footer — the middle dot (U+00B7) renders OK
-    // in helvetica, but to keep the footer 100% WinAnsi-safe across font
-    // variants we use a vertical bar. Also adding explicit padding ensures
-    // the three sections never collide visually.
-    doc.text(`Financial Report  |  ${ym}`,40,H-16);
-    doc.text(`Page ${p} of ${pageCount}`,W-40,H-16,{align:'right'});
-    doc.text(`Generated ${new Date().toLocaleString('en-GB')}`,W/2,H-16,{align:'center'});
+    doc.setDrawColor(...PDF_S.rule).setLineWidth(0.6).line(40,H-32,W-40,H-32);
+    doc.setFillColor(...PDF_S.gold).rect(40,H-33.5,14,1.5,'F');
+    doc.setFont('helvetica','bold').setFontSize(7).setTextColor(...PDF_S.muted);
+    doc.text(`REVENUE & EXPENSES  |  MONTHLY REPORT  |  ${ym}`,40,H-19);
+    doc.setFont('helvetica','normal');
+    doc.text(`Generated ${new Date().toLocaleString('en-GB')}`,W/2,H-19,{align:'center'});
+    doc.setFont('helvetica','bold').setTextColor(...PDF_S.ink);
+    doc.text(`${p} / ${pageCount}`,W-40,H-19,{align:'right'});
   }
   doc.setTextColor(0);
 }
@@ -2546,10 +2591,11 @@ function _pdfHeatmap(doc,x,y,w,h,daily,ym){
   const headerH=12;
   const rows=Math.ceil((days+offset)/7);
   const cellH=(h-headerH)/Math.max(rows,1);
-  doc.setFont('helvetica','normal').setFontSize(7).setTextColor(120);
-  ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].forEach((d,i)=>{
+  doc.setFont('helvetica','bold').setFontSize(6.5).setTextColor(...PDF_S.faint);
+  ['MON','TUE','WED','THU','FRI','SAT','SUN'].forEach((d,i)=>{
     doc.text(d,x+i*cellW+cellW/2,y+8,{align:'center'});
   });
+  doc.setFont('helvetica','normal');
   for(let d=0;d<days;d++){
     const idx=offset+d;
     const col=idx%7;
@@ -2558,33 +2604,37 @@ function _pdfHeatmap(doc,x,y,w,h,daily,ym){
     const cy=y+headerH+row*cellH;
     const val=daily[d];
     const intensity=val/max;
-    const r=Math.round(248-intensity*(248-220));
-    const g=Math.round(248-intensity*(248-38));
-    const b=Math.round(248-intensity*(248-38));
-    doc.setFillColor(r,g,b);
-    doc.rect(cx+1,cy+1,cellW-2,cellH-2,'F');
-    doc.setFontSize(7).setTextColor(intensity>0.5?255:100);
-    doc.text(String(d+1),cx+cellW-3,cy+8,{align:'right'});
+    // Zero days: flat slate card. Spend days: slate → deep red ramp.
+    const base=[241,245,249], hot=[185,28,28];
+    const mix=(a,b)=>Math.round(a+intensity*(b-a));
+    doc.setFillColor(val>0?mix(base[0],hot[0]):base[0],val>0?mix(base[1],hot[1]):base[1],val>0?mix(base[2],hot[2]):base[2]);
+    doc.roundedRect(cx+1.5,cy+1.5,cellW-3,cellH-3,2,2,'F');
+    doc.setFontSize(6.5).setTextColor(intensity>0.45?255:PDF_S.faint[0],intensity>0.45?255:PDF_S.faint[1],intensity>0.45?255:PDF_S.faint[2]);
+    doc.text(String(d+1),cx+cellW-4.5,cy+9,{align:'right'});
     if(val>0&&cellH>20){
-      doc.setFontSize(6.5).setFont('helvetica','bold').setTextColor(intensity>0.5?255:30);
-      doc.text('€'+Math.round(val),cx+3,cy+cellH-3);
+      doc.setFontSize(6.5).setFont('helvetica','bold');
+      if(intensity>0.45)doc.setTextColor(255);else doc.setTextColor(...PDF_S.body);
+      doc.text('€'+Math.round(val),cx+4.5,cy+cellH-4.5);
       doc.setFont('helvetica','normal');
     }
   }
   doc.setTextColor(0);
 }
-// Callout box: solid color background, icon + title at top, large value mid,
-// small subtitle bottom. Used for the three Notable-changes boxes on page 1.
-function _pdfCallout(doc,x,y,w,h,icon,title,value,subtitle,color){
-  doc.setFillColor(color[0],color[1],color[2]);
+// Callout card: light tinted background, colored accent bar on the left,
+// colored small-caps title, ink value, muted subtitle. Reads as a report
+// highlight rather than a saturated banner.
+function _pdfCallout(doc,x,y,w,h,icon,title,value,subtitle,color,tint){
+  doc.setFillColor(...(tint||PDF_S.tintGrey));
   doc.roundedRect(x,y,w,h,4,4,'F');
-  doc.setFont('helvetica','bold').setFontSize(8).setTextColor(255);
-  doc.text((icon?icon+'  ':'')+title.toUpperCase(),x+10,y+14);
-  doc.setFontSize(14).setTextColor(255);
-  doc.text(value,x+10,y+33);
-  doc.setFontSize(7.5).setFont('helvetica','normal').setTextColor(255);
+  doc.setDrawColor(...PDF_S.rule).setLineWidth(0.5).roundedRect(x,y,w,h,4,4,'S');
+  doc.setFillColor(color[0],color[1],color[2]).rect(x,y+5,3,h-10,'F');
+  doc.setFont('helvetica','bold').setFontSize(7.5).setTextColor(color[0],color[1],color[2]);
+  doc.text(title.toUpperCase(),x+11,y+14);
+  doc.setFontSize(14).setTextColor(...PDF_S.ink);
+  doc.text(value,x+11,y+33);
+  doc.setFontSize(7.5).setFont('helvetica','normal').setTextColor(...PDF_S.muted);
   const lines=doc.splitTextToSize(subtitle,w-20);
-  doc.text(lines[0]||'',x+10,y+h-8);
+  doc.text(lines[0]||'',x+11,y+h-9);
   doc.setTextColor(0);
 }
 async function exportMonthPDF(){
@@ -2717,17 +2767,18 @@ async function exportMonthPDF(){
   const cumPrevAligned=Array.from({length:daysInMonth},(_,i)=>cumPrev[i]!=null?cumPrev[i]:(cumPrev[cumPrev.length-1]||0));
 
   // ============ Pre-render every chart we need ============
-  const HUES=['#ef4444','#f59e0b','#8b5cf6','#06b6d4','#ec4899','#84cc16','#3b82f6','#f97316','#14b8a6','#a855f7','#0ea5e9','#d946ef'];
+  // Donut uses the dashboard's ranked expense palette (top-5 distinct hues,
+  // slate tail) so the report reads as the same product as the app.
   const catChartImg=topCats.length?await _pdfRenderChart({
     type:'doughnut',
-    data:{labels:topCats.map(([c])=>c),datasets:[{data:topCats.map(([,v])=>v),backgroundColor:HUES.slice(0,topCats.length),borderWidth:0}]},
-    options:{cutout:'58%',plugins:{legend:{position:'right',labels:{boxWidth:10,padding:6,font:{size:9}}}}}
+    data:{labels:topCats.map(([c])=>c),datasets:[{data:topCats.map(([,v])=>v),backgroundColor:topCats.map((_,i)=>ramp(i,topCats.length)),borderWidth:2,borderColor:'#ffffff'}]},
+    options:{cutout:'60%',plugins:{legend:{position:'right',labels:{boxWidth:9,boxHeight:9,padding:7,font:{size:9}}}}}
   },480,200):null;
   const dailyChartImg=await _pdfRenderChart({
     type:'line',
     data:{labels:dayLabels,datasets:[
-      {label:'Daily expenses',data:dailyOut,borderColor:'#ef4444',backgroundColor:'rgba(239,68,68,.18)',fill:true,tension:.3,pointRadius:0,borderWidth:2},
-      {label:'Daily income',data:dailyIn,borderColor:'#10b981',backgroundColor:'rgba(16,185,129,.10)',fill:true,tension:.3,pointRadius:0,borderWidth:1.5}
+      {label:'Daily expenses',data:dailyOut,borderColor:'#dc2626',backgroundColor:'rgba(220,38,38,.10)',fill:true,tension:.3,pointRadius:0,borderWidth:2},
+      {label:'Daily income',data:dailyIn,borderColor:'#059669',backgroundColor:'rgba(5,150,105,.08)',fill:true,tension:.3,pointRadius:0,borderWidth:1.5}
     ]},
     options:{plugins:{legend:{display:true,position:'top',labels:{boxWidth:10,font:{size:10}}}},scales:{y:{beginAtZero:true}}}
   },480,170);
@@ -2736,21 +2787,21 @@ async function exportMonthPDF(){
   const cumChartImg=await _pdfRenderChart({
     type:'line',
     data:{labels:dayLabels,datasets:[
-      {label:`${ym} cumulative`,data:cumThis,borderColor:'#ef4444',backgroundColor:'rgba(239,68,68,.12)',fill:true,tension:.15,pointRadius:0,borderWidth:2},
+      {label:`${ym} cumulative`,data:cumThis,borderColor:'#dc2626',backgroundColor:'rgba(220,38,38,.08)',fill:true,tension:.15,pointRadius:0,borderWidth:2},
       {label:`${prevMonth} (prior)`,data:cumPrevAligned,borderColor:'#94a3b8',borderDash:[5,4],borderWidth:1.4,fill:false,tension:.15,pointRadius:0}
     ]},
     options:{plugins:{legend:{display:true,position:'top',labels:{boxWidth:10,font:{size:10}}}},scales:{y:{beginAtZero:true}}}
   },480,170);
   const dowChartImg=await _pdfRenderChart({
     type:'bar',
-    data:{labels:dowOrder,datasets:[{data:dowOrder.map(d=>dowMap[d]),backgroundColor:'#8b5cf6cc',borderRadius:4}]},
+    data:{labels:dowOrder,datasets:[{data:dowOrder.map(d=>dowMap[d]),backgroundColor:'#0f2a4a',borderRadius:3}]},
     options:{plugins:{legend:{display:false}},scales:{y:{beginAtZero:true}}}
   },240,150);
   const compareImg=await _pdfRenderChart({
     type:'bar',
     data:{labels:['Income','Expenses'],datasets:[
-      {label:'Prior month',data:[prevIn,prevOut],backgroundColor:'#cbd5e1'},
-      {label:'This month',data:[totalIn,totalOut],backgroundColor:['#10b981','#ef4444']}
+      {label:'Prior month',data:[prevIn,prevOut],backgroundColor:'#cbd5e1',borderRadius:3},
+      {label:'This month',data:[totalIn,totalOut],backgroundColor:['#059669','#dc2626'],borderRadius:3}
     ]},
     options:{plugins:{legend:{display:true,position:'top',labels:{boxWidth:10,font:{size:10}}}}}
   },240,150);
@@ -2808,212 +2859,250 @@ New merchants this month: ${newMerchants.length}`;
   let y=44;
 
   // ---- Page 1: Executive summary ----
-  // Header band
-  doc.setFillColor(5,12,28).rect(0,0,W,90,'F');
-  doc.setTextColor(255).setFont('helvetica','bold').setFontSize(22);
-  doc.text(`Financial Report`,M,40);
-  doc.setFont('helvetica','normal').setFontSize(11).setTextColor(212,161,63);
-  doc.text(ym,M,60);
-  doc.setTextColor(200).setFontSize(9);
-  doc.text(`${all.length} transactions  |  ${out.length} expenses  |  ${inT.length} income  |  ${inv.length} investments`,M,76);
+  // Header band: navy with gold rule, month name spelled out, net at right.
+  const monthName=new Date(ym+'-15').toLocaleString('en-GB',{month:'long',year:'numeric'});
+  doc.setFillColor(...PDF_S.navy).rect(0,0,W,92,'F');
+  doc.setFillColor(...PDF_S.gold).rect(0,92,W,2.5,'F');
+  doc.setTextColor(255).setFont('helvetica','bold').setFontSize(21);
+  doc.text('Monthly Financial Report',M,42);
+  doc.setFont('helvetica','normal').setFontSize(12).setTextColor(...PDF_S.gold);
+  doc.text(monthName,M,62);
+  doc.setTextColor(160,174,192).setFontSize(8.5);
+  doc.text(`${all.length} transactions  |  ${out.length} expenses  |  ${inT.length} income  |  ${inv.length} investments`,M,78);
+  // Net highlight, right side of the band.
+  doc.setFont('helvetica','normal').setFontSize(7.5).setTextColor(160,174,192);
+  doc.text('NET RESULT',W-M,40,{align:'right'});
+  doc.setFont('helvetica','bold').setFontSize(20).setTextColor(...(net>=0?[110,231,183]:[252,165,165]));
+  doc.text(_pdfFmtSigned(net),W-M,62,{align:'right'});
+  doc.setFont('helvetica','normal').setFontSize(8).setTextColor(160,174,192);
+  doc.text(`savings rate ${savRate.toFixed(1)}%`,W-M,78,{align:'right'});
   doc.setTextColor(0);
-  y=102;
+  y=112;
 
   // ===== AI Executive Summary box =====
-  const summLines=doc.splitTextToSize(aiSummary,W-2*M-20);
-  const summH=20+summLines.length*12;
-  doc.setFillColor(248,250,252).roundedRect(M,y,W-2*M,summH,3,3,'F');
-  doc.setFillColor(212,161,63).rect(M,y,3,summH,'F'); // gold left accent
-  doc.setFont('helvetica','bold').setFontSize(8).setTextColor(140);
-  doc.text('EXECUTIVE SUMMARY',M+10,y+12);
-  doc.setFont('helvetica','normal').setFontSize(10).setTextColor(40);
-  doc.text(summLines,M+10,y+24);
+  const summLines=doc.splitTextToSize(aiSummary,W-2*M-24);
+  const summH=24+summLines.length*12;
+  doc.setFillColor(...PDF_S.card).roundedRect(M,y,W-2*M,summH,4,4,'F');
+  doc.setDrawColor(...PDF_S.rule).setLineWidth(0.5).roundedRect(M,y,W-2*M,summH,4,4,'S');
+  doc.setFillColor(...PDF_S.gold).rect(M,y+5,3,summH-10,'F');
+  doc.setFont('helvetica','bold').setFontSize(7.5).setTextColor(...PDF_S.gold);
+  doc.text('EXECUTIVE SUMMARY',M+12,y+14);
+  doc.setFont('helvetica','normal').setFontSize(9.5).setTextColor(...PDF_S.body);
+  doc.text(summLines,M+12,y+27);
   doc.setTextColor(0);
-  y+=summH+12;
+  y+=summH+14;
 
-  // ===== KPI strip with deltas =====
-  doc.setFont('helvetica','bold').setFontSize(11);
-  const colW=(W-2*M)/4;
+  // ===== KPI cards =====
+  // Four cards; deltas colored by whether the direction is favorable
+  // (income up = green, expenses up = red).
+  const kGap=8;
+  const colW=(W-2*M-3*kGap)/4;
+  const kH=58;
   const kpis=[
-    {label:'Income',value:'€'+Math.round(totalIn).toLocaleString(),color:[16,185,129],delta:dPrevIn,deltaYoy:dYoyIn},
-    {label:'Expenses',value:'€'+Math.round(totalOut).toLocaleString(),color:[239,68,68],delta:dPrevOut,deltaYoy:dYoyOut},
-    {label:'Net',value:_pdfFmtSigned(net),color:net>=0?[16,185,129]:[239,68,68]},
-    {label:'Savings rate',value:savRate.toFixed(1)+'%',color:savRate>=0?[6,182,212]:[239,68,68]}
+    {label:'Income',value:'€'+Math.round(totalIn).toLocaleString(),color:PDF_S.green,delta:dPrevIn,deltaYoy:dYoyIn,goodWhenUp:true},
+    {label:'Expenses',value:'€'+Math.round(totalOut).toLocaleString(),color:PDF_S.red,delta:dPrevOut,deltaYoy:dYoyOut,goodWhenUp:false},
+    {label:'Net',value:_pdfFmtSigned(net),color:net>=0?PDF_S.green:PDF_S.red},
+    {label:'Savings rate',value:savRate.toFixed(1)+'%',color:savRate>=0?PDF_S.cyan:PDF_S.red}
   ];
   kpis.forEach((k,i)=>{
-    const x=M+i*colW;
-    doc.setDrawColor(k.color[0],k.color[1],k.color[2]).setLineWidth(2).line(x,y-4,x+colW-12,y-4);
-    doc.setFont('helvetica','normal').setFontSize(8).setTextColor(110).text(k.label.toUpperCase(),x,y+6);
-    doc.setFont('helvetica','bold').setFontSize(15).setTextColor(k.color[0],k.color[1],k.color[2]).text(k.value,x,y+24);
+    const x=M+i*(colW+kGap);
+    doc.setFillColor(...PDF_S.card).roundedRect(x,y,colW,kH,4,4,'F');
+    doc.setDrawColor(...PDF_S.rule).setLineWidth(0.5).roundedRect(x,y,colW,kH,4,4,'S');
+    doc.setFillColor(k.color[0],k.color[1],k.color[2]).rect(x+4,y,colW-8,2.2,'F');
+    doc.setFont('helvetica','bold').setFontSize(7).setTextColor(...PDF_S.muted);
+    doc.text(k.label.toUpperCase(),x+9,y+16);
+    doc.setFontSize(14.5).setTextColor(...PDF_S.ink);
+    doc.text(k.value,x+9,y+33);
     if(k.delta!=null){
-      doc.setFont('helvetica','normal').setFontSize(8).setTextColor(140);
-      doc.text(`MoM ${_pdfFmtDelta(k.delta)}${k.deltaYoy!=null?`  |  YoY ${_pdfFmtDelta(k.deltaYoy)}`:''}`,x,y+38);
+      const mk=(v)=>v==null?null:{txt:_pdfFmtDelta(v),good:(v>=0)===k.goodWhenUp};
+      const mom=mk(k.delta),yoy=mk(k.deltaYoy);
+      let dx=x+9;
+      doc.setFont('helvetica','bold').setFontSize(7);
+      if(mom){
+        const c=mom.good?PDF_S.green:PDF_S.red;
+        doc.setTextColor(c[0],c[1],c[2]);doc.text(`MoM ${mom.txt}`,dx,y+48);
+        dx+=doc.getTextWidth(`MoM ${mom.txt}`)+8;
+      }
+      if(yoy){
+        const c=yoy.good?PDF_S.green:PDF_S.red;
+        doc.setTextColor(c[0],c[1],c[2]);doc.text(`YoY ${yoy.txt}`,dx,y+48);
+      }
     }
   });
   doc.setTextColor(0);
-  y+=52;
+  y+=kH+16;
 
-  // ===== Year-to-date strip with mini sparklines =====
-  doc.setFont('helvetica','bold').setFontSize(8).setTextColor(80).text(`YEAR-TO-DATE  (${yearOfMonth})`,M,y);
-  doc.setDrawColor(220).setLineWidth(0.5).line(M+120,y-2,W-M,y-2);
-  y+=8;
-  const ytdColW=(W-2*M)/5;
+  // ===== Year-to-date strip (single card with sparklines) =====
+  const ytdH=64;
+  doc.setFillColor(...PDF_S.card).roundedRect(M,y,W-2*M,ytdH,4,4,'F');
+  doc.setDrawColor(...PDF_S.rule).setLineWidth(0.5).roundedRect(M,y,W-2*M,ytdH,4,4,'S');
+  doc.setFont('helvetica','bold').setFontSize(7).setTextColor(...PDF_S.faint);
+  doc.text(`YEAR TO DATE  ${yearOfMonth}`,M+10,y+13);
+  const ytdColW=(W-2*M-20)/5;
   const ytdItems=[
-    {label:'INCOME',value:'€'+Math.round(ytdIn).toLocaleString(),color:[16,185,129],spark:sparkIn},
-    {label:'EXPENSES',value:'€'+Math.round(ytdOut).toLocaleString(),color:[239,68,68],spark:sparkOut},
-    {label:'NET',value:_pdfFmtSigned(ytdNet),color:ytdNet>=0?[16,185,129]:[239,68,68],spark:sparkNet},
-    {label:'INVESTED',value:'€'+Math.round(ytdInv).toLocaleString(),color:[139,92,246],spark:sparkInv},
-    {label:'SAVINGS RATE',value:ytdSav.toFixed(1)+'%',color:[6,182,212],spark:sparkSav}
+    {label:'INCOME',value:'€'+Math.round(ytdIn).toLocaleString(),color:PDF_S.green,spark:sparkIn},
+    {label:'EXPENSES',value:'€'+Math.round(ytdOut).toLocaleString(),color:PDF_S.red,spark:sparkOut},
+    {label:'NET',value:_pdfFmtSigned(ytdNet),color:ytdNet>=0?PDF_S.green:PDF_S.red,spark:sparkNet},
+    {label:'INVESTED',value:'€'+Math.round(ytdInv).toLocaleString(),color:PDF_S.violet,spark:sparkInv},
+    {label:'SAVINGS',value:ytdSav.toFixed(1)+'%',color:PDF_S.cyan,spark:sparkSav}
   ];
   ytdItems.forEach((it,i)=>{
-    const x=M+i*ytdColW;
-    doc.setFont('helvetica','normal').setFontSize(7).setTextColor(120).text(it.label,x,y+8);
-    doc.setFont('helvetica','bold').setFontSize(11).setTextColor(it.color[0],it.color[1],it.color[2]).text(it.value,x,y+22);
-    _pdfSparkline(doc,x,y+26,ytdColW-18,12,it.spark,it.color);
+    const x=M+10+i*ytdColW;
+    doc.setFont('helvetica','bold').setFontSize(6.5).setTextColor(...PDF_S.muted).text(it.label,x,y+26);
+    doc.setFontSize(11).setTextColor(...PDF_S.ink).text(it.value,x,y+40);
+    _pdfSparkline(doc,x,y+46,ytdColW-22,11,it.spark,it.color);
   });
   doc.setTextColor(0);
-  y+=48;
+  y+=ytdH+16;
 
-  // ===== Notable changes callouts (3 boxes) =====
+  // ===== Notable changes callouts (3 tinted cards) =====
   const callW=(W-2*M-16)/3;
-  const callH=58;
+  const callH=56;
   if(catUp){
-    _pdfCallout(doc,M,y,callW,callH,'',catUp.cat.slice(0,18)+' UP',`+€${Math.round(catUp.delta).toLocaleString()}`,`vs 6-mo median of €${Math.round(catUp.median).toLocaleString()}`,[239,68,68]);
+    _pdfCallout(doc,M,y,callW,callH,'',catUp.cat.slice(0,20)+' UP',`+€${Math.round(catUp.delta).toLocaleString()}`,`vs 6-mo median of €${Math.round(catUp.median).toLocaleString()}`,PDF_S.red,PDF_S.tintRed);
   }else{
-    _pdfCallout(doc,M,y,callW,callH,'','CATEGORY UP','-','no significant increase',[148,163,184]);
+    _pdfCallout(doc,M,y,callW,callH,'','CATEGORY UP','-','no significant increase',PDF_S.faint,PDF_S.tintGrey);
   }
   if(catDown){
-    _pdfCallout(doc,M+callW+8,y,callW,callH,'',catDown.cat.slice(0,18)+' DOWN',`-€${Math.round(Math.abs(catDown.delta)).toLocaleString()}`,`vs 6-mo median of €${Math.round(catDown.median).toLocaleString()}`,[16,185,129]);
+    _pdfCallout(doc,M+callW+8,y,callW,callH,'',catDown.cat.slice(0,20)+' DOWN',`-€${Math.round(Math.abs(catDown.delta)).toLocaleString()}`,`vs 6-mo median of €${Math.round(catDown.median).toLocaleString()}`,PDF_S.green,PDF_S.tintGreen);
   }else{
-    _pdfCallout(doc,M+callW+8,y,callW,callH,'','CATEGORY DOWN','-','no significant decrease',[148,163,184]);
+    _pdfCallout(doc,M+callW+8,y,callW,callH,'','CATEGORY DOWN','-','no significant decrease',PDF_S.faint,PDF_S.tintGrey);
   }
-  _pdfCallout(doc,M+2*callW+16,y,callW,callH,'','NEW MERCHANTS',String(newMerchants.length),'first seen in 6+ months',[139,92,246]);
-  y+=callH+12;
+  _pdfCallout(doc,M+2*callW+16,y,callW,callH,'','NEW MERCHANTS',String(newMerchants.length),'first seen in 6+ months',PDF_S.violet,PDF_S.tintViolet);
+  y+=callH+16;
 
-  // ===== Quick stats row =====
-  doc.setFont('helvetica','normal').setFontSize(9).setTextColor(80);
-  const stats=[
-    `Biggest spending day: ${ym}-${String(biggestDay.day).padStart(2,'0')} (${'€'+Math.round(biggestDay.v).toLocaleString()})`,
-    `Avg daily spend (active days): €${Math.round(avgDaily).toLocaleString()}`,
-    `Active days: ${activeDays}/${daysInMonth}`,
-    `Reconciled: ${recon} / ${all.length} (${reconPct}%)`
+  // ===== Quick stats (4 label-over-value cells) =====
+  const qStats=[
+    {l:'BIGGEST DAY',v:`${ym}-${String(biggestDay.day).padStart(2,'0')}  (€${Math.round(biggestDay.v).toLocaleString()})`},
+    {l:'AVG DAILY (ACTIVE)',v:'€'+Math.round(avgDaily).toLocaleString()},
+    {l:'ACTIVE DAYS',v:`${activeDays} / ${daysInMonth}`},
+    {l:'RECONCILED',v:`${recon} / ${all.length}  (${reconPct}%)`}
   ];
-  stats.forEach((s,i)=>doc.text('• '+s,M+(i%2)*((W-2*M)/2),y+Math.floor(i/2)*12));
-  y+=30;
+  const qW=(W-2*M)/4;
+  qStats.forEach((s,i)=>{
+    const x=M+i*qW;
+    doc.setFont('helvetica','bold').setFontSize(6.5).setTextColor(...PDF_S.faint).text(s.l,x,y+8);
+    doc.setFontSize(10).setTextColor(...PDF_S.ink).text(s.v,x,y+22);
+  });
   doc.setTextColor(0);
+  y+=36;
 
   // ===== Expense distribution donut =====
   if(catChartImg){
-    doc.setFont('helvetica','bold').setFontSize(11).text('Expense distribution',M,y);y+=6;
+    y=_pdfSection(doc,'Expense distribution',y,M,W);
     doc.addImage(catChartImg,'PNG',M,y,W-2*M,140);y+=150;
   }
 
   // ---- Page 2: Patterns ----
   doc.addPage();
-  y=M;
-  doc.setFont('helvetica','bold').setFontSize(15).text('Patterns & comparison',M,y);y+=22;
+  y=48;
+  y=_pdfSection(doc,'Daily flow throughout the month',y,M,W);
+  doc.addImage(dailyChartImg,'PNG',M,y,W-2*M,150);y+=162;
 
-  // Daily flow line chart
-  doc.setFont('helvetica','bold').setFontSize(11).text('Daily flow throughout the month',M,y);y+=6;
-  doc.addImage(dailyChartImg,'PNG',M,y,W-2*M,150);y+=158;
+  y=_pdfSection(doc,'Cumulative spend vs prior month',y,M,W);
+  doc.addImage(cumChartImg,'PNG',M,y,W-2*M,150);y+=162;
 
-  // Cumulative spend curve (this month vs prior month ghost)
-  doc.setFont('helvetica','bold').setFontSize(11).text('Cumulative spend vs prior month',M,y);y+=6;
-  doc.addImage(cumChartImg,'PNG',M,y,W-2*M,150);y+=158;
-
-  // Side-by-side: DoW and Compare
-  doc.setFont('helvetica','bold').setFontSize(11).text('Spending by day of week',M,y);
-  doc.text('vs Prior month',M+(W-2*M)/2+10,y);y+=6;
+  y=_pdfSection(doc,'Weekly pattern & month-over-month',y,M,W);
   doc.addImage(dowChartImg,'PNG',M,y,(W-2*M)/2-10,140);
-  doc.addImage(compareImg,'PNG',M+(W-2*M)/2+10,y,(W-2*M)/2-10,140);y+=148;
+  doc.addImage(compareImg,'PNG',M+(W-2*M)/2+10,y,(W-2*M)/2-10,140);y+=152;
 
   // ---- Page 3: Heatmap + tables ----
-  doc.addPage();y=M;
-  doc.setFont('helvetica','bold').setFontSize(15).text('Daily calendar & top spenders',M,y);y+=22;
-  // Calendar heatmap (drawn directly, no canvas)
-  doc.setFont('helvetica','bold').setFontSize(11).text('Daily spending intensity',M,y);y+=8;
-  _pdfHeatmap(doc,M,y,W-2*M,200,dailyOut,ym);y+=210;
+  doc.addPage();y=48;
+  y=_pdfSection(doc,'Daily spending intensity',y,M,W);
+  _pdfHeatmap(doc,M,y,W-2*M,200,dailyOut,ym);y+=212;
 
-  // Top categories + top merchants side by side
-  doc.autoTable({startY:y,head:[['Top categories','Amount','% of expenses']],
+  y=_pdfSection(doc,'Top spenders',y,M,W);
+  const halfW=(W-2*M)/2-5;
+  doc.autoTable(_pdfTable({startY:y,head:[['Top categories','Amount','% of exp.']],
     body:topCats.map(([c,v])=>[c,'€'+Math.round(v).toLocaleString(),(v/totalOut*100).toFixed(1)+'%']),
-    theme:'grid',headStyles:{fillColor:[16,185,129],fontSize:9},styles:{fontSize:9,cellPadding:4},
-    margin:{left:M,right:W/2+5},tableWidth:(W-2*M)/2-5
-  });
-  doc.autoTable({startY:y,head:[['Top merchants','Amount','# txns']],
+    foot:[['Total','€'+Math.round(topCats.reduce((s,[,v])=>s+v,0)).toLocaleString(),(totalOut>0?(topCats.reduce((s,[,v])=>s+v,0)/totalOut*100).toFixed(1):'0.0')+'%']],
+    columnStyles:{1:{halign:'right'},2:{halign:'right'}},
+    margin:{left:M,right:W/2+5},tableWidth:halfW
+  }));
+  doc.autoTable(_pdfTable({startY:y,head:[['Top merchants','Amount','# txns']],
     body:topMerchants.map(([s,v])=>[s,'€'+Math.round(v).toLocaleString(),out.filter(t=>t.s===s).length]),
-    theme:'grid',headStyles:{fillColor:[59,130,246],fontSize:9},styles:{fontSize:9,cellPadding:4},
-    margin:{left:W/2+5,right:M},tableWidth:(W-2*M)/2-5
-  });
+    columnStyles:{1:{halign:'right'},2:{halign:'right'}},
+    margin:{left:W/2+5,right:M},tableWidth:halfW
+  }));
   y=doc.lastAutoTable.finalY+14;
 
-  // ---- Page 3: Income / Banks / Activity ----
-  doc.addPage();y=M;
-  doc.setFont('helvetica','bold').setFontSize(15).text('Income, accounts & activity',M,y);y+=22;
+  // ---- Page 4: Income / Banks / Activity ----
+  doc.addPage();y=48;
 
   // Income breakdown
   if(incomeSrc.length){
-    doc.autoTable({startY:y,head:[['Income source','Amount','% of income']],
-      body:incomeSrc.map(([s,v])=>[s,'€'+Math.round(v).toLocaleString(),totalIn?(v/totalIn*100).toFixed(1)+'%':'—']),
-      theme:'grid',headStyles:{fillColor:[16,185,129]},margin:{left:M,right:M}
-    });
-    y=doc.lastAutoTable.finalY+12;
+    y=_pdfSection(doc,'Income sources',y,M,W);
+    doc.autoTable(_pdfTable({startY:y,head:[['Source','Amount','% of income']],
+      body:incomeSrc.map(([s,v])=>[s,'€'+Math.round(v).toLocaleString(),totalIn?(v/totalIn*100).toFixed(1)+'%':'-']),
+      foot:[['Total','€'+Math.round(totalIn).toLocaleString(),'100.0%']],
+      columnStyles:{1:{halign:'right'},2:{halign:'right'}},
+      margin:{left:M,right:M}
+    }));
+    y=doc.lastAutoTable.finalY+16;
   }
 
   // Bank / account breakdown
   if(banks.length){
-    doc.autoTable({startY:y,head:[['Bank / Account','Income','Expenses','Invested','Net']],
+    y=_pdfEnsure(doc,y,90,H);
+    y=_pdfSection(doc,'Accounts',y,M,W);
+    doc.autoTable(_pdfTable({startY:y,head:[['Bank / Account','Income','Expenses','Invested','Net']],
       body:banks.map(([b,v])=>[b,'€'+Math.round(v.in).toLocaleString(),'€'+Math.round(v.out).toLocaleString(),'€'+Math.round(v.inv).toLocaleString(),_pdfFmtSigned(v.in-v.out-v.inv)]),
-      theme:'grid',headStyles:{fillColor:[14,165,233]},margin:{left:M,right:M}
-    });
-    y=doc.lastAutoTable.finalY+12;
+      columnStyles:{1:{halign:'right'},2:{halign:'right'},3:{halign:'right'},4:{halign:'right'}},
+      margin:{left:M,right:M}
+    }));
+    y=doc.lastAutoTable.finalY+16;
   }
 
   // Recurring this month
   if(recList.length){
-    doc.autoTable({startY:y,head:[['Recurring this month','Amount','Type','Last seen']],
-      body:recList.slice(0,18).map(r=>[r.source,'€'+r.amount.toFixed(2),r.type==='In'?'Income':'Expense',r.lastDate||'—']),
-      theme:'grid',headStyles:{fillColor:[139,92,246]},margin:{left:M,right:M}
-    });
-    y=doc.lastAutoTable.finalY+12;
+    y=_pdfEnsure(doc,y,90,H);
+    y=_pdfSection(doc,'Recurring this month',y,M,W);
+    doc.autoTable(_pdfTable({startY:y,head:[['Source','Amount','Type','Last seen']],
+      body:recList.slice(0,18).map(r=>[r.source,'€'+r.amount.toFixed(2),r.type==='In'?'Income':'Expense',r.lastDate||'-']),
+      columnStyles:{1:{halign:'right'}},
+      margin:{left:M,right:M}
+    }));
+    y=doc.lastAutoTable.finalY+16;
   }
 
   // Anomalies
   if(anomalies.length){
-    doc.autoTable({startY:y,head:[['Anomaly (>2 stdev vs source mean)','Date','Amount']],
+    y=_pdfEnsure(doc,y,90,H);
+    y=_pdfSection(doc,'Unusual charges (>2 st.dev. vs merchant average)',y,M,W);
+    doc.autoTable(_pdfTable({startY:y,head:[['Merchant','Date','Amount']],
       body:anomalies.slice(0,12).map(t=>[t.s,t.d,'€'+Math.round(t.v).toLocaleString()]),
-      theme:'grid',headStyles:{fillColor:[245,158,11]},margin:{left:M,right:M}
-    });
-    y=doc.lastAutoTable.finalY+12;
+      columnStyles:{2:{halign:'right'}},
+      margin:{left:M,right:M}
+    }));
+    y=doc.lastAutoTable.finalY+16;
   }
 
   // New merchants this month
   if(newMerchants.length){
-    if(y>H-100){doc.addPage();y=M;}
-    doc.setFont('helvetica','bold').setFontSize(11).setTextColor(0).text('New merchants this month',M,y);y+=6;
-    doc.setFont('helvetica','normal').setFontSize(9).setTextColor(60);
+    y=_pdfEnsure(doc,y,70,H);
+    y=_pdfSection(doc,'New merchants this month',y,M,W);
+    doc.setFont('helvetica','normal').setFontSize(9).setTextColor(...PDF_S.body);
     const text=newMerchants.join('   |   ');
     const lines=doc.splitTextToSize(text,W-2*M);
-    doc.text(lines,M,y+10);y+=lines.length*12+18;
+    doc.text(lines,M,y+4);y+=lines.length*12+16;
     doc.setTextColor(0);
   }
 
   // Investments this month
   if(inv.length){
-    if(y>H-120){doc.addPage();y=M;}
-    doc.autoTable({startY:y,head:[['Investment activity','Date','Bank','Amount']],
-      body:inv.slice(0,12).map(t=>[t.s,t.d,t.b||'—','€'+Math.round(t.v).toLocaleString()]),
-      theme:'grid',headStyles:{fillColor:[139,92,246]},margin:{left:M,right:M}
-    });
-    y=doc.lastAutoTable.finalY+12;
+    y=_pdfEnsure(doc,y,100,H);
+    y=_pdfSection(doc,'Investment activity',y,M,W);
+    doc.autoTable(_pdfTable({startY:y,head:[['Source','Date','Bank','Amount']],
+      body:inv.slice(0,12).map(t=>[t.s,t.d,t.b||'-','€'+Math.round(t.v).toLocaleString()]),
+      columnStyles:{3:{halign:'right'}},
+      margin:{left:M,right:M}
+    }));
+    y=doc.lastAutoTable.finalY+16;
   }
 
-  // ---- Page 4+: Full transaction appendix ----
-  doc.addPage();y=M;
-  doc.setFont('helvetica','bold').setFontSize(15).text('All transactions',M,y);
-  doc.setFont('helvetica','normal').setFontSize(9).setTextColor(120);
-  doc.text(`${all.length} rows, sorted newest first`,M,y+16);y+=30;
-  doc.setTextColor(0);
+  // ---- Page 5+: Full transaction appendix ----
+  doc.addPage();y=48;
+  y=_pdfSection(doc,`Appendix - all transactions (${all.length} rows, newest first)`,y,M,W);
   const txRows=[...all].sort((a,b)=>b.d.localeCompare(a.d)).map(t=>[
     t.d,
     (t.s||'').slice(0,32),
@@ -3025,24 +3114,21 @@ New merchants this month: ${newMerchants.length}`;
     (t.t==='In'?'+':(t.t==='Inv'?'inv ':'-'))+'€'+t.v.toFixed(2),
     t.f?'Y':''
   ]);
-  doc.autoTable({
+  doc.autoTable(_pdfTable({
     startY:y,
     head:[['Date','Source','Type','Bank','Category','Amount','Recon']],
     body:txRows,
-    theme:'striped',
-    headStyles:{fillColor:[5,12,28],fontSize:9,textColor:255},
-    styles:{fontSize:8,cellPadding:3},
+    styles:{fontSize:7.5,cellPadding:3.5,lineColor:PDF_S.rule,lineWidth:0.3,textColor:PDF_S.body},
     columnStyles:{
       0:{cellWidth:55},
-      2:{cellWidth:55},
-      3:{cellWidth:60},
-      4:{cellWidth:120},
-      5:{cellWidth:75,halign:'right',fontStyle:'bold'},
-      6:{cellWidth:38,halign:'center'}
+      2:{cellWidth:52},
+      3:{cellWidth:58},
+      4:{cellWidth:118},
+      5:{cellWidth:72,halign:'right',fontStyle:'bold'},
+      6:{cellWidth:36,halign:'center'}
     },
-    margin:{left:M,right:M},
-    didDrawPage:()=>{}
-  });
+    margin:{left:M,right:M,top:44,bottom:48}
+  }));
 
   _pdfFooter(doc,ym);
   doc.save(`finance_report_${ym}.pdf`);
