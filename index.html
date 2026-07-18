@@ -2628,8 +2628,16 @@ function _pdfCallout(doc,x,y,w,h,icon,title,value,subtitle,color,tint){
   doc.roundedRect(x,y,w,h,4,4,'F');
   doc.setDrawColor(...PDF_S.rule).setLineWidth(0.5).roundedRect(x,y,w,h,4,4,'S');
   doc.setFillColor(color[0],color[1],color[2]).rect(x,y+5,3,h-10,'F');
-  doc.setFont('helvetica','bold').setFontSize(7.5).setTextColor(color[0],color[1],color[2]);
-  doc.text(title.toUpperCase(),x+11,y+14);
+  // Auto-fit the title: shrink the font down to 6pt before truncating, and
+  // truncate on whole characters with '..' only as a last resort — avoids
+  // mid-word cuts like 'EATING/DRINKING OU'.
+  let tSize=7.5,tTxt=title.toUpperCase();
+  doc.setFont('helvetica','bold').setFontSize(tSize);
+  while(doc.getTextWidth(tTxt)>w-22&&tSize>6){tSize-=0.25;doc.setFontSize(tSize);}
+  while(doc.getTextWidth(tTxt+'..')>w-22&&tTxt.length>8)tTxt=tTxt.slice(0,-1);
+  if(tTxt!==title.toUpperCase())tTxt+='..';
+  doc.setTextColor(color[0],color[1],color[2]);
+  doc.text(tTxt,x+11,y+14);
   doc.setFontSize(14).setTextColor(...PDF_S.ink);
   doc.text(value,x+11,y+33);
   doc.setFontSize(7.5).setFont('helvetica','normal').setTextColor(...PDF_S.muted);
@@ -2959,12 +2967,12 @@ New merchants this month: ${newMerchants.length}`;
   const callW=(W-2*M-16)/3;
   const callH=56;
   if(catUp){
-    _pdfCallout(doc,M,y,callW,callH,'',catUp.cat.slice(0,20)+' UP',`+€${Math.round(catUp.delta).toLocaleString()}`,`vs 6-mo median of €${Math.round(catUp.median).toLocaleString()}`,PDF_S.red,PDF_S.tintRed);
+    _pdfCallout(doc,M,y,callW,callH,'',catUp.cat+' UP',`+€${Math.round(catUp.delta).toLocaleString()}`,`vs 6-mo median of €${Math.round(catUp.median).toLocaleString()}`,PDF_S.red,PDF_S.tintRed);
   }else{
     _pdfCallout(doc,M,y,callW,callH,'','CATEGORY UP','-','no significant increase',PDF_S.faint,PDF_S.tintGrey);
   }
   if(catDown){
-    _pdfCallout(doc,M+callW+8,y,callW,callH,'',catDown.cat.slice(0,20)+' DOWN',`-€${Math.round(Math.abs(catDown.delta)).toLocaleString()}`,`vs 6-mo median of €${Math.round(catDown.median).toLocaleString()}`,PDF_S.green,PDF_S.tintGreen);
+    _pdfCallout(doc,M+callW+8,y,callW,callH,'',catDown.cat+' DOWN',`-€${Math.round(Math.abs(catDown.delta)).toLocaleString()}`,`vs 6-mo median of €${Math.round(catDown.median).toLocaleString()}`,PDF_S.green,PDF_S.tintGreen);
   }else{
     _pdfCallout(doc,M+callW+8,y,callW,callH,'','CATEGORY DOWN','-','no significant decrease',PDF_S.faint,PDF_S.tintGrey);
   }
