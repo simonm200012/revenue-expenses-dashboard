@@ -1,5 +1,5 @@
 {
-  "updated": "2026-07-24T14:52:45Z",
+  "updated": "2026-07-24T16:30:53Z",
   "source": "Trading 212 live API",
   "currency": "EUR",
   "fxRates": {
@@ -13,19 +13,19 @@
   "cash": {
     "free": 0,
     "invested": 15.63,
-    "ppl": -5.29,
+    "ppl": -5.34,
     "result": 417.1,
-    "total": 10.37,
+    "total": 10.32,
     "pieCash": 0.03,
     "blocked": 0
   },
   "totals": {
     "positionCount": 1,
-    "marketValue": 10.34,
+    "marketValue": 10.29,
     "costBasis": 15.63,
-    "unrealizedPL": -5.29,
-    "unrealizedPLPct": -33.85,
-    "accountValue": 10.37
+    "unrealizedPL": -5.34,
+    "unrealizedPLPct": -34.17,
+    "accountValue": 10.32
   },
   "positions": [
     {
@@ -33,17 +33,17 @@
       "nativeCurrency": "USD",
       "quantity": 0.10425283,
       "averagePrice": 173.52046942,
-      "currentPrice": 112.83,
-      "nativeCurrencyValue": 11.76,
+      "currentPrice": 112.43,
+      "nativeCurrencyValue": 11.72,
       "costBasis": 15.63,
-      "marketValue": 10.34,
-      "unrealizedPL": -5.29,
-      "unrealizedPLPct": -33.85,
+      "marketValue": 10.3,
+      "unrealizedPL": -5.33,
+      "unrealizedPLPct": -34.1,
       "fxPpl": 0.27,
       "initialFillDate": "2026-06-12T19:59:07.000+03:00",
       "pieQuantity": 0,
       "frontend": "IOS",
-      "allocationPercent": 100
+      "allocationPercent": 100.1
     }
   ]
 }
