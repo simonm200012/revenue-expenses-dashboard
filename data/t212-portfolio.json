@@ -1,49 +1,30 @@
 {
-  "updated": "2026-07-29T11:58:51Z",
+  "updated": "2026-07-29T14:24:24Z",
   "source": "Trading 212 live API",
   "currency": "EUR",
   "fxRates": {
-    "EUR": 1,
-    "USD": 1.1367
+    "EUR": 1
   },
   "account": {
     "id": 30881486,
     "currencyCode": "EUR"
   },
   "cash": {
-    "free": 0,
-    "invested": 15.63,
-    "ppl": -4.98,
-    "result": 417.1,
-    "total": 10.68,
+    "free": 10.45,
+    "invested": 0,
+    "ppl": 0,
+    "result": 411.94,
+    "total": 10.48,
     "pieCash": 0.03,
     "blocked": 0
   },
   "totals": {
-    "positionCount": 1,
-    "marketValue": 10.65,
-    "costBasis": 15.63,
-    "unrealizedPL": -4.98,
-    "unrealizedPLPct": -31.86,
-    "accountValue": 10.68
+    "positionCount": 0,
+    "marketValue": 0,
+    "costBasis": 0,
+    "unrealizedPL": 0,
+    "unrealizedPLPct": 0,
+    "accountValue": 10.48
   },
-  "positions": [
-    {
-      "ticker": "SPCX_US_EQ",
-      "nativeCurrency": "USD",
-      "quantity": 0.10425283,
-      "averagePrice": 173.52046942,
-      "currentPrice": 116.23,
-      "nativeCurrencyValue": 12.12,
-      "costBasis": 15.64,
-      "marketValue": 10.66,
-      "unrealizedPL": -4.98,
-      "unrealizedPLPct": -31.84,
-      "fxPpl": 0.27,
-      "initialFillDate": "2026-06-12T19:59:07.000+03:00",
-      "pieQuantity": 0,
-      "frontend": "IOS",
-      "allocationPercent": 100.09
-    }
-  ]
+  "positions": []
 }
