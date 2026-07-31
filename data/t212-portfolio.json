@@ -1,5 +1,5 @@
 {
-  "updated": "2026-07-31T14:11:19Z",
+  "updated": "2026-07-31T16:15:54Z",
   "source": "Trading 212 live API",
   "currency": "EUR",
   "fxRates": {
@@ -10,11 +10,11 @@
     "currencyCode": "EUR"
   },
   "cash": {
-    "free": 10.45,
+    "free": 0,
     "invested": 0,
     "ppl": 0,
     "result": 411.94,
-    "total": 10.48,
+    "total": 0.03,
     "pieCash": 0.03,
     "blocked": 0
   },
@@ -24,7 +24,7 @@
     "costBasis": 0,
     "unrealizedPL": 0,
     "unrealizedPLPct": 0,
-    "accountValue": 10.48
+    "accountValue": 0.03
   },
   "positions": []
 }
