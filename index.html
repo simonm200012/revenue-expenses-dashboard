@@ -344,6 +344,38 @@ html.is-mobile-device .chat-fab{bottom:calc(78px + env(safe-area-inset-bottom)) 
 .treemap-item-label{font-size:11px;font-weight:700;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.5);line-height:1.2;word-break:break-word}
 .treemap-item-value{font-size:10px;color:rgba(255,255,255,.85);font-family:'JetBrains Mono',monospace;text-shadow:0 1px 3px rgba(0,0,0,.5)}
 .treemap-item-pct{font-size:9px;color:rgba(255,255,255,.7);font-family:'JetBrains Mono',monospace}
+/* ===== CATEGORIES TAB — category × month matrix ===== */
+.cat-controls{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+.cat-controls label{font-size:10px;font-weight:700;color:var(--text4);text-transform:uppercase;letter-spacing:1px;display:flex;align-items:center;gap:7px}
+.cat-controls select{background:var(--card);border:1px solid var(--border2);border-radius:8px;color:var(--text);height:30px;padding:0 9px;font-size:12px;font-weight:600;font-family:inherit;outline:none;text-transform:none;letter-spacing:0}
+.cat-controls select option{background:var(--tooltip-bg);color:var(--text)}
+.cat-matrix-wrap{overflow:auto;border:1px solid var(--border);border-radius:12px;max-height:620px;background:var(--card)}
+.cat-matrix{border-collapse:separate;border-spacing:0;min-width:100%;font-size:12px}
+.cat-matrix th{position:sticky;top:0;z-index:2;background:var(--card);color:var(--text4);font-size:10px;text-transform:uppercase;letter-spacing:.8px;font-weight:700;padding:10px 9px;text-align:right;border-bottom:1px solid var(--border2);white-space:nowrap}
+.cat-matrix th.partial::after{content:"*";color:var(--acc-amber);margin-left:2px}
+.cat-matrix td{padding:7px 9px;text-align:right;font-family:'JetBrains Mono',monospace;font-size:11.5px;color:var(--text2);border-bottom:1px solid var(--border);white-space:nowrap}
+.cat-matrix th.cat-name,.cat-matrix td.cat-name{position:sticky;left:0;z-index:1;background:var(--card);text-align:left;min-width:160px;max-width:220px;overflow:hidden;text-overflow:ellipsis;box-shadow:inset -1px 0 0 var(--border)}
+.cat-matrix th.cat-name{z-index:3}
+.cat-matrix td.cat-name{font-family:'DM Sans',sans-serif;font-weight:600;color:var(--text);font-size:12.5px}
+.cat-matrix .cat-dot{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:8px;vertical-align:1px}
+.cat-matrix tr.cat-row{cursor:pointer}
+.cat-matrix tr.cat-row:hover td{background:var(--table-hover)}
+.cat-matrix tr.cat-row:hover td.cat-name{background:color-mix(in srgb,var(--card) 88%,#94a3b8)}
+.cat-matrix tr.cat-row.sel td.cat-name{box-shadow:inset 3px 0 0 var(--acc-green),inset -1px 0 0 var(--border)}
+.cat-matrix td.empty{color:var(--text5)}
+.cat-matrix tr.cat-other td{color:var(--text4)}
+.cat-matrix tr.cat-total td{font-weight:700;color:var(--text);border-top:1px solid var(--border2);background:var(--bg2);position:sticky;bottom:0;z-index:1}
+.cat-matrix tr.cat-total td.cat-name{z-index:2;background:color-mix(in srgb,var(--card) 92%,#94a3b8)}
+.cat-hint{font-size:11px;color:var(--text4);margin-top:10px;line-height:1.6}
+.cat-hint .sw{display:inline-block;width:11px;height:11px;border-radius:2px;vertical-align:-1px;margin:0 4px 0 2px}
+.cat-detail-grid{display:grid;grid-template-columns:3fr 2fr;gap:20px}
+@media(max-width:768px){.cat-detail-grid{grid-template-columns:1fr}.cat-matrix th.cat-name,.cat-matrix td.cat-name{min-width:120px;max-width:150px}}
+.cat-txn{display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-bottom:1px solid var(--border);font-size:12px;align-items:center}
+.cat-txn:last-child{border-bottom:none}
+.cat-txn .d{color:var(--text4);font-family:'JetBrains Mono',monospace;font-size:11px;flex:none}
+.cat-txn .s{flex:1;color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cat-txn .v{font-family:'JetBrains Mono',monospace;font-weight:700;color:var(--acc-red);flex:none}
+
 
 /* Forecast */
 .forecast-table{width:100%;border-collapse:collapse;font-size:12px;margin-top:12px}
@@ -926,8 +958,8 @@ const fmtAxis=v=>{
 };
 
 let activeTab="overview",yearFilter="All",charts={},txnPage=0;
-const TABS=["overview","networth","spending","budgets","income","trends","flow","recurring","transactions","compare","projection","plan","investments","fuel","rules"];
-const TAB_LABELS={overview:"Overview",networth:"Net Worth",spending:"Spending",budgets:"Budgets",income:"Income",trends:"Trends",flow:"Money Flow",recurring:"Recurring",transactions:"Transactions",compare:"Compare",projection:"Projection",plan:"Plan",investments:"Investments",fuel:"Gas Prices",rules:"Rules"};
+const TABS=["overview","networth","spending","categories","budgets","income","trends","flow","recurring","transactions","compare","projection","plan","investments","fuel","rules"];
+const TAB_LABELS={overview:"Overview",networth:"Net Worth",spending:"Spending",categories:"Categories",budgets:"Budgets",income:"Income",trends:"Trends",flow:"Money Flow",recurring:"Recurring",transactions:"Transactions",compare:"Compare",projection:"Projection",plan:"Plan",investments:"Investments",fuel:"Gas Prices",rules:"Rules"};
 let gFilters={type:"",bank:"",category:"",dateFrom:"",dateTo:"",amtMin:"",amtMax:"",search:"",recon:"",statement:"",source:""};
 
 let dashboardSubtitle='Loading from Supabase...';
@@ -2183,6 +2215,144 @@ function autoAddBudgets(){
     if(sug>0)BUDGETS[cat]=sug;
   });
   saveBudgets();render();
+}
+// ============================================================
+// CATEGORIES TAB — how much each category costs per month.
+// A category × month matrix where every cell is shaded against that
+// category's OWN typical month (median of the months it had spend), so a
+// €300 grocery month and a €300 clothing month can look completely
+// different: one is normal, the other is a spike. Stacked chart on top,
+// drill-down (bars + typical line, merchants, largest transactions) on click.
+// ============================================================
+let CAT_VIEW={months:12,top:12,sort:'total',mode:'abs',sel:null};
+try{Object.assign(CAT_VIEW,JSON.parse(localStorage.getItem('cat-view-v1')||'{}'));}catch(_){}
+function _catViewSave(){try{localStorage.setItem('cat-view-v1',JSON.stringify(CAT_VIEW));}catch(_){}}
+function setCatView(k,v){CAT_VIEW[k]=(k==='months'||k==='top')?parseInt(v,10):v;_catViewSave();render();}
+function selectCatRow(c){
+  CAT_VIEW.sel=(CAT_VIEW.sel===c?null:c);_catViewSave();render();
+  if(CAT_VIEW.sel)setTimeout(()=>{const d=document.getElementById('catDetail');if(d)d.scrollIntoView({behavior:'smooth',block:'nearest'});},80);
+}
+function _catMonthLabel(ym){
+  const d=new Date(ym+'-15T00:00:00');
+  return d.toLocaleString(CURRENT_LANG==='sl'?'sl-SI':'en-GB',{month:'short'}).replace('.','')+' '+ym.slice(2,4);
+}
+function _catMatrix(){
+  const out=getFilteredTxns().filter(t=>t.t==='Out');
+  if(!out.length)return {months:[],rows:[],partial:false,lastFull:-1};
+  const latest=out.reduce((m,t)=>t.d>m?t.d:m,'').slice(0,7);
+  const months=[];let y=+latest.slice(0,4),m=+latest.slice(5,7);
+  for(let i=0;i<CAT_VIEW.months;i++){months.unshift(y+'-'+String(m).padStart(2,'0'));m--;if(m===0){m=12;y--;}}
+  const idx={};months.forEach((k,i)=>idx[k]=i);
+  const map={};
+  out.forEach(t=>{const i=idx[t.d.slice(0,7)];if(i===undefined)return;const c=t.c||'Uncategorized';(map[c]=map[c]||Array.from({length:months.length},()=>0))[i]+=t.v;});
+  const lastIdx=months.length-1;
+  const partial=months[lastIdx]===_localYM();
+  const lastFull=partial?lastIdx-1:lastIdx;
+  const avg=a=>a.length?a.reduce((s,v)=>s+v,0)/a.length:0;
+  const rows=Object.entries(map).map(([cat,vals])=>{
+    const total=vals.reduce((s,v)=>s+v,0);
+    const hist=(partial?vals.slice(0,lastIdx):vals).filter(v=>v>0);
+    const med=_median(hist);
+    const last=lastFull>=0?vals[lastFull]:0;
+    const delta=last-med;
+    return {cat,vals,total,med,last,delta,pct:med>0?(last-med)/med*100:null,active:hist.length};
+  });
+  return {months,rows,partial,lastFull};
+}
+function _catCell(v,med){
+  if(!(v>0))return '<td class="empty">·</td>';
+  if(!(med>0))return `<td title="${fmtE(v)}">${fmt(v)}</td>`;
+  const r=v/med;let bg='';
+  if(r>=1.15){const t=Math.min(1,(r-1)/1.5);bg=`rgba(239,68,68,${(0.10+0.34*t).toFixed(2)})`;}
+  else if(r<=0.85){const t=Math.min(1,(1-r)/0.85);bg=`rgba(16,185,129,${(0.08+0.22*t).toFixed(2)})`;}
+  return `<td${bg?` style="background:${bg}"`:''} title="${fmtE(v)} · ${Math.round(r*100)}%">${fmt(v)}</td>`;
+}
+function renderCategories(){
+  const el=document.getElementById('content');
+  const M=_catMatrix();
+  if(!M.rows.length){el.innerHTML=`<div class="section">${es('🗂️',tr('cat.empty_t'),tr('cat.empty_s'))}</div>`;return;}
+  const {months,partial,lastFull}=M;
+  const byTotal=[...M.rows].sort((a,b)=>b.total-a.total);
+  const topN=CAT_VIEW.top>=999?byTotal.length:Math.min(CAT_VIEW.top,byTotal.length);
+  const shown=byTotal.slice(0,topN),rest=byTotal.slice(topN);
+  const color={};shown.forEach((r,i)=>color[r.cat]=ramp(i,shown.length));
+  const rows=[...shown];
+  if(CAT_VIEW.sort==='change')rows.sort((a,b)=>(b.med>0?b.delta:-Infinity)-(a.med>0?a.delta:-Infinity));
+  else if(CAT_VIEW.sort==='name')rows.sort((a,b)=>a.cat.localeCompare(b.cat));
+  const other=rest.length?{cat:tr('cat.other')+' ('+rest.length+')',vals:months.map((_,i)=>rest.reduce((s,r)=>s+r.vals[i],0)),total:rest.reduce((s,r)=>s+r.total,0)}:null;
+  const colTotals=months.map((_,i)=>M.rows.reduce((s,r)=>s+r.vals[i],0));
+  const grand=colTotals.reduce((s,v)=>s+v,0);
+  // --- Callouts: what moved, and how concentrated last month was.
+  const cand=M.rows.filter(r=>r.med>0&&r.active>=2&&lastFull>=0);
+  const riser=cand.length?cand.reduce((a,b)=>b.delta>a.delta?b:a):null;
+  const regular=cand.filter(r=>r.active>=Math.max(3,Math.floor((partial?months.length-1:months.length)/2)));
+  const faller=regular.length?regular.reduce((a,b)=>b.delta<a.delta?b:a):null;
+  const lastTotal=lastFull>=0?colTotals[lastFull]:0;
+  const top3=lastFull>=0?[...M.rows].sort((a,b)=>b.vals[lastFull]-a.vals[lastFull]).slice(0,3).filter(r=>r.vals[lastFull]>0):[];
+  const top3Sum=top3.reduce((s,r)=>s+r.vals[lastFull],0);
+  const lastLabel=lastFull>=0?_catMonthLabel(months[lastFull]):'';
+  const co=(tone,label,value,sub)=>`<div class="callout-card" data-tone="${tone}"><div class="cc-label">${label}</div><div class="cc-value">${value}</div><div class="cc-sub">${sub}</div></div>`;
+  const callouts=`<div class="dash-callouts">
+    ${riser&&riser.delta>0?co('up',tr('cat.riser')+' · '+escapeHtml(riser.cat),'+'+fmtE(riser.delta),tr('cat.vs_typical',{last:fmtE(riser.last),med:fmtE(riser.med)})):co('muted',tr('cat.riser'),'–',tr('cat.none'))}
+    ${faller&&faller.delta<0?co('down',tr('cat.faller')+' · '+escapeHtml(faller.cat),'−'+fmtE(Math.abs(faller.delta)),tr('cat.vs_typical',{last:fmtE(faller.last),med:fmtE(faller.med)})):co('muted',tr('cat.faller'),'–',tr('cat.none'))}
+    ${lastTotal>0&&top3.length?co('new',tr('cat.conc'),Math.round(top3Sum/lastTotal*100)+'%',escapeHtml(tr('cat.conc_sub',{m:lastLabel})+': '+top3.map(r=>r.cat).join(', '))):co('muted',tr('cat.conc'),'–',tr('cat.none'))}
+  </div>`;
+  // --- Controls.
+  const sel=(name,opts,cur)=>`<select onchange="setCatView('${name}',this.value)" aria-label="${name}">${opts.map(([v,l])=>`<option value="${v}"${String(v)===String(cur)?' selected':''}>${l}</option>`).join('')}</select>`;
+  const controls=`<div class="cat-controls">
+    <label>${tr('cat.window')} ${sel('months',[[6,tr('cat.months',{n:6})],[12,tr('cat.months',{n:12})],[24,tr('cat.months',{n:24})],[36,tr('cat.months',{n:36})]],CAT_VIEW.months)}</label>
+    <label>${tr('cat.top')} ${sel('top',[[8,'8'],[12,'12'],[20,'20'],[999,tr('cat.all')]],CAT_VIEW.top)}</label>
+    <label>${tr('cat.sort')} ${sel('sort',[['total',tr('cat.sort_total')],['change',tr('cat.sort_change')],['name',tr('cat.sort_name')]],CAT_VIEW.sort)}</label>
+  </div>`;
+  // --- Matrix.
+  const regularMin=Math.max(3,Math.floor((partial?months.length-1:months.length)/2));
+  const deltaCell=r=>{
+    // Sporadic categories (vacations, one-off purchases) that simply did not occur
+    // last month are not a 'drop' — show a dash instead of a misleading -100%.
+    if(!(r.med>0)||lastFull<0||r.active<2||(r.last===0&&r.active<regularMin))return '<td>–</td>';
+    const pct=r.pct!=null?` (${r.pct>0?'+':''}${Math.round(r.pct)}%)`:'';
+    if(Math.abs(r.pct)<5)return `<td><span class="delta" style="background:var(--bg4);color:var(--text4)">${fmtSigned(r.delta)}${pct}</span></td>`;
+    return `<td><span class="delta ${r.delta>0?'neg':'pos'}">${fmtSigned(r.delta)}${pct}</span></td>`;
+  };
+  const rowHTML=(r,cls,clickable)=>`<tr class="${cls}${clickable&&CAT_VIEW.sel===r.cat?' sel':''}"${clickable?` data-cat="${escapeHtml(r.cat)}" onclick="selectCatRow(this.dataset.cat)"`:''}><td class="cat-name" title="${escapeHtml(r.cat)}">${color[r.cat]?`<span class="cat-dot" style="background:${color[r.cat]}"></span>`:''}${escapeHtml(r.cat)}</td>${r.vals.map(v=>_catCell(v,r.med)).join('')}<td>${r.med>0?fmt(r.med):'–'}</td>${clickable?deltaCell(r):'<td></td>'}<td><b>${fmt(r.total)}</b></td></tr>`;
+  const head=`<tr><th class="cat-name">${tr('cat.category')}</th>${months.map((m,i)=>`<th${partial&&i===months.length-1?' class="partial"':''}>${_catMonthLabel(m)}</th>`).join('')}<th>${tr('cat.typical')}</th><th>${tr('cat.last_vs')}</th><th>${tr('cat.total')}</th></tr>`;
+  const body=rows.map(r=>rowHTML(r,'cat-row',true)).join('')+(other?rowHTML(other,'cat-other',false):'')+
+    `<tr class="cat-total"><td class="cat-name">${tr('cat.total')}</td>${colTotals.map(v=>`<td>${fmt(v)}</td>`).join('')}<td></td><td></td><td><b>${fmt(grand)}</b></td></tr>`;
+  const hint=tr('cat.hint',{up:'<span class="sw" style="background:rgba(239,68,68,.42)"></span>',down:'<span class="sw" style="background:rgba(16,185,129,.32)"></span>'});
+  // --- Detail (selected category).
+  const selRow=CAT_VIEW.sel?M.rows.find(r=>r.cat===CAT_VIEW.sel):null;
+  let detail='';
+  if(selRow){
+    const first=months[0],lastM=months[months.length-1];
+    const txns=getFilteredTxns().filter(t=>t.t==='Out'&&(t.c||'Uncategorized')===selRow.cat&&t.d.slice(0,7)>=first&&t.d.slice(0,7)<=lastM);
+    const mm={};txns.forEach(t=>{mm[t.s]=(mm[t.s]||0)+t.v});
+    const merch=Object.entries(mm).sort((a,b)=>b[1]-a[1]).slice(0,8).map(([k,v])=>({Source:k,Total:Math.round(v)}));
+    const largest=[...txns].sort((a,b)=>b.v-a.v).slice(0,8);
+    detail=`<div class="section" id="catDetail" style="margin-top:16px"><div class="section-title" style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span>${tr('cat.detail',{c:escapeHtml(selRow.cat)})}</span><button class="fp-chip" data-cat="${escapeHtml(selRow.cat)}" onclick="selectCatRow(this.dataset.cat)">✕ ${tr('cat.close')}</button></div>
+      <div class="cat-detail-grid"><div>${mc('catDetailChart',280)}</div><div>
+        <div class="fp-label">${tr('cat.merchants')}</div>${merch.length?bl(merch,'Source','Total',merch[0].Total,'openMerchant'):''}
+        <div class="fp-label" style="margin-top:16px">${tr('cat.largest')}</div>${largest.map(t=>`<div class="cat-txn"><span class="d">${escapeHtml(t.d)}</span><span class="s">${escapeHtml(t.s)}</span><span class="v">${fmtE(t.v)}</span></div>`).join('')}
+      </div></div></div>`;
+  }
+  el.innerHTML=`${callouts}
+    <div class="section"><div class="section-title" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px"><span>${tr('cat.title')} <span style="font-size:10px;color:var(--text5);text-transform:none;letter-spacing:0;font-weight:400">(${tr('cat.months',{n:months.length})})</span></span><span class="view-toggle"><button class="${CAT_VIEW.mode!=='share'?'active':''}" onclick="setCatView('mode','abs')">€</button><button class="${CAT_VIEW.mode==='share'?'active':''}" onclick="setCatView('mode','share')">%</button></span></div>${mc('catStack',330)}</div>
+    <div class="section" style="margin-top:16px"><div class="section-title" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px"><span>${tr('cat.matrix')}</span>${controls}</div>
+      <div class="cat-matrix-wrap"><table class="cat-matrix"><thead>${head}</thead><tbody>${body}</tbody></table></div>
+      <div class="cat-hint">${hint}</div></div>
+    ${detail}`;
+  // --- Charts.
+  const share=CAT_VIEW.mode==='share';
+  const norm=(vals)=>vals.map((v,i)=>share?(colTotals[i]>0?Math.round(v/colTotals[i]*1000)/10:0):Math.round(v));
+  const ds=shown.map(r=>({label:r.cat,data:norm(r.vals),raw:r.vals,backgroundColor:color[r.cat],borderWidth:0,stack:'s'}));
+  if(other)ds.push({label:other.cat,data:norm(other.vals),raw:other.vals,backgroundColor:'hsl(220,10%,45%)',borderWidth:0,stack:'s'});
+  charts.catStack=new Chart(document.getElementById('catStack'),{type:'bar',data:{labels:months.map(_catMonthLabel),datasets:ds},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},scales:{x:{stacked:true,grid:{display:false}},y:{stacked:true,max:share?100:undefined,ticks:{callback:v=>share?v+'%':fmtAxis(v)}}},plugins:{legend:{position:'bottom',labels:{boxWidth:10,boxHeight:10,padding:10,font:{size:11}}},tooltip:{filter:i=>i.parsed.y>0,callbacks:{label:c=>c.dataset.label+': '+(share?c.parsed.y+'% · '+fmtE(c.dataset.raw[c.dataIndex]):fmtE(c.parsed.y)),footer:items=>tr('cat.total')+': '+fmtE(items.length?colTotals[items[0].dataIndex]:0)}}}}});
+  if(selRow){
+    const c=color[selRow.cat]||'#ef4444';
+    charts.catDetail=new Chart(document.getElementById('catDetailChart'),{type:'bar',data:{labels:months.map(_catMonthLabel),datasets:[
+      {type:'bar',label:selRow.cat,data:selRow.vals.map(v=>Math.round(v)),backgroundColor:selRow.vals.map((v,i)=>partial&&i===months.length-1?'rgba(148,163,184,.45)':c),borderRadius:3,borderWidth:0,order:2},
+      {type:'line',label:tr('cat.median_line'),data:months.map(()=>Math.round(selRow.med)),borderColor:'#94a3b8',borderDash:[5,4],borderWidth:1.5,pointRadius:0,order:1}
+    ]},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},scales:{x:{grid:{display:false}},y:{ticks:{callback:v=>fmtAxis(v)}}},plugins:{legend:{position:'bottom',labels:{boxWidth:10,boxHeight:10,font:{size:11}}},tooltip:ttcb(1)}}});
+  }
 }
 function renderBudgets(){
   const el=document.getElementById('content');
@@ -3782,7 +3952,7 @@ function render(){
   }
   renderActiveTags();
   renderKPIs();
-  ({overview:renderOverview,spending:renderSpending,income:renderIncome,trends:renderTrends,flow:renderFlow,recurring:renderRecurring,transactions:renderTransactions,compare:renderCompare,projection:renderProjection,rules:renderRules})[activeTab]();
+  ({overview:renderOverview,spending:renderSpending,categories:renderCategories,income:renderIncome,trends:renderTrends,flow:renderFlow,recurring:renderRecurring,transactions:renderTransactions,compare:renderCompare,projection:renderProjection,rules:renderRules})[activeTab]();
 }
 
 // ============================================================
@@ -4933,7 +5103,7 @@ async function sendChat(){
 const T_KEYS = {
   en: {
     // Tabs
-    'tab.overview':'Overview','tab.networth':'Net Worth','tab.spending':'Spending','tab.budgets':'Budgets','tab.income':'Income','tab.trends':'Trends','tab.flow':'Money Flow','tab.recurring':'Recurring','tab.transactions':'Transactions','tab.compare':'Compare','tab.projection':'Projection','tab.plan':'Plan','tab.investments':'Investments','tab.fuel':'Gas Prices','tab.rules':'Rules',
+    'tab.overview':'Overview','tab.networth':'Net Worth','tab.spending':'Spending','tab.categories':'Categories','cat.title':'Monthly spend by category','cat.matrix':'Category \u00d7 month','cat.window':'Window','cat.top':'Show','cat.sort':'Sort','cat.sort_total':'by total','cat.sort_change':'by change','cat.sort_name':'by name','cat.months':'{n} months','cat.all':'all categories','cat.other':'Other','cat.typical':'Typical','cat.last_vs':'Last vs typical','cat.total':'Total','cat.category':'Category','cat.hint':'Cells are shaded against each category\u2019s typical month (median of the months it had spend): {up} above typical, {down} below. * marks the current month, which is still filling up. Click a row to drill in.','cat.riser':'Biggest rise','cat.faller':'Biggest drop','cat.conc':'Concentration','cat.vs_typical':'{last} last month vs {med} typical','cat.conc_sub':'top 3 categories in {m}','cat.detail':'{c} by month','cat.merchants':'Top merchants','cat.largest':'Largest transactions','cat.empty_t':'No spending in this window','cat.empty_s':'Widen the window or clear the filters.','cat.median_line':'typical month','cat.none':'nothing stands out','cat.close':'Close','tab.budgets':'Budgets','tab.income':'Income','tab.trends':'Trends','tab.flow':'Money Flow','tab.recurring':'Recurring','tab.transactions':'Transactions','tab.compare':'Compare','tab.projection':'Projection','tab.plan':'Plan','tab.investments':'Investments','tab.fuel':'Gas Prices','tab.rules':'Rules',
     // Header buttons
     'btn.menu':'Menu','btn.add':'Add','btn.export_csv':'Export CSV','btn.month_pdf':'Month PDF','btn.filters':'Filters','btn.light':'Light','btn.dark':'Dark',
     // Year filter
@@ -4978,7 +5148,7 @@ const T_KEYS = {
   },
   sl: {
     // Tabs
-    'tab.overview':'Pregled','tab.networth':'Premoženje','tab.spending':'Stroški','tab.budgets':'Proračun','tab.income':'Prihodki','tab.trends':'Trendi','tab.flow':'Tok denarja','tab.recurring':'Ponavljajoči','tab.transactions':'Transakcije','tab.compare':'Primerjava','tab.projection':'Napoved','tab.plan':'Načrt','tab.investments':'Naložbe','tab.fuel':'Cene goriv','tab.rules':'Pravila',
+    'tab.overview':'Pregled','tab.networth':'Premoženje','tab.spending':'Stroški','tab.categories':'Kategorije','cat.title':'Mesečna poraba po kategorijah','cat.matrix':'Kategorija \u00d7 mesec','cat.window':'Obdobje','cat.top':'Prikaži','cat.sort':'Razvrsti','cat.sort_total':'po skupnem znesku','cat.sort_change':'po spremembi','cat.sort_name':'po imenu','cat.months':'{n} mesecev','cat.all':'vse kategorije','cat.other':'Ostalo','cat.typical':'Običajno','cat.last_vs':'Zadnji vs običajno','cat.total':'Skupaj','cat.category':'Kategorija','cat.hint':'Celice so obarvane glede na običajen mesec kategorije (mediana mesecev s porabo): {up} nad običajnim, {down} pod. * označuje tekoči mesec, ki še ni popoln. Kliknite vrstico za podrobnosti.','cat.riser':'Največji porast','cat.faller':'Največji padec','cat.conc':'Koncentracija','cat.vs_typical':'{last} zadnji mesec vs {med} običajno','cat.conc_sub':'top 3 kategorije v {m}','cat.detail':'{c} po mesecih','cat.merchants':'Glavni trgovci','cat.largest':'Največje transakcije','cat.empty_t':'V tem obdobju ni porabe','cat.empty_s':'Razširite obdobje ali počistite filtre.','cat.median_line':'običajen mesec','cat.none':'nič ne izstopa','cat.close':'Zapri','tab.budgets':'Proračun','tab.income':'Prihodki','tab.trends':'Trendi','tab.flow':'Tok denarja','tab.recurring':'Ponavljajoči','tab.transactions':'Transakcije','tab.compare':'Primerjava','tab.projection':'Napoved','tab.plan':'Načrt','tab.investments':'Naložbe','tab.fuel':'Cene goriv','tab.rules':'Pravila',
     'btn.menu':'Meni','btn.add':'Dodaj','btn.export_csv':'Izvozi CSV','btn.month_pdf':'Mesečni PDF','btn.filters':'Filtri','btn.light':'Svetla','btn.dark':'Temna',
     'year.all':'Vsa leta',
     'kpi.income':'Skupni prihodki','kpi.expenses':'Skupni stroški','kpi.net':'Neto stanje','kpi.invested':'Naloženo','kpi.savings_rate':'Stopnja varčevanja','kpi.income_saved':'Prihranek prihodkov','kpi.surplus':'Presežek','kpi.deficit':'Primanjkljaj','kpi.filtered_txns':'Filtrirane','kpi.of_total':'od {n} skupaj','kpi.avg_per_mo':'Povp. €{v}/mes (Z12M)',
