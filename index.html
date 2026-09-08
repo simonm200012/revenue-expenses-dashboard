@@ -607,6 +607,8 @@ html.is-mobile-device .section .txn-table input.fp-input{width:120px !important;
 .finance-auth-card label{font-size:14px}
 .finance-auth-card input{font-size:16px}
 .finance-auth-card button{font-size:14px;min-height:42px}
+.finance-password-dialog{margin:auto;color:var(--text);max-height:90dvh;overflow:auto}
+.finance-password-dialog::backdrop{background:#000a}
 
 body[data-finance-locked="true"] > :not(#financeAuth):not(script):not(style){display:none!important}
 .wf-heading{display:flex;justify-content:space-between;align-items:center;gap:16px;margin:12px 0 24px}.wf-heading h2{font-size:24px}.wf-heading p,.wf-card>p{color:var(--text3);line-height:1.6;margin-top:10px;font-size:14px}.wf-heading .fp-btn{width:auto;flex-shrink:0}
@@ -692,26 +694,35 @@ body[data-finance-locked="true"] > :not(#financeAuth):not(script):not(style){dis
   <div class="finance-auth-card">
     <div class="finance-auth-icon" aria-hidden="true">🔒</div>
     <h1 id="financeAuthTitle">Your finances, privately.</h1>
-    <p>Sign in with your email to open your dashboard.</p>
-    <form onsubmit="requestFinanceCode(event)">
-      <label for="financeEmail">Email address</label>
-      <input class="fp-input" type="email" id="financeEmail" autocomplete="email" required>
-      <button class="fp-btn fp-btn-primary" id="financeSendCode" type="submit">Send sign-in code</button>
-    </form>
-    <form id="financeCodeStep" onsubmit="verifyFinanceCode(event)" hidden>
-      <label for="financeCode">Code from your email</label>
-      <input class="fp-input" id="financeCode" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6,10}" minlength="6" maxlength="10" required>
-      <button class="fp-btn fp-btn-primary" id="financeVerifyCode" type="submit">Sign in</button>
+    <p>Sign in with your username and password.</p>
+    <form onsubmit="signInFinance(event)">
+      <label for="financeUsername">Username</label>
+      <input class="fp-input" type="text" id="financeUsername" name="username" autocomplete="username" autocapitalize="none" spellcheck="false" required>
+      <label for="financePassword">Password</label>
+      <input class="fp-input" type="password" id="financePassword" name="password" autocomplete="current-password" required>
+      <button class="fp-btn fp-btn-primary" id="financeSignIn" type="submit">Sign in</button>
     </form>
     <p id="financeAuthStatus" role="status" aria-live="polite"></p>
     <button class="page-btn" type="button" onclick="initFinanceAuth()">Retry connection</button>
-    <button class="page-btn" type="button" onclick="signOutFinance()">Use another account</button>
   </div>
 </section>
+<dialog id="financePasswordDialog" class="finance-auth-card finance-password-dialog" aria-labelledby="financePasswordTitle" onclose="clearFinancePasswords()">
+  <h1 id="financePasswordTitle">Set or change password</h1>
+  <p>Your username is <strong>simon</strong>. Use this password whenever you sign in.</p>
+  <form id="financePasswordForm" onsubmit="saveFinancePassword(event)">
+    <label for="financeNewPassword">New password</label>
+    <input class="fp-input" type="password" id="financeNewPassword" name="new-password" autocomplete="new-password" minlength="8" required>
+    <label for="financeConfirmPassword">Confirm password</label>
+    <input class="fp-input" type="password" id="financeConfirmPassword" name="confirm-password" autocomplete="new-password" minlength="8" required>
+    <button class="fp-btn fp-btn-primary" id="financeSavePassword" type="submit">Save password</button>
+  </form>
+  <p id="financePasswordStatus" role="status" aria-live="polite"></p>
+  <button class="page-btn" type="button" onclick="document.getElementById('financePasswordDialog').close()">Close</button>
+</dialog>
 <div id="app" hidden>
   <div class="header">
     <div><h1>Revenue & Expenses</h1><p class="subtitle">Loading from Supabase...</p><p id="sheetsSyncStatus" class="entry-sync" role="status"></p><p id="entryNotice" class="entry-sync" role="status" aria-live="polite"></p></div>
-    <div class="header-btns"><span id="financeSignedInAs" class="entry-sync"></span><button class="icon-btn" onclick="signOutFinance()">Sign out</button>
+    <div class="header-btns"><span id="financeSignedInAs" class="entry-sync"></span><button class="icon-btn" onclick="openFinancePassword()">Password</button><button class="icon-btn" onclick="signOutFinance()">Sign out</button>
       <button class="icon-btn nav-menu-btn" onclick="openNavMenu()" title="Sections">☰ <span class="lbl" data-t="btn.menu">Menu</span></button>
       <button class="icon-btn primary" onclick="openQuickAdd()" title="Quick add transaction">➕ <span class="lbl" data-t="btn.add">Add</span></button>
       <button class="icon-btn" onclick="exportCSV()">⬇ <span class="lbl" data-t="btn.export_csv">Export CSV</span></button>
@@ -788,7 +799,7 @@ body[data-finance-locked="true"] > :not(#financeAuth):not(script):not(style){dis
      the version + recompute the integrity hash when you want to upgrade. -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.50.0" integrity="sha384-jP+y6mxch/vbLrNpx4basfv6ciZQuHwdRHgZGa6Mhja0Xm4p87ok2OQavTrRIGxH" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js" integrity="sha384-bs/nf9FbdNouRbMiFcrcZfLXYPKiPaGVGplVbv7dLGECccEXDW+S3zjqSKR5ZEaD" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-<script src="scripts/finance-auth.js?v=2"></script>
+<script src="scripts/finance-auth.js?v=3"></script>
 <script src="scripts/receipt-parser.js?v=1"></script>
 <script src="scripts/transaction-entry.js?v=2"></script>
 <script src="scripts/finance-workflows.js?v=2"></script>
