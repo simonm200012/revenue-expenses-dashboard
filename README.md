@@ -4,7 +4,9 @@ Private personal finance dashboard on GitHub Pages, with Supabase storage and a 
 
 ## Sign-in and private access
 
-Sign in using the email code sent to the owner address configured in `finance_private.settings`. Ownership is checked against a confirmed Supabase Auth email on the server. Database policies, transaction RPCs and private storage policies enforce access; the login screen alone is not the security boundary.
+Sign in with username `simon` and the owner's Supabase Auth password. The username maps to the existing owner email; Supabase validates the password, and ownership is checked against the confirmed email configured in `finance_private.settings` on the server. Database policies, transaction RPCs and private storage policies enforce access; the login screen alone is not the security boundary. Routine sign-in does not send email.
+
+Use **Password** in the signed-in dashboard to set or change the password. Initial setup requires an authenticated owner session; it does not bypass authentication or create a second account. Passwords are submitted directly to Supabase Auth and are never placed in source code or app storage. Keep the owner email mapping and server owner setting aligned if changing the account in future.
 
 Transactions are edited through atomic RPCs. The public API identifier in the source does not grant access to financial data. Scheduled jobs use separate private random tokens, stored in Apps Script properties and GitHub Actions secrets; only their SHA-256 hashes and allowed scopes are stored in `finance_private.worker_tokens`.
 
