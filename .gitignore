@@ -4,3 +4,6 @@ node_modules/
 .env
 .env.*
 *.traineddata
+
+.ops/
+data/t212-portfolio.json

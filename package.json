@@ -8,7 +8,9 @@
     "dev": "python3 -m http.server 4173 --bind 127.0.0.1"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "0.3.14",
     "jsdom": "26.1.0",
+    "pdfjs-dist": "5.4.624",
     "tesseract.js": "6.0.1"
   }
 }

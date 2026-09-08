@@ -8,7 +8,7 @@ on:
   workflow_dispatch: {}
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   fetch:
@@ -23,17 +23,6 @@ jobs:
       - name: Fetch from Trading 212
         env:
           T212_API_KEY: ${{ secrets.T212_API_KEY }}
+          FINANCE_WORKER_TOKEN: ${{ secrets.FINANCE_WORKER_TOKEN }}
           T212_API_SECRET: ${{ secrets.T212_API_SECRET }}
         run: node scripts/scrape-t212.mjs
-
-      - name: Commit if changed
-        run: |
-          if [[ -n "$(git status --porcelain data/t212-portfolio.json)" ]]; then
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add data/t212-portfolio.json
-            git commit -m "Update T212 portfolio ($(date -u +%Y-%m-%dT%H:%MZ))"
-            git push
-          else
-            echo "No changes."
-          fi

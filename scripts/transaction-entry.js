@@ -23,7 +23,8 @@ async function loadTransactionEdits(){
   }
   importedEdits=edits;
 }
-function effectiveTransaction(row){const fields=importedEdits.get(row.row_hash);return fields?{...row,...fields,_edited:true}:row;}
+// The database applies corrections atomically. Never overlay stale browser values on a newer server row.
+function effectiveTransaction(row){return importedEdits.has(row.row_hash)?{...row,_edited:true}:row;}
 async function refreshSyncStatus(){
   const node=document.getElementById('sheetsSyncStatus');if(!node)return;
   try{
@@ -41,6 +42,8 @@ async function refreshSyncStatus(){
   }catch{node.textContent=entryText('Sheets sync status unavailable','Stanje uvoza ni na voljo');}
 }
 function clearReceipt(){
+  activeReceiptId=null;
+  document.getElementById('qaReceiptMatches').replaceChildren();
   receiptRun++;
   if(receiptWorker){receiptWorker.terminate().catch(()=>{});receiptWorker=null;}
   if(receiptURL){URL.revokeObjectURL(receiptURL);receiptURL='';}
@@ -71,6 +74,9 @@ function openQuickAdd(id){
   document.getElementById('qaDuplicate').hidden=true;
   document.getElementById('qaDuplicateConfirmed').checked=false;
   entryStatus('');
+  document.getElementById('qaHistory').replaceChildren();document.getElementById('qaHistory').hidden=true;
+  document.getElementById('qaManage').hidden=!entryEdit;
+  document.getElementById('qaAttached').innerHTML=entryEdit?FINANCE_RECEIPTS.filter(r=>String(r.transaction_id)===String(entryEdit.id)).map(r=>`<button class="page-btn" data-id="${escapeHtml(r.id)}" onclick="viewPrivateReceipt(this.dataset.id)">View ${escapeHtml(r.original_name)}</button>`).join(''):'';
   document.getElementById('quickAddPanel').classList.add('open');
   document.getElementById('quickAddPanel').setAttribute('aria-hidden','false');
   document.getElementById('quickAddOverlay').classList.add('open');
@@ -103,32 +109,13 @@ async function saveQuickAdd(){
   if(checkEntryDuplicates().length&&!document.getElementById('qaDuplicateConfirmed').checked){entryStatus(entryText('A matching amount is already recorded on this date. Review it below.','Na ta datum je že vpisan enak znesek. Preverite spodaj.'),true);return;}
   entryLock(true);entryStatus(tr('qa.saving'));
   try{
-    let saved;
-    if(entryEdit){
-      // Store imported corrections before updating the row. The daily import
-      // re-applies this record, so a later Sheets run cannot undo an app edit.
-      if(entryEdit.hash&&!entryEdit.hash.startsWith('app:')){
-        const {error}=await _supabase.from('app_state').upsert({key:'txn-edit:'+entryEdit.hash,value:{fields},updated_at:new Date().toISOString()});
-        if(error)throw error;
-      }
-      const {data,error}=await _supabase.from('transactions').update(entryEdit.hash?fields:{...fields,row_hash:entryToken}).eq('id',entryEdit.id).select().single();
-      if(error)throw error;saved=data;
-    }else{
-      // A stable token makes retry after a lost response safe, including on mobile.
-      const {data,error}=await _supabase.from('transactions').upsert({...fields,row_hash:entryToken,found_in_statements:null},{onConflict:'row_hash',ignoreDuplicates:true}).select();
-      if(error)throw error;saved=data?.[0];
-      if(!saved){const {data,error}=await _supabase.from('transactions').select('*').eq('row_hash',entryToken).single();if(error)throw error;saved=data;}
-    }
-    if(!saved?.id)throw new Error('The server did not confirm the saved transaction. Please retry.');
-    const newRow={id:saved.id,hash:saved.row_hash||'',d:saved.date,v:Number(saved.value),s:saved.source||'',b:saved.bank||'',t:saved.type==='Inflow'?'In':saved.type==='Investment'?'Inv':'Out',c:saved.final_category||saved.category||'',r:saved.cost_revenue_type||'',f:saved.found_in_statements||'',edited:true};
-    ORIGINAL_TXNS=ORIGINAL_TXNS.filter(t=>String(t.id)!==String(saved.id));ORIGINAL_TXNS.push({...newRow});
-    TXNS=ORIGINAL_TXNS.map(t=>({...t}));TXNS.sort((a,b)=>b.d.localeCompare(a.d));applyCategoryRules(TXNS);recomputeAggregates();
-    _srcStatsCache={n:-1,map:{}};
-    const dates=TXNS.map(t=>t.d).sort();_subMinDate=dates[0]||'';_subMaxDate=dates[dates.length-1]||'';_subCount=TXNS.length;_subUnrecon=TXNS.filter(t=>!t.f).length;
-    document.getElementById('yearFilter').innerHTML='<option value="All">All Years</option>'+[...new Set(TXNS.map(t=>t.d.slice(0,4)))].sort().map(y=>`<option value="${y}">${y}</option>`).join('');
-    document.getElementById('yearFilter').value=yearFilter;
+    const {data:result,error}=await _supabase.rpc('finance_save_entry',{p_fields:fields,p_id:entryEdit?.id??null,p_token:entryToken,p_expected:entryEdit?.updated_at??null,p_receipt:activeReceiptId});
+    if(error)throw error;
+    if(!result?.transaction?.id)throw new Error('The server did not confirm the save. Please retry.');
+    acceptSavedTransaction(result.transaction);
+    if(activeReceiptId)await refreshPrivateWorkflows();
     entryLock(false);closeQuickAdd();render();
-    document.getElementById('entryNotice').textContent=entryText('Saved. You can edit it from Transactions.','Shranjeno. Vnos lahko uredite med transakcijami.');
+    offerUndo(result,result.already_linked?'This receipt was already recorded.':'Saved. You can edit it from Transactions.');
   }catch(err){entryLock(false);entryStatus(tr('qa.error',{e:err.message||String(err)}),true);}
 }
 let ocrLibraryPromise;
@@ -139,34 +126,7 @@ function loadReceiptLibrary(){
     script.onload=resolve;script.onerror=()=>{script.remove();ocrLibraryPromise=null;reject(new Error('Receipt scanner could not load. Check your connection and retry.'));};document.head.append(script);
   });return ocrLibraryPromise;
 }
-async function scanReceipt(file){
-  if(!file||entryBusy)return;
-  if(!['image/jpeg','image/png','image/webp'].includes(file.type)||file.size>12*1024*1024){entryStatus(entryText('Choose a JPG, PNG or WebP image under 12 MB. For a PDF, upload a screenshot.','Izberite JPG, PNG ali WebP do 12 MB. Za PDF naložite posnetek zaslona.'),true);return;}
-  clearReceipt();const run=receiptRun;entryLock(true);const status=document.getElementById('receiptStatus');
-  receiptURL=URL.createObjectURL(file);document.getElementById('receiptPreview').src=receiptURL;document.getElementById('receiptReview').hidden=false;
-  document.getElementById('qaDate').value='';document.getElementById('qaAmount').value='';document.getElementById('qaSource').value='';document.getElementById('qaCategory').value='';document.getElementById('qaDetail').value='';setChipState('qaTypeChips','Out');
-  status.textContent=entryText('Preparing receipt reader… First scan downloads language files.','Pripravljam bralnik… Prvi pregled prenese jezikovne datoteke.');
-  let worker,timer;
-  try{
-    const task=(async()=>{
-      await loadReceiptLibrary();if(run!==receiptRun)return;
-      worker=await Tesseract.createWorker(['eng','slv'],1,{workerPath:new URL('vendor/tesseract/worker.min.js',document.baseURI).href,workerBlobURL:false,corePath:'https://cdn.jsdelivr.net/npm/tesseract.js-core@6.0.0',logger:m=>{if(run===receiptRun&&m.status==='recognizing text')status.textContent=entryText('Reading receipt','Berem račun')+`… ${Math.round(m.progress*100)}%`;}});
-      if(run!==receiptRun){await worker.terminate();return;}receiptWorker=worker;
-      const image=await createImageBitmap(file);const scale=Math.min(1,2400/Math.max(image.width,image.height));
-      const canvas=document.createElement('canvas');canvas.width=Math.round(image.width*scale);canvas.height=Math.round(image.height*scale);
-      const ctx=canvas.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.drawImage(image,0,0,canvas.width,canvas.height);image.close();
-      const result=await worker.recognize(canvas);if(run!==receiptRun)return;
-      const parsed=ReceiptParser.parse(result.data.text);
-      document.getElementById('receiptText').textContent=result.data.text.slice(0,20000);
-      document.getElementById('qaDate').value=parsed.date;document.getElementById('qaAmount').value=parsed.amount??'';document.getElementById('qaSource').value=parsed.merchant;
-      const known=TXNS.find(t=>t.s.toLowerCase()===parsed.merchant.toLowerCase()&&t.c);if(known)document.getElementById('qaCategory').value=known.c;
-      status.textContent=parsed.currency!=='EUR'?entryText('Non-euro currency detected. Enter the amount in EUR yourself.','Zaznana tuja valuta. Ročno vnesite znesek v EUR.'):entryText('Review all fields against the photo. Uncertain fields are left blank.','Preverite vsa polja s fotografijo. Negotova polja so prazna.');
-      checkEntryDuplicates();
-    })();
-    await Promise.race([task,new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error(entryText('Scanning took too long. Try a clearer photo or enter the details manually.','Branje traja predolgo. Poskusite z jasnejšo sliko ali ročnim vnosom.'))),90000);})]);
-  }catch(err){if(run===receiptRun){receiptRun++;status.textContent=entryText('Could not read this receipt. You can fill in the fields manually.','Računa ni bilo mogoče prebrati. Polja lahko izpolnite ročno.');entryStatus(err.message,true);}}
-  finally{clearTimeout(timer);if(worker)await worker.terminate().catch(()=>{});receiptWorker=null;entryLock(false);}
-}
+async function scanReceipt(file){if(file)await uploadReceiptBatch([file]);}
 document.addEventListener('DOMContentLoaded',()=>{
   const panel=document.getElementById('quickAddPanel');
   panel.addEventListener('input',event=>{if(event.target.id!=='qaDuplicateConfirmed'&&event.target.id!=='receiptConfirmed'){document.getElementById('qaDuplicateConfirmed').checked=false;document.getElementById('qaDuplicate').hidden=true;}});

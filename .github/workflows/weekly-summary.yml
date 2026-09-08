@@ -18,6 +18,7 @@ jobs:
 
       - name: Generate and send summary
         env:
+          FINANCE_WORKER_TOKEN: ${{ secrets.FINANCE_WORKER_TOKEN }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
         run: node scripts/weekly-summary.mjs
