@@ -2,11 +2,13 @@
 // Caches the app shell so it loads instantly and works offline.
 // Data (Supabase queries, fuel-prices.json, Anthropic API) always goes to the network.
 
-const VERSION = 'v5';
+const VERSION = 'v6';
 const SHELL_CACHE = 'shell-' + VERSION;
 const SHELL_ASSETS = [
   './',
   'index.html',
+  'scripts/receipt-parser.js?v=1',
+  'scripts/transaction-entry.js?v=1',
   'manifest.json',
   'icons/icon-192.png',
   'icons/icon-512.png',
