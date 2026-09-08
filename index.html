@@ -8,7 +8,7 @@
 <!-- Content Security Policy: locks the page to its known origins.
      connect-src allows only: Supabase project, Anthropic API, Google AI.
      script-src only cdnjs + jsdelivr. Frame-ancestors none = no clickjacking. -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.anthropic.com https://generativelanguage.googleapis.com https://nirmwhvdoxujgzkhbhrk.supabase.co wss://nirmwhvdoxujgzkhbhrk.supabase.co; manifest-src 'self'; worker-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://cdn.jsdelivr.net https://api.anthropic.com https://generativelanguage.googleapis.com https://nirmwhvdoxujgzkhbhrk.supabase.co wss://nirmwhvdoxujgzkhbhrk.supabase.co; manifest-src 'self'; worker-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'">
 <meta name="referrer" content="strict-origin-when-cross-origin">
 <link rel="manifest" href="manifest.json">
 <link rel="icon" type="image/png" href="icons/favicon-32.png">
@@ -575,6 +575,27 @@ html.is-mobile-device .section .txn-table input.fp-input{width:120px !important;
   .rec-summary-card{min-width:0;width:100%}
 }
 @media(max-width:480px),(pointer:coarse) and (max-width:550px){.chat-panel{right:0;left:0;bottom:0;width:100%;max-width:100%;height:88vh;max-height:none;border-radius:18px 18px 0 0;padding-bottom:env(safe-area-inset-bottom)}.chat-fab{bottom:calc(16px + env(safe-area-inset-bottom));right:16px}h1{font-size:22px}.kpi-value{font-size:20px !important}.section{padding:14px}}
+
+#quickAddPanel{width:480px;max-width:95vw;right:-520px;visibility:hidden;height:100dvh}
+#quickAddPanel.open{right:0;visibility:visible}
+#quickAddPanel .fp-input,#quickAddPanel .fp-select{font-size:16px}
+#quickAddPanel .fp-label{display:block;font-size:14px}
+#quickAddPanel .fp-body{overflow-y:auto;overscroll-behavior:contain}
+#quickAddPanel .fp-footer{padding-bottom:max(16px,env(safe-area-inset-bottom))}
+.receipt-picker{display:flex;gap:10px;flex-wrap:wrap}
+.receipt-picker label{cursor:pointer;font-size:14px}
+.receipt-picker input[type=file]{position:absolute;width:1px;height:1px;opacity:0;overflow:hidden}
+.entry-hint,.entry-check,.entry-warning{font-size:14px;line-height:1.5}
+.entry-hint{color:var(--text3);margin:12px 0}
+.entry-check{display:flex;gap:10px;align-items:flex-start;margin:12px 0}
+.entry-check input{flex:none;width:18px;height:18px;margin-top:2px}
+#receiptPreview{display:block;max-width:100%;max-height:240px;margin:12px auto;border-radius:8px;object-fit:contain}
+#receiptText{white-space:pre-wrap;overflow-wrap:anywhere;max-height:180px;overflow:auto;font-size:13px}
+.entry-warning{padding:12px;border:1px solid var(--acc-amber);border-radius:8px;margin-bottom:12px}
+.entry-warning ul{padding-left:20px}
+.entry-sync{font-size:12px;line-height:1.4;color:var(--text4);margin-top:4px}
+.entry-sync:empty{display:none}
+#quickAddPanel button:disabled{opacity:.55;cursor:wait}
 </style>
 </head>
 <body>
@@ -605,33 +626,51 @@ html.is-mobile-device .section .txn-table input.fp-input{width:120px !important;
 <!-- Quick Add transaction modal: floating dialog for manual entry. Saves
      to Supabase, then re-loads TXNS so the new row appears everywhere. -->
 <div class="filter-overlay" id="quickAddOverlay" onclick="closeQuickAdd()"></div>
-<div class="filter-panel" id="quickAddPanel" style="width:480px;max-width:95vw">
+<div class="filter-panel" id="quickAddPanel" role="dialog" aria-modal="true" aria-labelledby="qaTitle" aria-hidden="true">
   <div class="fp-header">
-    <span class="fp-title">➕ <span data-t="qa.title">Quick add transaction</span></span>
-    <button class="fp-close" onclick="closeQuickAdd()">×</button>
+    <span class="fp-title" id="qaTitle">Add transaction</span>
+    <button class="fp-close" onclick="closeQuickAdd()" aria-label="Close transaction form">×</button>
   </div>
   <div class="fp-body">
-    <div class="fp-group"><div class="fp-label" data-t="qa.date">Date</div><input class="fp-input" type="date" id="qaDate"></div>
-    <div class="fp-group"><div class="fp-label" data-t="qa.amount">Amount (€)</div><input class="fp-input" type="number" step="0.01" id="qaAmount" placeholder="0.00"></div>
+    <div class="receipt-picker">
+      <label class="fp-btn fp-btn-secondary" for="receiptFile" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();document.getElementById('receiptFile').click();}">🧾 <span data-t="receipt.upload">Scan receipt</span></label>
+      <input id="receiptFile" type="file" accept="image/jpeg,image/png,image/webp" onchange="scanReceipt(this.files[0])" aria-label="Upload receipt image">
+      <label class="fp-btn fp-btn-secondary" for="receiptCamera" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();document.getElementById('receiptCamera').click();}">📷 <span data-t="receipt.camera">Take photo</span></label>
+      <input id="receiptCamera" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" onchange="scanReceipt(this.files[0])" aria-label="Take receipt photo">
+    </div>
+    <p class="entry-hint" data-t="receipt.private">The photo is read on this device. Only the details you confirm are saved.</p>
+    <div id="receiptStatus" class="entry-hint" role="status" aria-live="polite"></div>
+    <div id="receiptReview" hidden>
+      <img id="receiptPreview" alt="Receipt to review">
+      <details><summary data-t="receipt.text">Recognized text</summary><pre id="receiptText"></pre></details>
+      <label class="entry-check"><input type="checkbox" id="receiptConfirmed"><span data-t="receipt.confirm">I checked the date, merchant and total against the receipt.</span></label>
+    </div>
+    <p id="qaEditNote" class="entry-hint" hidden data-t="qa.edit_note">Changes saved here are kept when Google Sheets syncs.</p>
+    <div class="fp-group"><label class="fp-label" for="qaDate" data-t="qa.date">Date</label><input class="fp-input" type="date" id="qaDate"></div>
+    <div class="fp-group"><label class="fp-label" for="qaAmount" data-t="qa.amount">Amount (€)</label><input class="fp-input" type="number" min="0.01" step="0.01" inputmode="decimal" id="qaAmount" placeholder="0.00"></div>
     <div class="fp-group"><div class="fp-label" data-t="qa.type">Type</div><div class="fp-chips" id="qaTypeChips">
-      <span class="fp-chip" data-val="Out" onclick="toggleChip(this)" data-t="fp.outflow">Outflow</span>
-      <span class="fp-chip" data-val="In" onclick="toggleChip(this)" data-t="fp.inflow">Inflow</span>
-      <span class="fp-chip" data-val="Inv" onclick="toggleChip(this)" data-t="fp.investment">Investment</span>
+      <button type="button" class="fp-chip" data-val="Out" onclick="toggleChip(this)" data-t="fp.outflow">Outflow</button>
+      <button type="button" class="fp-chip" data-val="In" onclick="toggleChip(this)" data-t="fp.inflow">Inflow</button>
+      <button type="button" class="fp-chip" data-val="Inv" onclick="toggleChip(this)" data-t="fp.investment">Investment</button>
     </div></div>
-    <div class="fp-group"><div class="fp-label" data-t="qa.source">Source / Merchant</div><input class="fp-input" type="text" id="qaSource" placeholder="e.g. Mercator, Salary ACME"></div>
-    <div class="fp-group"><div class="fp-label" data-t="qa.bank">Account / Bank</div><select class="fp-select" id="qaBank"></select></div>
-    <div class="fp-group"><div class="fp-label" data-t="qa.category">Category</div><input class="fp-input" type="text" id="qaCategory" placeholder="Groceries, Rent, Salary..." list="qaCategoryList"><datalist id="qaCategoryList"></datalist></div>
-    <div class="fp-group"><div class="fp-label" data-t="qa.detail">Detail (optional)</div><input class="fp-input" type="text" id="qaDetail" placeholder=""></div>
-    <div id="qaStatus" style="font-size:13px;min-height:20px;color:var(--text4);text-align:center"></div>
+    <div class="fp-group"><label class="fp-label" for="qaSource" data-t="qa.source">Source / Merchant</label><input class="fp-input" type="text" maxlength="500" id="qaSource" placeholder="e.g. Mercator, Salary ACME"></div>
+    <div class="fp-group"><label class="fp-label" for="qaBank" data-t="qa.bank">Account / Bank</label><select class="fp-select" id="qaBank"></select></div>
+    <div class="fp-group"><label class="fp-label" for="qaCategory" data-t="qa.category">Category</label><input class="fp-input" type="text" maxlength="500" id="qaCategory" placeholder="Groceries, Rent, Salary..." list="qaCategoryList"><datalist id="qaCategoryList"></datalist></div>
+    <div class="fp-group"><label class="fp-label" for="qaDetail" data-t="qa.detail">Detail (optional)</label><input class="fp-input" type="text" maxlength="500" id="qaDetail" placeholder=""></div>
+    <div id="qaDuplicate" class="entry-warning" hidden>
+      <strong data-t="qa.duplicate">Possible duplicate</strong><p data-t="qa.duplicate_help">The same amount is already recorded on this date. If this is the same purchase, edit the existing entry instead.</p>
+      <ul id="qaDuplicateList"></ul><label class="entry-check"><input type="checkbox" id="qaDuplicateConfirmed"><span data-t="qa.duplicate_confirm">This is a separate transaction. Save it anyway.</span></label>
+    </div>
+    <div role="status" aria-live="polite" id="qaStatus" style="font-size:13px;min-height:20px;color:var(--text4);text-align:center"></div>
   </div>
   <div class="fp-footer">
-    <button class="fp-btn fp-btn-secondary" onclick="resetQuickAdd()" data-t="qa.reset">Reset</button>
-    <button class="fp-btn fp-btn-primary" onclick="saveQuickAdd()" data-t="qa.save">Save transaction</button>
+    <button class="fp-btn fp-btn-secondary" id="qaReset" onclick="resetQuickAdd()" data-t="qa.reset">Reset</button>
+    <button class="fp-btn fp-btn-primary" id="qaSave" onclick="saveQuickAdd()">Save transaction</button>
   </div>
 </div>
 <div id="app">
   <div class="header">
-    <div><h1>Revenue & Expenses</h1><p class="subtitle">Loading from Supabase...</p></div>
+    <div><h1>Revenue & Expenses</h1><p class="subtitle">Loading from Supabase...</p><p id="sheetsSyncStatus" class="entry-sync" role="status"></p><p id="entryNotice" class="entry-sync" role="status" aria-live="polite"></p></div>
     <div class="header-btns">
       <button class="icon-btn nav-menu-btn" onclick="openNavMenu()" title="Sections">☰ <span class="lbl" data-t="btn.menu">Menu</span></button>
       <button class="icon-btn primary" onclick="openQuickAdd()" title="Quick add transaction">➕ <span class="lbl" data-t="btn.add">Add</span></button>
@@ -709,6 +748,8 @@ html.is-mobile-device .section .txn-table input.fp-input{width:120px !important;
      the version + recompute the integrity hash when you want to upgrade. -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.50.0" integrity="sha384-jP+y6mxch/vbLrNpx4basfv6ciZQuHwdRHgZGa6Mhja0Xm4p87ok2OQavTrRIGxH" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js" integrity="sha384-bs/nf9FbdNouRbMiFcrcZfLXYPKiPaGVGplVbv7dLGECccEXDW+S3zjqSKR5ZEaD" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script src="scripts/receipt-parser.js?v=1"></script>
+<script src="scripts/transaction-entry.js?v=1"></script>
 <script>
 // ============================================================
 // SUPABASE CONFIG — Replace with your credentials
@@ -751,6 +792,7 @@ function compileRule(r){
 function applyCategoryRules(txns){
   const compiled=RULES.map(r=>({rule:r,matcher:compileRule(r)})).filter(x=>x.matcher);
   for(const t of txns){
+    if(t.edited)continue;
     for(const {rule,matcher} of compiled){
       const field=rule.target==='source'?t.s:rule.target==='detail'?t.r:t.c;
       if(matcher.test(field)){t.c=rule.category;break}
@@ -812,6 +854,8 @@ async function loadFromSupabase() {
   // Kick off the cross-device state pull in parallel with the
   // transaction fetch; awaited below before rules are applied.
   const statePull = syncStatePull();
+  refreshSyncStatus();
+  await loadTransactionEdits();
 
   // Fetch all rows (Supabase paginates at 1000 by default)
   let allData = [];
@@ -821,9 +865,9 @@ async function loadFromSupabase() {
     const { data, error } = await _supabase
       .from('transactions')
       .select('*')
-      .order('date', { ascending: false })
+      .order('date', { ascending: false }).order('id', {ascending:false})
       .range(from, from + batchSize - 1);
-    if (error) { console.error('Supabase error:', error); break; }
+    if (error) throw new Error('Could not load all transactions. Please retry.');
     if (!data || data.length === 0) break;
     allData = allData.concat(data);
     if (data.length < batchSize) break;
@@ -832,7 +876,10 @@ async function loadFromSupabase() {
 
   // Transform Supabase rows → dashboard format {d, v, s, b, t, c, r, f}
   // f = "Found in Statements" reconciliation tag (e.g. "2026-04 (NLB)") or '' if unreconciled
-  TXNS = allData.map(row => ({
+  TXNS = allData.map(effectiveTransaction).map(row => ({
+    id: row.id,
+    hash: row.row_hash || '',
+    edited: !!row._edited || String(row.row_hash||'').startsWith('app:'),
     d: row.date || '',
     v: parseFloat(row.value) || 0,
     s: row.source || '',
@@ -1666,7 +1713,7 @@ charts.c8=new Chart(document.getElementById("c8"),{type:"line",data:{labels:data
 charts.c9=new Chart(document.getElementById("c9"),{type:"line",data:{labels:data.map(d=>d.YM),datasets:[{label:"Inflow",data:data.map(d=>d.Inflow),borderColor:"#10b981",borderWidth:2,pointRadius:0,tension:.3,fill:false},{label:"Outflow",data:data.map(d=>d.Outflow),borderColor:"#ef4444",borderWidth:2,pointRadius:0,tension:.3,fill:false}]},options:{responsive:true,maintainAspectRatio:false,scales:{x:{ticks:{maxTicksLimit:12,maxRotation:45}},y:{ticks:{callback:v=>fmtAxis(v)}}},plugins:{tooltip:ttcb(1)}}});}
 
 function renderTransactions(){const el=document.getElementById("content");
-el.innerHTML=`<div class="section"><div class="section-title">${tr('sec.txn_search')}</div><div class="search-bar"><input class="search-input" id="txnSearch" placeholder="Quick search within filtered results..." oninput="txnPage=0;filterTxns()"></div><div class="table-wrap"><table class="txn-table"><thead><tr><th>Date</th><th>Source</th><th>Amount</th><th>Type</th><th>Category</th><th>Detail</th></tr></thead><tbody id="txnBody"></tbody></table></div><div class="table-footer"><span id="txnCount"></span><div><button class="page-btn" id="prevBtn" onclick="txnPage--;filterTxns()">\u2190 Prev</button> <button class="page-btn" id="nextBtn" onclick="txnPage++;filterTxns()">Next \u2192</button></div></div></div>`;filterTxns()}
+el.innerHTML=`<div class="section"><div class="section-title">${tr('sec.txn_search')}</div><div class="search-bar"><input class="search-input" id="txnSearch" placeholder="Quick search within filtered results..." oninput="txnPage=0;filterTxns()"></div><div class="table-wrap"><table class="txn-table"><thead><tr><th>Date</th><th>Source</th><th>Amount</th><th>Type</th><th>Category</th><th>Detail</th><th>Edit</th></tr></thead><tbody id="txnBody"></tbody></table></div><div class="table-footer"><span id="txnCount"></span><div><button class="page-btn" id="prevBtn" onclick="txnPage--;filterTxns()">\u2190 Prev</button> <button class="page-btn" id="nextBtn" onclick="txnPage++;filterTxns()">Next \u2192</button></div></div></div>`;filterTxns()}
 // Per-merchant spending stats for anomaly badges — same detection the
 // monthly PDF uses (>2 standard deviations above the merchant's mean,
 // minimum 4 historical charges, ignore amounts under €25). Memoized on
@@ -1692,7 +1739,7 @@ function anomalyBadge(t){
   if(!st||t.v<=st.mean+2*st.sd)return'';
   return `<span title="Unusually high for this merchant — typical charge is ~€${Math.round(st.mean)}" style="color:var(--acc-amber);margin-left:5px;font-size:11px;cursor:help">⚠</span>`;
 }
-function filterTxns(){let filtered=getFilteredTxns();const q=(document.getElementById("txnSearch").value||"").toLowerCase();if(q)filtered=filtered.filter(t=>(t.s+t.c+t.r+t.b+t.d).toLowerCase().includes(q));const pp=50,total=filtered.length,pages=Math.ceil(total/pp);if(txnPage>=pages)txnPage=Math.max(0,pages-1);const sl=filtered.slice(txnPage*pp,(txnPage+1)*pp);const typeLabel=t=>t.t==='In'?'Inflow':(t.t==='Inv'?'Investment':'Outflow');const amtClass=t=>t.t==='In'?'in':(t.t==='Inv'?'inv':'out');const amtSign=t=>t.t==='In'?'+':(t.t==='Inv'?'\u25CF':'\u2212');const reconBadge=t=>t.f?`<span title="Found in ${escapeAttr(t.f)}" style="color:var(--acc-green);font-size:11px;margin-left:6px">\u2713</span>`:`<span title="Not yet found in any bank statement" style="color:var(--acc-amber);font-size:11px;margin-left:6px">\u26A0</span>`;document.getElementById("txnBody").innerHTML=sl.map(t=>`<tr><td>${t.d}${reconBadge(t)}</td><td style="cursor:pointer;color:var(--text)" data-merchant="${escapeHtml(t.s||'')}" onclick="openMerchant(this.dataset.merchant)">${escapeHtml(t.s)}</td><td class="${amtClass(t)}">${amtSign(t)}\u20AC${t.v.toFixed(2)}${anomalyBadge(t)}</td><td>${typeLabel(t)}</td><td>${escapeHtml(t.c)}</td><td>${escapeHtml(t.r)}</td></tr>`).join("");const unreconShown=sl.filter(t=>!t.f).length;document.getElementById("txnCount").innerHTML=`${total} transactions \u00B7 Page ${txnPage+1}/${Math.max(pages,1)}${unreconShown>0?` \u00B7 <span style="color:var(--acc-amber)">\u26A0 ${unreconShown} unreconciled on this page</span>`:''}`;document.getElementById("prevBtn").disabled=txnPage<=0;document.getElementById("nextBtn").disabled=txnPage>=pages-1}
+function filterTxns(){let filtered=getFilteredTxns();const q=(document.getElementById("txnSearch").value||"").toLowerCase();if(q)filtered=filtered.filter(t=>(t.s+t.c+t.r+t.b+t.d).toLowerCase().includes(q));const pp=50,total=filtered.length,pages=Math.ceil(total/pp);if(txnPage>=pages)txnPage=Math.max(0,pages-1);const sl=filtered.slice(txnPage*pp,(txnPage+1)*pp);const typeLabel=t=>t.t==='In'?'Inflow':(t.t==='Inv'?'Investment':'Outflow');const amtClass=t=>t.t==='In'?'in':(t.t==='Inv'?'inv':'out');const amtSign=t=>t.t==='In'?'+':(t.t==='Inv'?'\u25CF':'\u2212');const reconBadge=t=>t.f?`<span title="Found in ${escapeAttr(t.f)}" style="color:var(--acc-green);font-size:11px;margin-left:6px">\u2713</span>`:`<span title="Not yet found in any bank statement" style="color:var(--acc-amber);font-size:11px;margin-left:6px">\u26A0</span>`;document.getElementById("txnBody").innerHTML=sl.map(t=>`<tr><td>${t.d}${reconBadge(t)}</td><td style="cursor:pointer;color:var(--text)" data-merchant="${escapeHtml(t.s||'')}" onclick="openMerchant(this.dataset.merchant)">${escapeHtml(t.s)}</td><td class="${amtClass(t)}">${amtSign(t)}\u20AC${t.v.toFixed(2)}${anomalyBadge(t)}</td><td>${typeLabel(t)}</td><td>${escapeHtml(t.c)}</td><td>${escapeHtml(t.r)}</td><td><button class="page-btn" data-entry-id="${escapeHtml(t.id)}" onclick="openQuickAdd(this.dataset.entryId)">${entryText('Edit','Uredi')}</button></td></tr>`).join("");const unreconShown=sl.filter(t=>!t.f).length;document.getElementById("txnCount").innerHTML=`${total} transactions \u00B7 Page ${txnPage+1}/${Math.max(pages,1)}${unreconShown>0?` \u00B7 <span style="color:var(--acc-amber)">\u26A0 ${unreconShown} unreconciled on this page</span>`:''}`;document.getElementById("prevBtn").disabled=txnPage<=0;document.getElementById("nextBtn").disabled=txnPage>=pages-1}
 
 function renderCompare(){const months=MONTHLY.map(m=>m.YM);const el=document.getElementById("content");
 // Smart defaults: current month vs same month last year
@@ -4741,7 +4788,7 @@ function renderPlan(){
 }
 
 applyTheme();
-(async()=>{await loadFromSupabase();restoreStateFromHash();render();})();
+(async()=>{try{await loadFromSupabase();restoreStateFromHash();render();}catch(error){document.getElementById('content').innerHTML='<div class="section"><p>'+escapeHtml(error.message)+'</p><button class="fp-btn fp-btn-primary" onclick="location.reload()">Retry loading</button></div>';}})();
 
 // PWA service worker registration
 if('serviceWorker' in navigator){
@@ -5115,7 +5162,7 @@ const T_KEYS = {
     // Active filter chips
     'af.year':'Year','af.type':'Type','af.bank':'Bank','af.from':'From','af.to':'To','af.min':'Min','af.max':'Max','af.stmt':'Stmt','af.src':'Source','af.reconciled':'Reconciled','af.unreconciled':'Unreconciled',
     // Quick Add modal
-    'qa.title':'Quick add transaction','qa.date':'Date','qa.amount':'Amount (€)','qa.type':'Type','qa.source':'Source / Merchant','qa.bank':'Account / Bank','qa.category':'Category','qa.detail':'Detail (optional)','qa.reset':'Reset','qa.save':'Save transaction','qa.saving':'Saving…','qa.saved':'✓ Saved','qa.error':'Save failed: {e}','qa.required':'Please fill in date, amount, type and source.','qa.bank_cash':'Cash',
+    'receipt.upload':'Scan receipt','receipt.camera':'Take photo','receipt.private':'The photo is read on this device. Only the details you confirm are saved.','receipt.text':'Recognized text','receipt.confirm':'I checked the date, merchant and total against the receipt.','qa.edit_note':'Changes saved here are kept when Google Sheets syncs.','qa.duplicate':'Possible duplicate','qa.duplicate_help':'The same amount is already recorded on this date. If this is the same purchase, edit the existing entry instead.','qa.duplicate_confirm':'This is a separate transaction. Save it anyway.','qa.title':'Quick add transaction','qa.date':'Date','qa.amount':'Amount (€)','qa.type':'Type','qa.source':'Source / Merchant','qa.bank':'Account / Bank','qa.category':'Category','qa.detail':'Detail (optional)','qa.reset':'Reset','qa.save':'Save transaction','qa.saving':'Saving…','qa.saved':'✓ Saved','qa.error':'Save failed: {e}','qa.required':'Please fill in date, amount, type and source.','qa.bank_cash':'Cash',
     // Section titles
     'sec.key_insights':'Key Insights','sec.monthly_ie':'Monthly Income vs Expenses','sec.yearly_ie':'Yearly Income vs Expenses','sec.top_cats':'Top Expense Categories','sec.income_sources':'Income Sources','sec.expense_ratio':'Expense Ratio Breakdown','sec.monthly_exp':'Monthly Expenses','sec.spending_breakdown':'Spending Breakdown','sec.spending_breakdown_sub':'top {n} categories','sec.cat_trends':'Category Trends','sec.top_merchants':'Top Merchants','sec.dow':'Spending by Day of Week','sec.heatmap':'Daily Spending Heatmap','sec.monthly_inc':'Monthly Income','sec.income_breakdown':'Income Breakdown','sec.monthly_net':'Monthly Net Balance','sec.cum_net':'Cumulative Net Balance','sec.ie_monthly':'Income vs Expenses — Monthly','sec.txn_search':'Transaction Search','sec.mom_compare':'Month-over-Month Comparison','sec.cat_breakdown':'Category Breakdown','sec.near_term':'Near-Term Forecast (data-driven)','sec.cash_forecast':'Cash Flow Forecast','sec.cashflow_breakdown':'Cash Flow Breakdown (Recurring vs Variable)','sec.active_subs':'Active Subscriptions','sec.dormant_subs':'Dormant / inactive','sec.rec_income':'Recurring Income','sec.rec_breakdown':'Recurring Expense Breakdown','sec.bank_balances':'Bank balances','sec.inv_accounts':'Investment accounts','sec.nw_over_time':'Net worth over time','sec.nw_setup':'Set up your account baselines','sec.nw_trend':'Trend','sec.fuel_title':'Regulated Fuel Prices · Slovenia · €/liter','sec.fuel_history':'Weekly history · last 52 weeks','sec.no_positions':'No positions','sec.snapshot':'Snapshot','sec.portfolio_alloc':'Portfolio Allocation','sec.gain_loss':'Gain / Loss by Position (top 15)','sec.top_holdings':'Top Holdings','sec.cur_cash':'Currency & Cash','sec.all_positions':'All Positions','sec.rules_title':'Auto-categorization Rules',
     // Transactions
@@ -5148,7 +5195,7 @@ const T_KEYS = {
   },
   sl: {
     // Tabs
-    'tab.overview':'Pregled','tab.networth':'Premoženje','tab.spending':'Stroški','tab.categories':'Kategorije','cat.title':'Mesečna poraba po kategorijah','cat.matrix':'Kategorija \u00d7 mesec','cat.window':'Obdobje','cat.top':'Prikaži','cat.sort':'Razvrsti','cat.sort_total':'po skupnem znesku','cat.sort_change':'po spremembi','cat.sort_name':'po imenu','cat.months':'{n} mesecev','cat.all':'vse kategorije','cat.other':'Ostalo','cat.typical':'Običajno','cat.last_vs':'Zadnji vs običajno','cat.total':'Skupaj','cat.category':'Kategorija','cat.hint':'Celice so obarvane glede na običajen mesec kategorije (mediana mesecev s porabo): {up} nad običajnim, {down} pod. * označuje tekoči mesec, ki še ni popoln. Kliknite vrstico za podrobnosti.','cat.riser':'Največji porast','cat.faller':'Največji padec','cat.conc':'Koncentracija','cat.vs_typical':'{last} zadnji mesec vs {med} običajno','cat.conc_sub':'top 3 kategorije v {m}','cat.detail':'{c} po mesecih','cat.merchants':'Glavni trgovci','cat.largest':'Največje transakcije','cat.empty_t':'V tem obdobju ni porabe','cat.empty_s':'Razširite obdobje ali počistite filtre.','cat.median_line':'običajen mesec','cat.none':'nič ne izstopa','cat.close':'Zapri','tab.budgets':'Proračun','tab.income':'Prihodki','tab.trends':'Trendi','tab.flow':'Tok denarja','tab.recurring':'Ponavljajoči','tab.transactions':'Transakcije','tab.compare':'Primerjava','tab.projection':'Napoved','tab.plan':'Načrt','tab.investments':'Naložbe','tab.fuel':'Cene goriv','tab.rules':'Pravila',
+    'receipt.upload':'Preberi račun','receipt.camera':'Fotografiraj','receipt.private':'Fotografija se prebere na tej napravi. Shranijo se samo podatki, ki jih potrdite.','receipt.text':'Prepoznano besedilo','receipt.confirm':'Preveril sem datum, trgovca in skupni znesek na računu.','qa.edit_note':'Spremembe, shranjene tukaj, ostanejo tudi po uvozu preglednice.','qa.duplicate':'Možen dvojnik','qa.duplicate_help':'Na ta datum je že vpisan enak znesek. Če gre za isti nakup, uredite obstoječi vnos.','qa.duplicate_confirm':'To je ločena transakcija. Vseeno jo shrani.','tab.overview':'Pregled','tab.networth':'Premoženje','tab.spending':'Stroški','tab.categories':'Kategorije','cat.title':'Mesečna poraba po kategorijah','cat.matrix':'Kategorija \u00d7 mesec','cat.window':'Obdobje','cat.top':'Prikaži','cat.sort':'Razvrsti','cat.sort_total':'po skupnem znesku','cat.sort_change':'po spremembi','cat.sort_name':'po imenu','cat.months':'{n} mesecev','cat.all':'vse kategorije','cat.other':'Ostalo','cat.typical':'Običajno','cat.last_vs':'Zadnji vs običajno','cat.total':'Skupaj','cat.category':'Kategorija','cat.hint':'Celice so obarvane glede na običajen mesec kategorije (mediana mesecev s porabo): {up} nad običajnim, {down} pod. * označuje tekoči mesec, ki še ni popoln. Kliknite vrstico za podrobnosti.','cat.riser':'Največji porast','cat.faller':'Največji padec','cat.conc':'Koncentracija','cat.vs_typical':'{last} zadnji mesec vs {med} običajno','cat.conc_sub':'top 3 kategorije v {m}','cat.detail':'{c} po mesecih','cat.merchants':'Glavni trgovci','cat.largest':'Največje transakcije','cat.empty_t':'V tem obdobju ni porabe','cat.empty_s':'Razširite obdobje ali počistite filtre.','cat.median_line':'običajen mesec','cat.none':'nič ne izstopa','cat.close':'Zapri','tab.budgets':'Proračun','tab.income':'Prihodki','tab.trends':'Trendi','tab.flow':'Tok denarja','tab.recurring':'Ponavljajoči','tab.transactions':'Transakcije','tab.compare':'Primerjava','tab.projection':'Napoved','tab.plan':'Načrt','tab.investments':'Naložbe','tab.fuel':'Cene goriv','tab.rules':'Pravila',
     'btn.menu':'Meni','btn.add':'Dodaj','btn.export_csv':'Izvozi CSV','btn.month_pdf':'Mesečni PDF','btn.filters':'Filtri','btn.light':'Svetla','btn.dark':'Temna',
     'year.all':'Vsa leta',
     'kpi.income':'Skupni prihodki','kpi.expenses':'Skupni stroški','kpi.net':'Neto stanje','kpi.invested':'Naloženo','kpi.savings_rate':'Stopnja varčevanja','kpi.income_saved':'Prihranek prihodkov','kpi.surplus':'Presežek','kpi.deficit':'Primanjkljaj','kpi.filtered_txns':'Filtrirane','kpi.of_total':'od {n} skupaj','kpi.avg_per_mo':'Povp. €{v}/mes (Z12M)',
@@ -5276,100 +5323,7 @@ function updateBottomNav(){
 }
 
 // ============================================================
-// QUICK ADD — manual transaction entry, writes to Supabase
-// ============================================================
-function openQuickAdd(){
-  // Pre-fill date with today, populate Bank dropdown from current data
-  const today = new Date().toISOString().slice(0,10);
-  document.getElementById('qaDate').value = today;
-  document.getElementById('qaAmount').value = '';
-  document.getElementById('qaSource').value = '';
-  document.getElementById('qaCategory').value = '';
-  document.getElementById('qaDetail').value = '';
-  document.getElementById('qaStatus').textContent = '';
-  // Default to Outflow
-  setChipState('qaTypeChips','Out');
-  // Build bank options from existing transactions + a "Cash" sentinel
-  const banks = [...new Set(TXNS.map(x=>x.b).filter(Boolean))].sort();
-  const bankSel = document.getElementById('qaBank');
-  bankSel.innerHTML = '<option value="Cash">'+tr('qa.bank_cash')+'</option>' +
-    banks.map(b=>`<option value="${escapeHtml(b)}">${escapeHtml(b)}</option>`).join('');
-  // Build category datalist from existing data
-  const cats = [...new Set(TXNS.map(x=>x.c).filter(Boolean))].sort();
-  document.getElementById('qaCategoryList').innerHTML = cats.map(c=>`<option value="${escapeHtml(c)}">`).join('');
-  document.getElementById('quickAddPanel').classList.add('open');
-  document.getElementById('quickAddOverlay').classList.add('open');
-  setTimeout(()=>document.getElementById('qaAmount').focus(), 150);
-}
-function closeQuickAdd(){
-  document.getElementById('quickAddPanel').classList.remove('open');
-  document.getElementById('quickAddOverlay').classList.remove('open');
-}
-function resetQuickAdd(){
-  document.getElementById('qaDate').value = new Date().toISOString().slice(0,10);
-  document.getElementById('qaAmount').value = '';
-  document.getElementById('qaSource').value = '';
-  document.getElementById('qaCategory').value = '';
-  document.getElementById('qaDetail').value = '';
-  setChipState('qaTypeChips','Out');
-  document.getElementById('qaStatus').textContent = '';
-}
-async function saveQuickAdd(){
-  const date = document.getElementById('qaDate').value;
-  const amount = parseFloat(document.getElementById('qaAmount').value);
-  const typeShort = getChipVal('qaTypeChips') || 'Out';
-  const source = document.getElementById('qaSource').value.trim();
-  const bank = document.getElementById('qaBank').value || 'Cash';
-  const category = document.getElementById('qaCategory').value.trim() || 'Uncategorized';
-  const detail = document.getElementById('qaDetail').value.trim();
-  const status = document.getElementById('qaStatus');
-  if(!date || !amount || !typeShort || !source){
-    status.style.color = '#ef4444';
-    status.textContent = tr('qa.required');
-    return;
-  }
-  // Map internal type ('In'/'Out'/'Inv') → Supabase type ('Inflow'/'Outflow'/'Investment')
-  const typeFull = typeShort === 'In' ? 'Inflow' : (typeShort === 'Inv' ? 'Investment' : 'Outflow');
-  status.style.color = 'var(--text4)';
-  status.textContent = tr('qa.saving');
-  try {
-    const { data, error } = await _supabase.from('transactions').insert([{
-      date: date,
-      value: Math.abs(amount),
-      source: source,
-      bank: bank,
-      type: typeFull,
-      category: category,
-      final_category: category,
-      cost_revenue_type: detail || null,
-      found_in_statements: null
-    }]).select();
-    if(error) throw error;
-    status.style.color = '#10b981';
-    status.textContent = tr('qa.saved');
-    // Insert into local TXNS array directly so we don't need a full reload
-    const newRow = {
-      d: date,
-      v: Math.abs(amount),
-      s: source,
-      b: bank,
-      t: typeShort,
-      c: category,
-      r: detail || '',
-      f: ''
-    };
-    TXNS.unshift(newRow);
-    TXNS.sort((a,b)=>b.d.localeCompare(a.d));
-    ORIGINAL_TXNS.unshift({...newRow});
-    // Recompute everything that depends on TXNS
-    if(typeof applyCategoryRules === 'function') applyCategoryRules(TXNS);
-    if(typeof recomputeAggregates === 'function') recomputeAggregates();
-    setTimeout(()=>{ closeQuickAdd(); render(); }, 600);
-  } catch(err){
-    status.style.color = '#ef4444';
-    status.textContent = tr('qa.error', {e: err.message || String(err)});
-  }
-}
+// App entry and receipt scanning live in scripts/transaction-entry.js.
 
 // Apply translations once on first paint (after all elements exist).
 window.addEventListener('DOMContentLoaded', ()=>{
