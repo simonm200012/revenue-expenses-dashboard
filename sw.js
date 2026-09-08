@@ -2,13 +2,15 @@
 // Caches the app shell so it loads instantly and works offline.
 // Data (Supabase queries, fuel-prices.json, Anthropic API) always goes to the network.
 
-const VERSION = 'v6';
+const VERSION = 'v7';
 const SHELL_CACHE = 'shell-' + VERSION;
 const SHELL_ASSETS = [
   './',
   'index.html',
   'scripts/receipt-parser.js?v=1',
-  'scripts/transaction-entry.js?v=1',
+  'scripts/transaction-entry.js?v=2',
+  'scripts/finance-auth.js?v=2',
+  'scripts/finance-workflows.js?v=2',
   'manifest.json',
   'icons/icon-192.png',
   'icons/icon-512.png',
@@ -47,6 +49,8 @@ self.addEventListener('fetch', event => {
   // Never cache cross-origin (Supabase, Anthropic, CDN scripts, fonts) — let the network handle them.
   // But fall back to cached shell assets when offline.
   if (url.origin !== self.location.origin) return;
+  // Personal portfolio data is now authenticated in Supabase; never retain legacy files.
+  if(url.pathname.endsWith('/data/t212-portfolio.json')){event.respondWith(new Response('Not found',{status:404}));return;}
 
   // Network-first for fuel-prices.json (so updates land immediately).
   if (url.pathname.endsWith('/data/fuel-prices.json')) {

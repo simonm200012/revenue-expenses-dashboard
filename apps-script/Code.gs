@@ -2,6 +2,7 @@
 // set SUPABASE_KEY in Apps Script > Project settings > Script properties.
 const SUPABASE_URL = 'https://nirmwhvdoxujgzkhbhrk.supabase.co';
 const SUPABASE_KEY = PropertiesService.getScriptProperties().getProperty('SUPABASE_KEY');
+const FINANCE_WORKER_TOKEN = PropertiesService.getScriptProperties().getProperty('FINANCE_WORKER_TOKEN');
 const TABLE_NAME = 'transactions';
 const SHEET_NAME = 'Data';
 const SPREADSHEET_ID = PropertiesService.getScriptProperties().getProperty('SPREADSHEET_ID');
@@ -11,6 +12,7 @@ function syncToSupabase() {
   if (!lock.tryLock(1000)) throw new Error('Another sync is running. This run did not change any rows.');
   const startedAt = new Date().toISOString();
   try {
+    if (!FINANCE_WORKER_TOKEN) throw new Error('Missing private finance worker token.');
     if (!SUPABASE_KEY) throw new Error('Missing Supabase credential in Script properties.');
     setSyncStatus({ status: 'running', started_at: startedAt });
     // Explicit ID works from a scheduled execution without an open spreadsheet.
@@ -47,7 +49,7 @@ function syncToSupabase() {
 
 function syncRequest(path, method, body) {
   const request = { url: SUPABASE_URL + path, method: method, headers: {
-    apikey: SUPABASE_KEY, Authorization: 'Bearer ' + SUPABASE_KEY,
+    apikey: SUPABASE_KEY, Authorization: 'Bearer ' + SUPABASE_KEY, 'x-finance-worker': FINANCE_WORKER_TOKEN,
     'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates,return=minimal'
   }, muteHttpExceptions: true };
   if (body !== undefined) request.payload = JSON.stringify(body);
@@ -124,4 +126,38 @@ function createDailyTrigger() {
   if (existing.length) { Logger.log('Existing sync trigger retained.'); return; }
   ScriptApp.newTrigger('syncToSupabase').timeBased().atHour(6).everyDays(1).inTimezone('Europe/Ljubljana').create();
   Logger.log('Daily sync enabled: 06:00–07:00 Europe/Ljubljana.');
+}
+
+
+function createDailyBackupTrigger() {
+  const existing = ScriptApp.getProjectTriggers().filter(t => t.getHandlerFunction() === 'backupFinanceDaily');
+  if (existing.length) { Logger.log('Existing backup trigger retained.'); return; }
+  ScriptApp.newTrigger('backupFinanceDaily').timeBased().atHour(5).everyDays(1).inTimezone('Europe/Ljubljana').create();
+  Logger.log('Daily private backup enabled: 05:00–06:00 Europe/Ljubljana.');
+}
+
+function backupFinanceDaily() {
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(1000)) throw new Error('Another finance job is running. Retry the backup later.');
+  try {
+    if (!FINANCE_WORKER_TOKEN) throw new Error('Missing private finance worker token.');
+    const request = syncRequest('/rest/v1/rpc/finance_export_snapshot', 'post', {});
+    const response = UrlFetchApp.fetch(request.url, request);
+    if (response.getResponseCode() !== 200) throw new Error('Could not read private snapshot (HTTP ' + response.getResponseCode() + ').');
+    const text = response.getContentText(), payload = JSON.parse(text);
+    if (!payload || !Array.isArray(payload.transactions) || payload.format_version !== 1) throw new Error('Snapshot was not authorized or was incomplete.');
+    const gzip = Utilities.gzip(Utilities.newBlob(text, 'application/json', 'finance.json'), 'finance.json.gz');
+    const bytes = gzip.getBytes();
+    const checksum = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, bytes).map(b => ('0' + (b & 255).toString(16)).slice(-2)).join('');
+    const path = 'daily/' + Utilities.formatDate(new Date(), 'Europe/Ljubljana', 'yyyy-MM-dd') + '-' + Utilities.getUuid() + '.json.gz';
+    const upload = syncRequest('/storage/v1/object/finance-backups/' + path, 'post');
+    upload.headers['Content-Type'] = 'application/gzip';upload.headers['Cache-Control'] = 'max-age=0';delete upload.headers.Prefer;upload.payload = bytes;
+    const stored = UrlFetchApp.fetch(upload.url, upload);
+    if (stored.getResponseCode() < 200 || stored.getResponseCode() >= 300) throw new Error('Private backup upload failed (HTTP ' + stored.getResponseCode() + ').');
+    const record = syncRequest('/rest/v1/finance_backups', 'post', {storage_path:path,created_at:payload.created_at,row_count:payload.transactions.length,byte_count:bytes.length,sha256:checksum,source:'Daily Apps Script'});
+    record.headers.Prefer = 'return=minimal';
+    const saved = UrlFetchApp.fetch(record.url, record);
+    if (saved.getResponseCode() < 200 || saved.getResponseCode() >= 300) throw new Error('Backup index could not be saved (HTTP ' + saved.getResponseCode() + ').');
+    Logger.log('Private backup complete. Snapshot and checksum saved.');
+  } finally { lock.releaseLock(); }
 }

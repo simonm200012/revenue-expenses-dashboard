@@ -1,3 +1,4 @@
+if(!process.env.FINANCE_WORKER_TOKEN)throw new Error('Missing private finance worker token.');
 // Weekly AI-generated finance summary, emailed via Resend.
 // Triggered by .github/workflows/weekly-summary.yml every Monday morning.
 // Required env: ANTHROPIC_API_KEY, RESEND_API_KEY
@@ -36,9 +37,10 @@ async function supabaseFetch(){
   const page = 1000;
   let offset = 0;
   while(true){
-    const url = `${SUPABASE_URL}/rest/v1/transactions?date=gte.${fromIso}&order=date.desc&limit=${page}&offset=${offset}`;
+    const url = `${SUPABASE_URL}/rest/v1/transactions?deleted_at=is.null&date=gte.${fromIso}&order=date.desc&limit=${page}&offset=${offset}`;
     const res = await fetch(url, {
       headers: {
+        'x-finance-worker': process.env.FINANCE_WORKER_TOKEN,
         apikey: SUPABASE_ANON_KEY,
         Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
         'Accept': 'application/json'

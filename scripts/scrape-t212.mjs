@@ -1,10 +1,9 @@
-// Fetches the Trading 212 portfolio + cash balance and writes them to
-// data/t212-portfolio.json. Runs from .github/workflows/scrape-t212.yml.
+// Fetches Trading 212 holdings into private Supabase app_state. Runs from .github/workflows/scrape-t212.yml.
 //
 // Required env: T212_API_KEY (stored as a GitHub Actions secret).
 // T212 uses the API key directly as the Authorization header value (no "Bearer ").
 
-import { writeFile, mkdir } from 'node:fs/promises';
+import { privateFinanceRequest } from './private-finance-access.mjs';
 
 // Trim whitespace — GitHub secrets sometimes pick up a trailing newline on paste.
 const API_KEY = (process.env.T212_API_KEY || '').trim();
@@ -14,11 +13,6 @@ if (!API_KEY || !API_SECRET) {
   console.error('T212 beta API uses HTTP Basic auth — you need BOTH secrets.');
   process.exit(1);
 }
-const keyHint = API_KEY.length >= 8 ? `${API_KEY.slice(0,4)}...${API_KEY.slice(-4)} (length ${API_KEY.length})` : `(${API_KEY.length} chars)`;
-const secHint = API_SECRET.length >= 8 ? `${API_SECRET.slice(0,4)}...${API_SECRET.slice(-4)} (length ${API_SECRET.length})` : `(${API_SECRET.length} chars)`;
-console.log('Using API key:', keyHint);
-console.log('Using API secret:', secHint);
-
 const ENV = (process.env.T212_ENV || 'live').toLowerCase();
 const BASE = ENV === 'demo'
   ? 'https://demo.trading212.com'
@@ -234,13 +228,12 @@ const out = {
 // would otherwise silently drop every holding). Key off the explicit fetch
 // failure, not positions.length — a legitimately all-cash account is valid.
 if (portfolioFailed) {
-  console.error('Portfolio fetch failed — preserving last known-good t212-portfolio.json, not writing.');
+  console.error('Portfolio fetch failed — preserving the last known-good private portfolio.');
   process.exit(1);
 }
 
-await mkdir(new URL('../data/', import.meta.url), { recursive: true });
-await writeFile(
-  new URL('../data/t212-portfolio.json', import.meta.url),
-  JSON.stringify(out, null, 2) + '\n'
-);
-console.log(`Wrote ${positions.length} positions \u2014 market value \u20AC${out.totals.marketValue}, P/L \u20AC${out.totals.unrealizedPL} (${out.totals.unrealizedPLPct}%)`);
+const saved = await privateFinanceRequest('/rest/v1/app_state?on_conflict=key', {
+  method:'POST',body:JSON.stringify({key:'fin-t212-portfolio',value:out,updated_at:new Date().toISOString()})
+});
+if (!saved.ok) throw new Error('Private portfolio save failed (HTTP '+saved.status+').');
+console.log('Private portfolio updated successfully.');

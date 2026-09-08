@@ -1,36 +1,55 @@
 # Revenue & Expenses
 
-Personal finance dashboard served by GitHub Pages, with transactions in Supabase and a daily Google Sheets import.
+Private personal finance dashboard on GitHub Pages, with Supabase storage and a daily Google Sheets import.
 
-## Entry and receipt scanning
+## Sign-in and private access
 
-- **Add** opens manual entry. **Scan receipt** accepts JPG, PNG and WebP up to 12 MB; **Take photo** opens the device camera when supported. For a PDF or HEIC image, use a screenshot or convert to JPG first.
-- Tesseract.js 6.0.1 runs OCR on the device in English and Slovenian. The first scan downloads the pinned OCR core and language models from jsDelivr; no receipt images are sent to an AI service or retained in the database.
-- Review the photo, correct date, merchant, euro total, account and category, then confirm and save. Ambiguous totals, dates that cannot be read and non-euro amounts require manual input. OCR is a suggestion, never an automatic charge or transaction.
-- **Transactions → Edit** corrects an existing entry. A matching amount and date produces a duplicate warning with a shortcut to edit the existing entry. Warnings are advisory, since multiple legitimate purchases can share a date and amount.
-- New app entries use an `app:` row hash. A retry after a lost response uses the same token to avoid a second insert.
+Sign in using the email code sent to the owner address configured in `finance_private.settings`. Ownership is checked against a confirmed Supabase Auth email on the server. Database policies, transaction RPCs and private storage policies enforce access; the login screen alone is not the security boundary.
 
-## Daily import
+Transactions are edited through atomic RPCs. The public API identifier in the source does not grant access to financial data. Scheduled jobs use separate private random tokens, stored in Apps Script properties and GitHub Actions secrets; only their SHA-256 hashes and allowed scopes are stored in `finance_private.worker_tokens`.
 
-The existing Google Apps Script trigger runs `syncToSupabase` daily between **06:00 and 07:00 Europe/Ljubljana**. It runs in Google's infrastructure with the app and laptop closed. The existing daily failure notifications are retained.
+- Apps Script: import transactions, read consistent backup snapshots, upload backup files and index them. It cannot download receipt or backup files or change app-created entries.
+- GitHub Actions: read transactions for the existing weekly summary and update the private Trading 212 portfolio.
+- Signed-in owner: dashboard data, entry editing, receipt archive, history, Trash and backup downloads.
 
-`apps-script/Code.gs` is a credential-free copy of the deployed logic. A fresh installation needs `SUPABASE_KEY` and `SPREADSHEET_ID` in Script properties. The existing deployed project retains its private configuration; never commit its credential-bearing code. No OpenAI key is required.
+Portfolio updates now go to private `app_state` under `fin-t212-portfolio`. Do not reintroduce a public portfolio JSON file. Historical portfolio files remain in Git history; this release does not rewrite repository history or revoke copies previously downloaded while the dashboard was public.
 
-The importer upserts Sheet rows, preserves app entries, re-applies imported-row corrections from `app_state` keys `txn-edit:<original row hash>`, uses a lock to prevent overlapping runs, and records status at `fin-sheets-sync`. It stops if corrections cannot be read. Failed batches throw so Apps Script can notify the owner. A running status older than ten minutes is shown as needing attention, including hard platform timeouts. Partial upserts are safe to retry; success is reported only after all batches succeed. The legacy destructive `fullReplaceSync` is disabled.
+## Entries and receipts
 
-### Existing import limitations
+**Add** opens a manual entry. **Upload receipts** in the Review inbox accepts up to 20 JPG, PNG, WebP or PDF files per batch, 20 MB per file and 50 pages per PDF. Convert HEIC photos to JPG before uploading.
 
-The original hash includes the Sheet row position and transaction contents. This release preserves that identity scheme to avoid duplicating the existing database during deployment. **Do not sort, insert within, or edit previously imported Sheet rows** without a reviewed migration to persistent source IDs: such changes can produce a new hash and a duplicate. Make corrections in the app. The importer reads the `Data` tab; a separate `Cash payments` tab is included only if its contents feed into `Data`. App entries save directly to Supabase and do not write back into Sheets.
+Original files are saved in the private `finance-receipts` bucket. Each PDF page becomes a separate pending review item before scanning starts, so leaving the page preserves the queue. File hashes prevent repeat uploads from creating another queue item. Tesseract.js 6.0.1 reads English and Slovenian on the device; PDF.js 5.4.624 reads text PDFs and renders scanned pages for OCR. OCR core and language downloads use jsDelivr. Receipt contents are not sent to an AI API.
 
-App corrections are stored before the corresponding transaction update. If that update fails, retry from the still-filled form. The correction remains visible to the app and is reapplied on the next import. The daily import reads corrections at the start of a run; an edit made during that same run is still shown by the app's correction layer and is reapplied to the underlying transaction on the following run. Editing the same entry from two devices currently uses last-write-wins.
+Review the date, merchant, euro total, account and category before confirming. Ambiguous or non-euro amounts need manual input. You can either save a new expense or **Attach** the receipt to an existing transaction. Suggested matches use the same amount within three days; a search finds other transactions. Attachment leaves spending totals unchanged. Archived queue items can be reopened, and linked receipts can be viewed from the transaction editor.
 
-## Recommended next changes
+The Review inbox also lists uncategorized expenses and possible duplicate groups. Duplicate warnings are advisory: separate purchases may have the same date and amount. Nothing is removed automatically.
 
-1. **Sign-in and owner-only database policies.** The current database allows anonymous reads and writes. Restricting access must be coordinated with the Sheets importer and existing GitHub workflows; the receipt feature does not change these permissions.
-2. **Persistent import IDs.** Migrate existing rows once, then make Sheet reordering and upstream corrections safe.
-3. **Private receipt archive and statement matching.** After sign-in is in place, retain receipts in private storage and attach them to imported bank entries, rather than counting one purchase twice.
+## Corrections, history and Trash
 
-## Development and checks
+**Transactions → Edit** changes an existing entry. Updates include a server version check; a newer edit on another device must be reloaded before saving. Stable `app:` save tokens make retries safe after a lost response. Receipt linking and entry creation happen in one database transaction.
+
+Saved changes offer **Undo**. **History** shows before/after values and can restore the version before an earlier change. **Move to Trash** excludes an entry from all totals without deleting its history or receipt. The Trash tab restores it. Sheets imports preserve both corrections and Trash state in database triggers, including an app edit made while an import is running. History begins when this upgrade is enabled; a private pre-upgrade snapshot preserves earlier state.
+
+## Daily import and backups
+
+Both jobs run on Google's infrastructure with the laptop and dashboard closed:
+
+- `backupFinanceDaily`: **05:00–06:00 Europe/Ljubljana**, private backup snapshot.
+- `syncToSupabase`: **06:00–07:00 Europe/Ljubljana**, existing Sheets import.
+
+`apps-script/Code.gs` contains no private credentials. Its Script properties are `SUPABASE_KEY`, `SPREADSHEET_ID` and `FINANCE_WORKER_TOKEN`. Trigger setup functions retain existing triggers rather than duplicating them. Failed jobs throw errors for Apps Script's failure notifications.
+
+Backups capture transactions (including Trash), app settings, receipt metadata and history in one consistent database snapshot. Gzip files and their SHA-256 checksums are stored privately. **Back up now** creates an additional snapshot; **Download JSON** verifies the checksum and downloads readable recovery data. Originals remain in the private receipt bucket and can be downloaded individually. Snapshots are retained; no automatic deletion is scheduled. Recovery of an entire database is a deliberate administrator operation, while individual transaction recovery is available in the app.
+
+The backup worker only uploads storage objects. Downloads use the owner's Auth JWT; custom worker headers must not authorize Storage downloads because CDN caches are keyed on JWT identity. Browser uploads and backup uploads use a zero cache lifetime.
+
+### Existing Sheet identity limitation
+
+The original import hash includes the Sheet row position and mutable transaction fields. It is preserved to match existing records. Sorting, inserting within or editing already-imported Sheet rows can create duplicates. Make corrections in the app. A future migration to persistent Sheet IDs is needed before changing old Sheet rows freely.
+
+The importer reads the `Data` tab. `Cash payments` is included only if its contents feed into `Data`. App entries save directly to Supabase and do not write back into Sheets. Partial batch failures are safe to retry; destructive full replacement is disabled.
+
+## Deployment and development
 
 ```sh
 npm ci
@@ -39,6 +58,8 @@ npm run check
 npm run dev
 ```
 
-The app is static; GitHub Pages serves `index.html` and the existing assets directly. No framework build is required. The test suite exercises receipt amount/date parsing, save/edit/retry/duplicate flows using an in-memory Supabase adapter, and import failure/correction behavior using an Apps Script adapter. It does not create test transactions in the live database. A separate OCR smoke check on a synthetic Slovenian-format receipt recognized the merchant, date and €12.50 total correctly.
+GitHub Pages serves the static files without a framework build. The migrations are staged: `001_private_workflows.sql` creates private tables, RPCs and storage; configure the owner and worker hashes privately, set the scheduled-job secrets and deploy their updated code; then apply `002_restrict_existing_access.sql` to remove the original public transaction/state policies. `003_owner_only_backup_downloads.sql` removes the temporary worker download policy if an earlier staging version was installed. Do not publish setup files, plaintext worker tokens or owner sessions.
 
-Vendored files in `vendor/tesseract` come from the unmodified `tesseract.js@6.0.1` npm distribution. Its Apache-2.0 license and bundled dependency notices are included. Bump the script query versions and service worker version whenever the entry scripts change so installed apps receive the update.
+Tests cover PostgreSQL RLS and RPC behavior with PGlite, manual save/edit/retry flows, safe receipt matching, multi-file queue persistence, actual multi-page PDF extraction, HTML escaping, and Apps Script import/backup failure handling. Fixtures are synthetic and do not insert test transactions into the live database.
+
+Vendored OCR and PDF libraries retain their upstream Apache-2.0 licenses. PDF CMaps, fonts and WASM support assets are included. Bump the asset query versions and service-worker version when publishing changes so installed apps receive them.
