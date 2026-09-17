@@ -6,7 +6,7 @@ function twoPagePdf(){
  let pdf='%PDF-1.4\n',offsets=[0];objects.forEach((s,i)=>{offsets.push(Buffer.byteLength(pdf));pdf+=`${i+1} 0 obj\n${s}\nendobj\n`;});const start=Buffer.byteLength(pdf);pdf+=`xref\n0 ${objects.length+1}\n0000000000 65535 f \n`+offsets.slice(1).map(n=>String(n).padStart(10,'0')+' 00000 n \n').join('')+`trailer\n<< /Size ${objects.length+1} /Root 1 0 R >>\nstartxref\n${start}\n%%EOF`;return new Uint8Array(Buffer.from(pdf));
 }
 test('real two-page PDF text preserves receipt lines for amount and date parsing',async()=>{
- const pdfjs=await import('pdfjs-dist/legacy/build/pdf.mjs');const context=vm.createContext({});vm.runInContext(fs.readFileSync('scripts/receipt-parser.js','utf8'),context);vm.runInContext(fs.readFileSync('scripts/finance-workflows.js','utf8'),context);
+ const pdfjs=await import('pdfjs-dist/legacy/build/pdf.mjs');const context=vm.createContext({});vm.runInContext(fs.readFileSync('scripts/invoice-data.js','utf8'),context);vm.runInContext(fs.readFileSync('scripts/receipt-parser.js','utf8'),context);vm.runInContext(fs.readFileSync('scripts/finance-workflows.js','utf8'),context);
  const doc=await pdfjs.getDocument({data:twoPagePdf(),isEvalSupported:false,disableFontFace:true,standardFontDataUrl:require('node:path').resolve('vendor/pdfjs/standard_fonts')+'/'}).promise;assert.equal(doc.numPages,2);
  try{for(let n=1;n<=2;n++){const page=await doc.getPage(n),text=context.pdfReceiptText((await page.getTextContent()).items),parsed=context.ReceiptParser.parse(text);assert.equal(parsed.amount,12.5);assert.equal(parsed.date,'2026-09-08');assert.match(parsed.merchant,new RegExp('TEST SHOP '+n));}}finally{await doc.destroy();}
 });

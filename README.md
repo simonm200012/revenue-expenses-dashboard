@@ -26,6 +26,16 @@ Review the date, merchant, euro total, account and category before confirming. A
 
 The Review inbox also lists uncategorized expenses and possible duplicate groups. Duplicate warnings are advisory: separate purchases may have the same date and amount. Nothing is removed automatically.
 
+## Invoice dates, numbers and purchased items
+
+**Invoices & items** lists receipt metadata and individual purchases. Search by merchant, invoice number, date or item name; switch to **Purchased items** to compare quantities, units, unit prices, discounts and line totals, or export the matching item rows as CSV.
+
+Use **Details** (or **Invoice & items** from an expense) to correct the invoice date and number and edit item lines. Invoice dates are stored separately from bank posting dates. Keep a cropped or illegible invoice number blank and explain it in **Number notes**; **Other reference** holds internal or card-slip references without treating them as fiscal invoice numbers. Quantities support weights and litres, unit prices retain fuel-price precision, and line totals are the printed amounts after discounts. The editor shows whether line totals match the invoice total and allows incomplete details to be saved for later review.
+
+Structured fields are stored in the existing private `finance_receipts.extracted` JSON (`invoice_date`, `invoice_number`, `invoice_number_note`, `reference`, `line_items`, `notes`, `reviewed_at`, `items_complete`). They inherit receipt ownership policies and are included in existing daily snapshots. No database access changes are required. Saving invoice details uses an optimistic version check and leaves the linked transaction amount and date unchanged. Items describe the expense; they are never inserted as additional expenses. Archived receipts and receipts linked to trashed transactions are excluded from the invoice/item list.
+
+The local scanner proposes item lines for supported receipt layouts and invoice numbers only where an explicit invoice label is readable. Always review its output; it cannot reconstruct cropped text. **Match or record expense** attaches a receipt to an existing transaction or opens a new expense. Review later bank imports for possible duplicates when a purchase was recorded from a receipt before its bank statement arrived.
+
 ## Corrections, history and Trash
 
 **Transactions → Edit** changes an existing entry. Updates include a server version check; a newer edit on another device must be reloaded before saving. Stable `app:` save tokens make retries safe after a lost response. Receipt linking and entry creation happen in one database transaction.
