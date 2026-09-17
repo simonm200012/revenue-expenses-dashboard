@@ -20,7 +20,7 @@ function app(){
  if(table==='finance_backups')return{data:[],error:null};
  if(table==='finance_receipts'){
  if(op==='upsert'){const added=[];for(const item of payload){if(receipts.some(r=>r.file_hash===item.file_hash&&r.page_number===item.page_number))continue;const row={id:'receipt-'+(receipts.length+1),status:'pending',...item};receipts.push(row);added.push(row);}return{data:added,error:null};}
- if(op==='update'){Object.assign(receipts.find(r=>r.id===filters.id),payload);return{data:null,error:null};}
+ if(op==='update'){const row=receipts.find(r=>Object.entries(filters).every(([k,v])=>r[k]===v));if(!row)return{data:[],error:null};Object.assign(row,payload);return{data:[row],error:null};}
  return{data:receipts,error:null};
  }
  if(table==='app_state'){
@@ -32,9 +32,10 @@ function app(){
  const result=rows.filter(t=>Object.entries(filters).every(([k,v])=>t[k]===v));return{data:q.isSingle?result[0]:result,error:null};
  }).then(resolve,reject);}};return q;}};
  w.Chart={defaults:{font:{},plugins:{legend:{labels:{}},tooltip:{}},scales:{linear:{grid:{}},category:{grid:{}}}}};w.supabase={createClient:()=>client};w.matchMedia=()=>({matches:false,addEventListener(){}});w.scrollTo=()=>{};
+ w.HTMLDialogElement.prototype.showModal=function(){this.open=true;};w.HTMLDialogElement.prototype.close=function(){this.open=false;};
  w.URL.createObjectURL=()=> 'blob:test';w.URL.revokeObjectURL=()=>{};
  const ctx=dom.getInternalVMContext();
- for(const file of ['scripts/finance-auth.js','scripts/receipt-parser.js','scripts/transaction-entry.js','scripts/finance-workflows.js'])vm.runInContext(fs.readFileSync(file,'utf8'),ctx);
+ for(const file of ['scripts/finance-auth.js','scripts/invoice-data.js','scripts/receipt-parser.js','scripts/transaction-entry.js','scripts/finance-workflows.js','scripts/finance-invoices.js'])vm.runInContext(fs.readFileSync(file,'utf8'),ctx);
  let main=[...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)].map(m=>m[1]).find(s=>s.includes('const SUPABASE_URL'));
  main=main.replace("window.addEventListener('DOMContentLoaded',initFinanceAuth);",'');
  main=main.replace(/\(async\(\)=>\{try\{await loadFromSupabase\(\);[\s\S]*?\}\}\)\(\);/,'');
@@ -91,4 +92,20 @@ test('PDF queue creates one review item per page and never inserts expenses auto
  a.w.receiptPdfDocument=async()=>({numPages:2,getPage:async n=>({getTextContent:async()=>({items:[{str:'Test shop '+n,transform:[1,0,0,1,0,100],hasEOL:true},{str:'Date: 08.09.2026',transform:[1,0,0,1,0,90],hasEOL:true},{str:'TOTAL EUR 12,50',transform:[1,0,0,1,0,80],hasEOL:true}]}),cleanup(){}}),destroy:async()=>{}});
  await a.w.uploadReceiptBatch([{name:'two.pdf',type:'application/pdf',size:1,arrayBuffer:async()=>new ArrayBuffer(1)}]);
  assert.equal(a.receipts.length,2);assert.deepEqual(a.receipts.map(r=>r.page_number),[1,2]);assert.equal(a.receipts[1].extracted.amount,12.5);assert.equal(a.rows.length,0);a.close();
+});
+
+test('invoice edits persist private metadata without changing expense totals',async()=>{
+ const a=app();const receipt={id:'invoice-test',status:'linked',transaction_id:1,updated_at:'old-version',extracted:{merchant:'Test shop',invoice_date:'2026-09-10',amount:8,line_items:[{description:'Coffee',quantity:2,unit:'pcs',unit_price:4,discount:0,total:8}]}};
+ a.receipts.push(receipt);a.w.receiptFixture=receipt;vm.runInContext('FINANCE_RECEIPTS=[receiptFixture];',a.ctx);
+ a.w.openInvoiceDetails('invoice-test');a.set('invoiceNumber','TEST-0001');await a.w.saveInvoiceDetails();
+ assert.equal(receipt.extracted.invoice_number,'TEST-0001');assert.equal(receipt.extracted.items_complete,true);assert.equal(receipt.transaction_id,1);
+ assert.equal(a.rows.length,0);assert.equal(a.writes.filter(x=>x.table==='transactions').length,0);a.close();
+});
+test('stale invoice edits are rejected, item text is escaped, and trashed expenses are excluded',async()=>{
+ const a=app();const receipt={id:'invoice-test',status:'linked',transaction_id:1,updated_at:'old',extracted:{merchant:'Test',amount:2,line_items:[{description:'<img src=x onerror=alert(1)>',total:2}]}};
+ a.receipts.push(receipt);a.w.receiptFixture=receipt;vm.runInContext('FINANCE_RECEIPTS=[receiptFixture];FINANCE_ROWS=[{id:1,deleted_at:null}];',a.ctx);
+ a.w.openInvoiceDetails(receipt.id);assert.equal(a.w.document.querySelector('#invoiceItemsBody img'),null);
+ receipt.updated_at='new';a.set('invoiceNumber','TEST-0002');await a.w.saveInvoiceDetails();assert.match(a.w.document.getElementById('invoiceSaveStatus').textContent,/changed elsewhere/);
+ assert.equal(receipt.extracted.invoice_number,undefined);assert.equal(a.w.invoiceRows('','items').length,1);
+ vm.runInContext("FINANCE_ROWS[0].deleted_at='2026-09-10';",a.ctx);assert.equal(a.w.invoiceRows('','items').length,0);a.close();
 });

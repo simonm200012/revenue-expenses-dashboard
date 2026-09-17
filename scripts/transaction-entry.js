@@ -43,6 +43,7 @@ async function refreshSyncStatus(){
 }
 function clearReceipt(){
   activeReceiptId=null;
+  document.getElementById('qaInvoiceDetails').hidden=true;
   document.getElementById('qaReceiptMatches').replaceChildren();
   receiptRun++;
   if(receiptWorker){receiptWorker.terminate().catch(()=>{});receiptWorker=null;}
@@ -76,7 +77,7 @@ function openQuickAdd(id){
   entryStatus('');
   document.getElementById('qaHistory').replaceChildren();document.getElementById('qaHistory').hidden=true;
   document.getElementById('qaManage').hidden=!entryEdit;
-  document.getElementById('qaAttached').innerHTML=entryEdit?FINANCE_RECEIPTS.filter(r=>String(r.transaction_id)===String(entryEdit.id)).map(r=>`<button class="page-btn" data-id="${escapeHtml(r.id)}" onclick="viewPrivateReceipt(this.dataset.id)">View ${escapeHtml(r.original_name)}</button>`).join(''):'';
+  document.getElementById('qaAttached').innerHTML=entryEdit?FINANCE_RECEIPTS.filter(r=>String(r.transaction_id)===String(entryEdit.id)).map(r=>`<button class="page-btn" data-id="${escapeHtml(r.id)}" onclick="viewPrivateReceipt(this.dataset.id)">View ${escapeHtml(r.original_name)}</button> <button class="page-btn" data-id="${escapeHtml(r.id)}" onclick="openInvoiceDetails(this.dataset.id)">Invoice & items</button>`).join(''):'';
   document.getElementById('quickAddPanel').classList.add('open');
   document.getElementById('quickAddPanel').setAttribute('aria-hidden','false');
   document.getElementById('quickAddOverlay').classList.add('open');

@@ -1,6 +1,7 @@
 /* Receipt text parsing is deliberately conservative: uncertain fields stay blank. */
 (function(root){
   'use strict';
+  const invoices=typeof module!=='undefined'&&module.exports?require('./invoice-data.js'):root.InvoiceData;
   function amount(text){
     let value=String(text).replace(/[€$£\s']/g,'');
     if(!/^-?\d[\d.,]*$/.test(value)) return null;
@@ -31,7 +32,7 @@
         else if(dmy)date=isoDate(dmy[3],dmy[2],dmy[1]);
       }
       // Avoid confusing subtotal, tender, change, VAT or savings with the cost.
-      const total=/\b(grand\s+total|amount\s+due|total\s+due|za\s+pla[cč]ilo|za\s+placilo|skupaj|total|znesek\s+ra[cč]una)\b/i.test(line);
+      const total=/\b(grand\s+total|amount\s+due|total\s+due|za\s+pla[cč]ilo|za\s+placilo|skupaj|total|znesek\s+ra[cč]una|hofer\s+cena|znesek\s+eur)\b/i.test(line);
       const excluded=/\b(sub[ -]?total|vmesni|ddv|vat|tax|change|vra[cč]ilo|prihran|popust|discount|gotovina|cash|tender|received)\b/i.test(line);
       if(total&&!excluded){
         const values=line.match(/-?\d(?:[\d.,\s']*\d)?[.,]\d{2}(?!\d)/g)||[];
@@ -44,11 +45,13 @@
       }
     }
     merchant=lines.slice(0,6).find(s=>/[a-zA-ZčšžČŠŽ]{3}/.test(s)&&!/(receipt|ra[cč]un|invoice|dobrodo|welcome|datum|date|www\.|https?:|tel\b|dav[cč]|ddv|vat|\bsi\d|\d{3,})/i.test(s))||'';
+    const brand=lines.slice(0,12).join(' ').match(/\b(HOFER|INTERSPAR|LIDL|M[ÜU]LLER|MOL\s*&\s*INA)\b/i);
+    if(brand)merchant=brand[1];
     const best=candidates.sort((a,b)=>b.score-a.score)[0];
     const highest=best?candidates.filter(c=>c.score===best.score):[];
     const ambiguous=new Set(highest.map(c=>c.value)).size>1;
     const currency=/\b(USD|GBP|CHF|HRK|HUF|CZK|PLN)\b|[$£]/i.test(text)?'other':'EUR';
-    return {merchant:merchant.slice(0,160),date,amount:ambiguous||currency!=='EUR'?null:best?.value??null,ambiguous,currency};
+    return {...invoices.parse(text),invoice_date:date,merchant:merchant.slice(0,160),date,amount:ambiguous||currency!=='EUR'?null:best?.value??null,ambiguous,currency};
   }
   function duplicateCandidates(rows,entry,excludedId){
     const cents=Math.round(entry.v*100);
