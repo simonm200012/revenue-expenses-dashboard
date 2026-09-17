@@ -109,3 +109,11 @@ test('stale invoice edits are rejected, item text is escaped, and trashed expens
  assert.equal(receipt.extracted.invoice_number,undefined);assert.equal(a.w.invoiceRows('','items').length,1);
  vm.runInContext("FINANCE_ROWS[0].deleted_at='2026-09-10';",a.ctx);assert.equal(a.w.invoiceRows('','items').length,0);a.close();
 });
+
+test('archived duplicate scans do not block corrections to the active invoice',async()=>{
+ const a=app();const receipt={id:'original',status:'linked',transaction_id:1,updated_at:'old',extracted:{merchant:'Shop',invoice_number:'INV-42',invoice_date:'2026-09-10',amount:2,line_items:[{description:'Bread',quantity:1,total:2}]}};
+ const duplicate={...receipt,id:'archived-copy',status:'dismissed',transaction_id:null};
+ a.receipts.push(receipt,duplicate);a.w.receiptFixtures=[receipt,duplicate];vm.runInContext('FINANCE_RECEIPTS=receiptFixtures;',a.ctx);
+ a.w.openInvoiceDetails('original');a.set('invoiceNotes','Corrected description');await a.w.saveInvoiceDetails();
+ assert.equal(receipt.extracted.notes,'Corrected description');assert.match(a.w.document.getElementById('invoiceSaveStatus').textContent,/saved/);a.close();
+});

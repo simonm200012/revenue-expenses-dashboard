@@ -48,7 +48,7 @@ async function saveInvoiceDetails(event){
  const status=document.getElementById('invoiceSaveStatus');let clean;
  try{clean=InvoiceData.clean(invoiceDraft());}catch(error){status.textContent=error.message;return;}
  const r=FINANCE_RECEIPTS.find(r=>r.id===invoiceEditingId);if(!r)return;
- const duplicate=InvoiceData.identity(clean)&&FINANCE_RECEIPTS.find(other=>other.id!==r.id&&InvoiceData.identity(invoiceData(other))===InvoiceData.identity(clean));
+ const duplicate=InvoiceData.identity(clean)&&FINANCE_RECEIPTS.find(other=>other.id!==r.id&&invoiceActive(other)&&InvoiceData.identity(invoiceData(other))===InvoiceData.identity(clean));
  if(duplicate){status.textContent='Another receipt already has this merchant, invoice number and date. Check it before saving.';return;}
  invoiceSaving=true;document.getElementById('invoiceSave').disabled=true;status.textContent='Saving invoice details…';
  try{
