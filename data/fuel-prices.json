@@ -1,6 +1,6 @@
 {
   "source": "https://www.energetika-portal.si/podrocja/energetika/cene-naftnih-derivatov/regulirane-cene-naftnih-derivatov/",
-  "updated": "2026-09-15T18:04:55Z",
+  "updated": "2026-09-22T18:01:08Z",
   "currency": "EUR",
   "unit": "per liter",
   "fuels": [
@@ -18,6 +18,18 @@
     }
   ],
   "prices": [
+    {
+      "date": "2026-09-22",
+      "nmb95": 1.748,
+      "diesel": 2.012,
+      "elko": 1.635
+    },
+    {
+      "date": "2026-09-15",
+      "nmb95": 1.728,
+      "diesel": 1.991,
+      "elko": 1.602
+    },
     {
       "date": "2026-09-08",
       "nmb95": 1.674,
