@@ -50,6 +50,7 @@ async function saveFinancePassword(event){
 }
 function clearPrivateDeviceState(){
   clearFinancePasswords();
+  if(typeof clearSheetsSyncStatus==='function')clearSheetsSyncStatus();
   const passwordDialog=document.getElementById('financePasswordDialog');
   if(passwordDialog.open)passwordDialog.close();
   // Preserve visual preferences. Financial caches must not survive sign-out.

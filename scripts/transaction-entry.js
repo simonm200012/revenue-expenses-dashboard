@@ -25,21 +25,37 @@ async function loadTransactionEdits(){
 }
 // The database applies corrections atomically. Never overlay stale browser values on a newer server row.
 function effectiveTransaction(row){return importedEdits.has(row.row_hash)?{...row,_edited:true}:row;}
+let sheetsSyncRecord=null,sheetsSyncUnavailable=false,sheetsSyncRequest=0;
+function clearSheetsSyncStatus(){
+  sheetsSyncRequest++;sheetsSyncRecord=null;sheetsSyncUnavailable=false;
+  const node=document.getElementById('sheetsSyncStatus');if(node){node.replaceChildren();node.removeAttribute('aria-busy');}
+}
+function renderSheetsSyncStatus(){
+  const node=document.getElementById('sheetsSyncStatus');if(!node||typeof SheetsSyncStatus==='undefined'||!financeSession)return;
+  const view=SheetsSyncStatus.describe(sheetsSyncRecord,{lang:typeof CURRENT_LANG!=='undefined'?CURRENT_LANG:'en',unavailable:sheetsSyncUnavailable});
+  const open=!!node.querySelector('details')?.open,restoreFocus=document.activeElement===node.querySelector('button');
+  const make=(tag,text)=>{const el=document.createElement(tag);if(text)el.textContent=text;return el;};
+  const title=make('p',view.title);title.className='sync-title';title.setAttribute('role','status');title.style.color=view.tone==='warning'?'var(--acc-amber)':'var(--text4)';
+  const details=make('details');details.open=open;details.className='sync-details';details.append(make('summary',view.detailsLabel));
+  details.append(make('p',view.message));
+  if(view.rows.length){const list=make('dl');for(const row of view.rows)list.append(make('dt',row.label),make('dd',row.value));details.append(list);}
+  details.append(make('p',view.schedule),make('p',view.reassurance));
+  const actions=make('div');actions.className='sync-actions';
+  const refresh=make('button',view.refreshLabel);refresh.type='button';refresh.className='page-btn';refresh.addEventListener('click',refreshSyncStatus);
+  const log=make('a',view.logLabel);log.href='https://script.google.com/home/projects/1erek9a9tZQOZOOjTDzT36RHofPb2cggp7TFxnieERl7Oe5QPji9Jx3eL/executions';log.target='_blank';log.rel='noopener noreferrer';
+  actions.append(refresh,log);details.append(actions);node.replaceChildren(title,details);if(restoreFocus)refresh.focus();
+}
 async function refreshSyncStatus(){
-  const node=document.getElementById('sheetsSyncStatus');if(!node)return;
+  const node=document.getElementById('sheetsSyncStatus');if(!node||!financeSession)return;
+  const request=++sheetsSyncRequest,epoch=financeAuthEpoch,owner=financeSession.user.id;
+  const active=()=>request===sheetsSyncRequest&&epoch===financeAuthEpoch&&financeSession?.user?.id===owner;
+  const button=node.querySelector('button');if(button){button.disabled=true;button.textContent=entryText('Checking…','Preverjam…');}node.setAttribute('aria-busy','true');
   try{
     const {data,error}=await _supabase.from('app_state').select('value').eq('key','fin-sheets-sync').maybeSingle();
-    if(error)throw error;
-    const s=data?.value;
-    if(!s){node.textContent=entryText('Sheets import: daily, 06:00–07:00 Ljubljana. Awaiting status.','Uvoz iz preglednice: dnevno, 6.00–7.00. Čakam stanje.');return;}
-    const when=new Date(s.finished_at||s.started_at);
-    const stamp=Number.isFinite(when.getTime())?when.toLocaleString(typeof CURRENT_LANG!=='undefined'&&CURRENT_LANG==='sl'?'sl-SI':'en-GB',{dateStyle:'short',timeStyle:'short',timeZone:'Europe/Ljubljana'}):'';
-    const stale=Date.now()-when.getTime()>36*3600000;
-    const interrupted=s.status==='running'&&Date.now()-when.getTime()>10*60000;
-    node.textContent=s.status==='success'?entryText(`Sheets synced ${stamp}${stale?' · Overdue':''}`,`Preglednica posodobljena ${stamp}${stale?' · Zamuja':''}`):s.status==='running'&&!interrupted?entryText('Sheets import running…','Uvoz preglednice poteka…'):entryText(`Sheets import needs attention · ${stamp}`,`Uvoz preglednice potrebuje pregled · ${stamp}`);
-    node.style.color=s.status==='success'&&!stale?'var(--text4)':'var(--acc-amber)';
-    node.title=entryText('Daily 06:00–07:00 Europe/Ljubljana. App entries save immediately.','Dnevno 6.00–7.00 Europe/Ljubljana. Vnosi v aplikaciji se shranijo takoj.');
-  }catch{node.textContent=entryText('Sheets sync status unavailable','Stanje uvoza ni na voljo');}
+    if(!active())return;if(error)throw error;
+    sheetsSyncRecord=data?.value||null;sheetsSyncUnavailable=false;
+  }catch{if(!active())return;sheetsSyncUnavailable=true;}
+  finally{if(active()){node.removeAttribute('aria-busy');renderSheetsSyncStatus();}}
 }
 function clearReceipt(){
   activeReceiptId=null;

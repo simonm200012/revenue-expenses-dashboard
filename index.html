@@ -595,6 +595,7 @@ html.is-mobile-device .section .txn-table input.fp-input{width:120px !important;
 .entry-warning ul{padding-left:20px}
 .entry-sync{font-size:12px;line-height:1.4;color:var(--text4);margin-top:4px}
 .entry-sync:empty{display:none}
+.sync-title{margin:0}.sync-details{margin-top:3px;max-width:560px}.sync-details summary{cursor:pointer;width:fit-content;color:var(--text3)}.sync-details p{margin:8px 0}.sync-details dl{display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 12px;margin:8px 0}.sync-details dt{color:var(--text3)}.sync-details dd{margin:0;overflow-wrap:anywhere}.sync-actions{display:flex;align-items:center;flex-wrap:wrap;gap:12px;margin:10px 0}.sync-actions a{color:var(--text3);text-decoration:underline;text-underline-offset:3px}
 #quickAddPanel button:disabled{opacity:.55;cursor:wait}
 
 [hidden]{display:none!important}
@@ -745,7 +746,7 @@ body[data-finance-locked="true"] > :not(#financeAuth):not(script):not(style){dis
 </dialog>
 <div id="app" hidden>
   <div class="header">
-    <div><h1>Revenue & Expenses</h1><p class="subtitle">Loading from Supabase...</p><p id="sheetsSyncStatus" class="entry-sync" role="status"></p><p id="entryNotice" class="entry-sync" role="status" aria-live="polite"></p></div>
+    <div><h1>Revenue & Expenses</h1><p class="subtitle">Loading from Supabase...</p><div id="sheetsSyncStatus" class="entry-sync"></div><p id="entryNotice" class="entry-sync" role="status" aria-live="polite"></p></div>
     <div class="header-btns"><span id="financeSignedInAs" class="entry-sync"></span><button class="icon-btn" onclick="openFinancePassword()">Password</button><button class="icon-btn" onclick="signOutFinance()">Sign out</button>
       <button class="icon-btn nav-menu-btn" onclick="openNavMenu()" title="Sections">☰ <span class="lbl" data-t="btn.menu">Menu</span></button>
       <button class="icon-btn primary" onclick="openQuickAdd()" title="Quick add transaction">➕ <span class="lbl" data-t="btn.add">Add</span></button>
@@ -823,10 +824,11 @@ body[data-finance-locked="true"] > :not(#financeAuth):not(script):not(style){dis
      the version + recompute the integrity hash when you want to upgrade. -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.50.0" integrity="sha384-jP+y6mxch/vbLrNpx4basfv6ciZQuHwdRHgZGa6Mhja0Xm4p87ok2OQavTrRIGxH" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js" integrity="sha384-bs/nf9FbdNouRbMiFcrcZfLXYPKiPaGVGplVbv7dLGECccEXDW+S3zjqSKR5ZEaD" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-<script src="scripts/finance-auth.js?v=3"></script>
+<script src="scripts/finance-auth.js?v=4"></script>
 <script src="scripts/invoice-data.js?v=1"></script>
 <script src="scripts/receipt-parser.js?v=2"></script>
-<script src="scripts/transaction-entry.js?v=3"></script>
+<script src="scripts/sync-status.js?v=1"></script>
+<script src="scripts/transaction-entry.js?v=4"></script>
 <script src="scripts/finance-workflows.js?v=3"></script>
 <script src="scripts/finance-invoices.js?v=2"></script>
 <script>
@@ -5308,6 +5310,7 @@ function setLang(lang){
   CURRENT_LANG = lang;
   try { localStorage.setItem('dash-lang', lang); } catch {}
   applyStaticTranslations();
+  if(typeof renderSheetsSyncStatus==='function')renderSheetsSyncStatus();
   // Re-render TAB_LABELS-driven UI (tab bar + nav pane) so labels switch.
   rebuildTabsAndNav();
   // Toggle flag/short-code on the button itself.
